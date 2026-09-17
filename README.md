@@ -1,4 +1,7 @@
-# SparkTutor
+# SparkTutor-CN
+
+> Based on [lisancao/sparktutor](https://github.com/lisancao/sparktutor), licensed under MIT. This is an enhanced derivative project focusing on **Chinese localization, open-source LLM integration, and learning diagnosis**.
+
 
 Interactive Apache Spark 4.1 learning environment — a VS Code extension with Claude-powered tutoring that turns your IDE into a hands-on Spark classroom.
 
