@@ -1,0 +1,334 @@
+- Class: meta
+  Lesson: Structured Streaming 结构化流处理
+  EstimatedMinutes: 30
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 你将学到什么
+
+    到目前为止，我们做的都是**批处理** —— 读取完整数据集，
+    转换它，写出结果。但真实数据通常是持续到达的：用户点击、
+    传感器读数、交易事件。
+
+    Structured Streaming 让你在数据到达时就处理它，
+    而且使用的是你已经熟悉的 DataFrame API。
+
+    学完本课后，你将能够：
+
+    - 解释流式执行模型（无界表）
+    - 设置数据源（文件、Kafka、socket）和数据汇（文件、控制台）
+    - 选择合适的输出模式（append、update、complete）
+    - 配置触发器以控制处理频率
+    - 应用水位线来处理迟到数据
+    - 通过 checkpoint 理解容错机制
+
+- Class: text
+  Depth: beginner
+  Output: |
+    想象一条传送带上包裹不断到达仓库。你不需要等所有包裹到齐再
+    分拣，而是每来一批就处理一批。你维护一个累计计数（状态），
+    每来新一批就更新它。
+
+    Structured Streaming 的工作方式相同 —— 它以微批方式处理数据，
+    将你熟悉的 DataFrame 操作应用到每个批次上。你的代码看起来
+    几乎和批处理代码一模一样。
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 流式模型
+
+    Structured Streaming 将实时数据流视为一张**持续追加的表**。
+    新数据到达就像向一张无界输入表追加新行。你的查询在这张表上
+    增量运行，在输出表中产生结果。
+
+    核心组件：
+
+    - **Source（数据源）** —— 数据从哪里来：文件、Kafka、socket、
+      rate（合成数据）
+    - **Query（查询）** —— 你的 DataFrame 转换（与批处理相同的 API）
+    - **Sink（数据汇）** —— 结果写到哪里：文件、Kafka、控制台、
+      内存、foreach
+    - **Trigger（触发器）** —— 多久检查一次新数据
+    - **Output mode（输出模式）** —— 每次触发器向 sink 写入什么
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 读取流
+
+    用 `spark.readStream` 替换 `spark.read`：
+
+    ```python
+    # File source — picks up new files as they appear
+    stream_df = (spark.readStream
+        .format("csv")
+        .option("header", "true")
+        .schema(my_schema)       # required for streaming!
+        .load("/data/incoming/"))
+
+    # Socket source — for development/testing
+    lines = (spark.readStream
+        .format("socket")
+        .option("host", "localhost")
+        .option("port", 9999)
+        .load())
+    ```
+
+    **重要**：流式数据源**必须**显式指定 schema。
+    `inferSchema` 不可用，因为没有完整的数据集可供采样。
+
+    **文档：** [Structured Streaming Programming Guide](https://spark.apache.org/docs/3.5.0/structured-streaming-programming-guide.html)
+    —— 数据源、数据汇、输出模式、触发器、水位线、容错，
+    以及流-流 join，均有完整代码示例。
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 写入流
+
+    用 `df.writeStream` 替换 `df.write`：
+
+    ```python
+    query = (result_df.writeStream
+        .outputMode("complete")
+        .format("console")
+        .trigger(processingTime="10 seconds")
+        .start())
+
+    query.awaitTermination()  # blocks until the stream is stopped
+    ```
+
+    `start()` 返回一个 `StreamingQuery` 对象，你可以用它来监控
+    和停止流。
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 输出模式
+
+    输出模式决定每次触发器向 sink 写入**什么**：
+
+    **`append`** —— 自上次触发器以来的新行。用于无状态转换
+    （select、filter、map）或基于水位线的聚合之后。
+
+    **`update`** —— 自上次触发器以来发生变化的行。适合
+    你只关心最新值的聚合。
+
+    **`complete`** —— 每次触发器输出整个结果表。
+    没有水位线的聚合必须使用此模式。大结果集可能代价高昂。
+
+    并非所有模式都适用于所有操作。聚合需要 `complete` 或 `update`。
+    无状态转换支持全部三种模式。
+
+- Class: mult_question
+  Depth: all
+  Output: "哪种输出模式在每次触发器后将整个结果表写入 sink？"
+  AnswerChoices: "complete;append;update;overwrite"
+  CorrectAnswer: "complete"
+  Hint: "这种模式输出所有内容 —— 而不仅仅是新行或变更行。"
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 无状态与有状态转换
+
+    **无状态** —— 逐行操作，不依赖历史：`select`、`filter`、
+    `withColumn`、`flatMap`。这些适用于所有输出模式，
+    无需特殊配置。
+
+    **有状态** —— 在微批之间维护状态：`groupBy` 聚合、
+    窗口聚合、流-流 join、`dropDuplicates`。这些需要状态管理，
+    并可能限制输出模式。
+
+    这种区分很重要，因为有状态操作会累积内存。如果没有界限
+    （如水位线），状态可能无限增长。
+
+- Class: text
+  Depth: intermediate
+  Output: |
+    ## 触发器
+
+    触发器控制 Spark 多久检查一次新数据：
+
+    ```python
+    # Process every 10 seconds
+    .trigger(processingTime="10 seconds")
+
+    # Process all available data in one batch, then stop
+    .trigger(availableNow=True)
+
+    # Process one micro-batch, then stop (for testing)
+    .trigger(once=True)
+
+    # Default: process as fast as possible
+    # (no trigger specified)
+    ```
+
+    `availableNow` 对于衔接批处理和流处理特别有用 ——
+    按计划运行（例如通过 cron 每小时一次）来处理积累的数据。
+
+- Class: text
+  Depth: intermediate
+  Output: |
+    ## 窗口聚合
+
+    将事件按时间窗口分组：
+
+    ```python
+    from pyspark.sql.functions import window
+
+    # Tumbling windows (non-overlapping, 10-minute buckets)
+    windowed = (events
+        .groupBy(window("event_time", "10 minutes"))
+        .count())
+
+    # Sliding windows (10-minute windows, sliding every 5 minutes)
+    windowed = (events
+        .groupBy(window("event_time", "10 minutes", "5 minutes"))
+        .count())
+    ```
+
+    滚动窗口将时间划分为不重叠的桶。滑动窗口会重叠，
+    因此每个事件出现在多个窗口中。
+
+- Class: mult_question
+  Depth: intermediate
+  Output: "水位线在 Structured Streaming 中的作用是什么？"
+  AnswerChoices: "定义数据最多可以迟到多久后被丢弃，从而让 Spark 清理旧状态;限制流的输出速率;控制输出分区数量;加密传输中的数据"
+  CorrectAnswer: "定义数据最多可以迟到多久后被丢弃，从而让 Spark 清理旧状态"
+  Hint: "水位线为迟到数据设定了一个阈值。比阈值更老的状态会怎样？"
+
+- Class: text
+  Depth: intermediate
+  Output: |
+    ## 水位线：处理迟到数据
+
+    在现实世界中，事件可能迟到 —— 5 分钟前的传感器读数现在才到。
+    水位线告诉 Spark 要等多久：
+
+    ```python
+    result = (events
+        .withWatermark("event_time", "10 minutes")
+        .groupBy(window("event_time", "5 minutes"))
+        .count())
+    ```
+
+    Spark 跟踪迄今为止看到的最大事件时间。任何落后最大值超过
+    10 分钟的事件都会被丢弃。这让 Spark 能够丢弃旧状态并
+    限制内存使用。
+
+    没有水位线，有状态操作会永远保留所有状态，最终耗尽内存。
+
+    **文档：** [f.window](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.window.html)
+    —— 滚动窗口和滑动窗口的 `windowDuration`、`slideDuration`
+    和 `startTime` 参数。
+
+- Class: cmd_question
+  Depth: all
+  Output: |
+    从 localhost:9999 的 socket 源创建流式词频统计。
+    将行拆分成单词，按单词分组计数，以 complete 模式写入控制台。
+  CorrectAnswer: |
+    from pyspark.sql import functions as f
+
+    lines = (spark.readStream
+        .format("socket")
+        .option("host", "localhost")
+        .option("port", 9999)
+        .load())
+
+    words = lines.select(f.explode(f.split("value", " ")).alias("word"))
+
+    counts = words.groupBy("word").count()
+
+    query = (counts.writeStream
+        .outputMode("complete")
+        .format("console")
+        .start())
+  Hint: "readStream 用 socket 格式，split 和 explode 拆词，groupBy + count，writeStream 用 complete 模式。"
+
+- Class: text
+  Depth: advanced
+  Output: |
+    ## 流-流与流-静态 Join
+
+    **流-静态 join** —— 将流式 DataFrame 与批处理 DataFrame join。
+    静态侧每个微批都会重新读取。适用于数据丰富化
+    （例如将点击事件与产品目录 join）：
+
+    ```python
+    enriched = click_stream.join(product_catalog, "product_id")
+    ```
+
+    **流-流 join** —— 两侧都是流。需要水位线来限制状态。
+    Spark 缓冲两侧的行并在它们到达时进行匹配：
+
+    ```python
+    clicks = clicks.withWatermark("click_time", "10 minutes")
+    impressions = impressions.withWatermark("imp_time", "10 minutes")
+
+    matched = clicks.join(impressions,
+        expr("click_id = imp_id AND click_time BETWEEN imp_time AND imp_time + interval 5 minutes"))
+    ```
+
+- Class: text
+  Depth: advanced
+  Output: |
+    ## 容错：Checkpoint
+
+    Structured Streaming 使用 **checkpoint** 实现恰好一次处理。
+    在 writeStream 中设置 checkpoint 位置：
+
+    ```python
+    query = (result.writeStream
+        .outputMode("update")
+        .option("checkpointLocation", "/checkpoints/my_query")
+        .format("parquet")
+        .start("/output/data"))
+    ```
+
+    重启时，Spark 从 checkpoint 重放以恢复状态。两条规则要记住：
+    1. 重启之间不要在不清除 checkpoint 的情况下更改查询逻辑
+    2. 不要在不同查询之间共享 checkpoint 位置
+
+- Class: script
+  Depth: all
+  Output: |
+    ## 练习：流式词频统计
+
+    实现流式词频统计的批处理模式模拟（兼容 dry-run ——
+    不需要真实的流式数据源）。
+
+    完成两个函数：
+    1. `streaming_word_count(spark, lines_df)` —— 将行拆分成单词，
+       按单词分组计数，按计数降序排列
+    2. `streaming_windowed_count(spark, events_df)` —— 统计
+       5 分钟滚动窗口内的事件数，按窗口开始时间排序
+
+    这些练习使用批处理 DataFrame 来实践核心流处理模式
+    （split/explode、groupBy、window）。
+  StarterFile: starter.py
+  SolutionFile: solution.py
+  Hint: "单词用 f.split() + f.explode()，聚合用 groupBy().count()，时间分组用 f.window()。"
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 小结
+
+    本课你学到了：
+
+    - **流式模型** —— 无界输入表增量处理
+    - **数据源与数据汇** —— readStream/writeStream，熟悉的格式
+    - **输出模式** —— append（新行）、update（变更行）、
+      complete（全部）
+    - **触发器** —— 控制处理频率；`availableNow` 衔接批处理和流处理
+    - **窗口聚合** —— 滚动和滑动时间窗口
+    - **水位线** —— 通过定义迟到数据阈值来限制状态
+    - **Checkpoint** —— 实现恰好一次容错
+
+    你现在可以用 Spark 处理批处理和流式数据了。在下一课中，
+    你将学习**数据湖和湖仓** —— 这个存储层通过 ACID 事务和
+    时间旅行让大规模数据变得可靠。

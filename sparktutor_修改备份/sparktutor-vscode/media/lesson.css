@@ -1,0 +1,516 @@
+/* SparkTutor lesson webview styles — uses VS Code CSS variables + Spark orange accent */
+
+:root {
+  --spark-orange: #E25A1C;
+  --spark-orange-light: #F4845F;
+  --spark-orange-dark: #C24A10;
+}
+
+body {
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  padding: 10px 14px;
+  margin: 0;
+  line-height: 1.45;
+}
+
+h2 {
+  margin: 0 0 4px 0;
+  color: var(--spark-orange);
+  font-size: 1.2em;
+}
+
+h3 {
+  margin: 10px 0 4px 0;
+  font-size: 1.05em;
+}
+
+/* Progress bar */
+.lesson-header {
+  margin-bottom: 10px;
+}
+
+.progress-bar {
+  height: 6px;
+  background: var(--vscode-progressBar-background, #333);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--spark-orange);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.step-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.step-label {
+  font-size: 0.9em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.depth-badge {
+  font-size: 0.8em;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.depth-beginner {
+  background: rgba(115, 201, 145, 0.15);
+  color: var(--vscode-testing-iconPassed, #73c991);
+  border: 1px solid rgba(115, 201, 145, 0.3);
+}
+
+.depth-intermediate {
+  background: rgba(226, 90, 28, 0.15);
+  color: var(--spark-orange-light);
+  border: 1px solid rgba(226, 90, 28, 0.3);
+}
+
+.depth-advanced {
+  background: rgba(241, 76, 76, 0.15);
+  color: var(--vscode-testing-iconFailed, #f14c4c);
+  border: 1px solid rgba(241, 76, 76, 0.3);
+}
+
+/* Step content */
+.step-content {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border, #333);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.step-output {
+  white-space: normal;
+  line-height: 1.5;
+}
+
+.step-output p {
+  margin: 4px 0;
+}
+
+.step-output ul,
+.step-output ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.step-output li {
+  margin: 2px 0;
+}
+
+.step-output code {
+  background: var(--vscode-textCodeBlock-background, #1e1e1e);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.step-output pre {
+  background: var(--vscode-textCodeBlock-background, #1e1e1e);
+  padding: 8px 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 6px 0;
+  line-height: 1.35;
+  font-size: 0.92em;
+}
+
+.step-output pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Multiple choice buttons */
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.choice-btn {
+  text-align: left;
+  padding: 10px 16px;
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  color: var(--vscode-button-secondaryForeground, #ccc);
+  border: 1px solid var(--vscode-panel-border, #555);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1em;
+  transition: all 0.15s ease;
+}
+
+.choice-btn:hover {
+  background: var(--spark-orange-dark);
+  color: #fff;
+  border-color: var(--spark-orange);
+}
+
+.choice-btn.selected {
+  background: var(--spark-orange);
+  color: #fff;
+  border-color: var(--spark-orange);
+}
+
+/* Buttons */
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.95em;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+
+.btn:hover {
+  opacity: 0.85;
+}
+
+.btn-primary {
+  background: var(--spark-orange);
+  color: #fff;
+}
+
+.btn-success {
+  background: var(--vscode-testing-iconPassed, #73c991);
+  color: #000;
+}
+
+.btn-secondary {
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  color: var(--vscode-button-secondaryForeground, #ccc);
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.nav-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+/* Instruction banner — tells the user what to do for this step type */
+.instruction-banner {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  line-height: 1.4;
+}
+
+.instruction-banner.info {
+  background: rgba(55, 148, 255, 0.08);
+  border-left: 4px solid var(--vscode-editorInfo-foreground, #3794ff);
+  color: var(--vscode-foreground);
+}
+
+.instruction-banner.prompt {
+  background: rgba(226, 90, 28, 0.08);
+  border-left: 4px solid var(--spark-orange);
+  color: var(--vscode-foreground);
+}
+
+.instruction-banner strong {
+  color: var(--spark-orange-light);
+}
+
+/* Feedback */
+.feedback-section {
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--vscode-panel-border, #333);
+}
+
+.feedback-section.hidden {
+  display: none;
+}
+
+.feedback-passed {
+  border-color: var(--vscode-testing-iconPassed, #73c991);
+  background: rgba(115, 201, 145, 0.08);
+}
+
+.feedback-failed {
+  border-color: var(--vscode-testing-iconFailed, #f14c4c);
+  background: rgba(241, 76, 76, 0.08);
+}
+
+.feedback-item {
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.95em;
+}
+
+.feedback-error {
+  color: var(--vscode-errorForeground, #f14c4c);
+  background: rgba(241, 76, 76, 0.1);
+}
+
+.feedback-warning {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  background: rgba(204, 167, 0, 0.1);
+}
+
+.feedback-info {
+  color: var(--vscode-editorInfo-foreground, #3794ff);
+  background: rgba(55, 148, 255, 0.1);
+}
+
+.feedback-success {
+  color: var(--vscode-testing-iconPassed, #73c991);
+  background: rgba(115, 201, 145, 0.1);
+}
+
+/* Pass/Fail verdict banner */
+.feedback-verdict {
+  font-size: 1.1em;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.feedback-verdict-pass {
+  color: var(--vscode-testing-iconPassed, #73c991);
+  background: rgba(115, 201, 145, 0.12);
+}
+
+.feedback-verdict-fail {
+  color: var(--vscode-testing-iconFailed, #f14c4c);
+  background: rgba(241, 76, 76, 0.12);
+}
+
+/* Feedback category groups */
+.feedback-group {
+  margin: 8px 0;
+}
+
+.feedback-group-label {
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+.label-bug {
+  color: var(--vscode-testing-iconFailed, #f14c4c);
+  background: rgba(241, 76, 76, 0.12);
+}
+
+.label-convention {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  background: rgba(204, 167, 0, 0.12);
+}
+
+.label-best-practice {
+  color: var(--vscode-editorInfo-foreground, #3794ff);
+  background: rgba(55, 148, 255, 0.12);
+}
+
+.label-other {
+  display: none;
+}
+
+.encouragement {
+  margin-top: 8px;
+  font-style: italic;
+  color: var(--spark-orange-light);
+}
+
+/* Hint */
+.hint-section {
+  margin: 12px 0;
+  padding: 12px;
+  background: rgba(55, 148, 255, 0.08);
+  border: 1px solid var(--vscode-editorInfo-foreground, #3794ff);
+  border-radius: 6px;
+}
+
+.hint-section.hidden {
+  display: none;
+}
+
+/* Chat */
+.chat-section {
+  margin-top: 8px;
+}
+
+.chat-messages {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+.chat-msg {
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.95em;
+}
+
+.chat-msg.user {
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  text-align: right;
+}
+
+.chat-msg.tutor {
+  background: rgba(226, 90, 28, 0.1);
+  border-left: 3px solid var(--spark-orange);
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-input-row input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--vscode-input-background, #1e1e1e);
+  color: var(--vscode-input-foreground, #ccc);
+  border: 1px solid var(--vscode-input-border, #555);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.95em;
+}
+
+.chat-input-row input:focus {
+  outline: none;
+  border-color: var(--spark-orange);
+}
+
+/* Finished state */
+.finished-banner {
+  text-align: center;
+  padding: 24px;
+  margin: 16px 0;
+}
+
+.finished-banner h2 {
+  font-size: 1.5em;
+  color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+/* Inline code and code blocks inside dynamic sections (feedback, hints, chat) */
+.feedback-section code,
+.hint-section code,
+.chat-msg code {
+  background: var(--vscode-textCodeBlock-background, #1e1e1e);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.92em;
+}
+
+.feedback-section pre,
+.hint-section pre,
+.chat-msg pre {
+  background: var(--vscode-textCodeBlock-background, #1e1e1e);
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+.feedback-section pre code,
+.hint-section pre code,
+.chat-msg pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.9em;
+}
+
+/* Lists inside rendered markdown */
+.feedback-section ul,
+.hint-section ul,
+.chat-msg ul {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.feedback-section li,
+.hint-section li,
+.chat-msg li {
+  margin: 2px 0;
+}
+
+/* Links inside rendered markdown */
+.hint-section a,
+.chat-msg a,
+.feedback-section a {
+  color: var(--vscode-textLink-foreground, #3794ff);
+  text-decoration: none;
+}
+
+.hint-section a:hover,
+.chat-msg a:hover,
+.feedback-section a:hover {
+  text-decoration: underline;
+}
+
+/* Loading spinner overlay */
+.loading-overlay {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin: 10px 0;
+  background: rgba(226, 90, 28, 0.08);
+  border: 1px solid var(--spark-orange);
+  border-radius: 6px;
+}
+
+.loading-overlay.hidden {
+  display: none;
+}
+
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--vscode-panel-border, #555);
+  border-top-color: var(--spark-orange);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 0.95em;
+  color: var(--spark-orange-light);
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--vscode-panel-border, #333);
+  margin: 16px 0;
+}

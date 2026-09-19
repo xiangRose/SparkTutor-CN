@@ -1,0 +1,269 @@
+- Class: meta
+  Lesson: Spark SQL 与 Catalyst 优化器
+  EstimatedMinutes: 30
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 你将学到什么
+
+    你已经使用 DataFrame API 好几课了。在幕后，每个 `select()`、
+    `filter()` 和 `groupBy()` 都经过同一个引擎：**Spark SQL**。
+    本课你将深入其内部原理。
+
+    学完本课后，你将能够：
+
+    - 解释 Catalyst 优化器管道的四个阶段
+    - 用 `explain()` 阅读执行计划
+    - 使用临时视图对 DataFrame 编写 SQL 查询
+    - 创建和使用用户自定义函数（UDF）
+    - 理解为什么 DataFrame 优于 RDD
+    - 解释自适应查询执行（AQE）在运行时做什么
+
+- Class: text
+  Depth: all
+  Output: |
+    ## Catalyst 优化器
+
+    Spark SQL 不仅仅是一种查询语言 —— 它是一个**优化引擎**。
+    无论你编写 DataFrame API 代码还是原始 SQL，你的查询都经过
+    相同的四阶段管道：
+
+    1. **解析（Parsing）** —— 你的代码被转换为未解析的逻辑计划
+       （带有占位符列名的操作树）
+    2. **分析（Analysis）** —— 使用 catalog 解析列名、表引用和类型
+    3. **优化（Optimization）** —— 用谓词下推、常量折叠和列裁剪等
+       规则重写计划
+    4. **物理计划（Physical Planning）** —— Spark 选择执行策略
+       （join 算法、扫描方法）并生成 JVM 字节码
+
+    这就是为什么 `df.filter(...).select(...)` 和
+    `spark.sql("SELECT ... WHERE ...")` 产生相同的结果 —— 它们都经过
+    Catalyst。
+
+- Class: text
+  Depth: beginner
+  Output: |
+    把 Catalyst 想象成 GPS 导航系统。你告诉它你想去哪里（你的查询），
+    它计算出最佳路线（执行计划）。它考虑捷径（跳过不需要列等优化）和
+    路况（数据统计）来找到最快路径。你不需要知道路线 —— 只需知道目的地。
+
+- Class: mult_question
+  Depth: all
+  Output: "Spark 在哪个 Catalyst 阶段应用谓词下推和常量折叠等优化？"
+  AnswerChoices: "Optimization;Parsing;Analysis;Physical Planning"
+  CorrectAnswer: "Optimization"
+  Hint: "在计划被解析、列引用被解析之后，哪个阶段将其重写为更高效的形式？"
+
+- Class: text
+  Depth: intermediate
+  Output: |
+    ## 关键 Catalyst 优化
+
+    **谓词下推（Predicate pushdown）** —— 过滤器被下推到尽可能靠近
+    数据源的位置。如果你在 join 之后过滤，Catalyst 会将过滤器移到
+    join *之前*（在适用时），减少 shuffle 的数据量。
+
+    **列裁剪（Column pruning）** —— 只读取查询中实际使用的列。
+    对于 Parquet，这意味着在文件级别跳过整列。
+
+    **常量折叠（Constant folding）** —— 像 `1 + 2` 或
+    `lit("a") == lit("a")` 这样的表达式在计划时求值，
+    而不是对每行在运行时求值。
+
+    **Join 重排序（Join reordering）** —— 当连接多个表时，Catalyst
+    可以重新排列 join 顺序以最小化中间结果大小。
+
+    这些优化自动发生。你通过使用 DataFrame API 或 SQL 免费获得它们。
+
+    **文档：** [Spark SQL Programming Guide](https://spark.apache.org/docs/3.5.0/sql-programming-guide.html)
+    —— 涵盖 Catalyst 阶段、谓词下推、列裁剪和计划优化。
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 阅读执行计划
+
+    用 `explain()` 查看 Spark 实际会做什么：
+
+    ```python
+    df.filter(col("age") > 30).select("name").explain()
+    ```
+
+    `explain()` 方法有几种模式：
+
+    - `explain()` 或 `explain("simple")` —— 仅物理计划
+    - `explain("extended")` —— 所有计划（解析、分析、优化、物理）
+    - `explain("formatted")` —— 带章节标题的人类可读格式
+    - `explain("cost")` —— 包含统计信息估算
+    - `explain("codegen")` —— 显示生成的 Java 字节码
+
+    从 `explain("formatted")` 开始 —— 它最易读。寻找：
+    - `FileScan` —— 如何读取数据（哪些列、下推的过滤器）
+    - `Filter` —— 过滤在计划中的位置
+    - `HashAggregate` / `SortAggregate` —— 聚合策略
+    - `BroadcastHashJoin` / `SortMergeJoin` —— join 策略
+
+- Class: cmd_question
+  Depth: all
+  Output: |
+    显示 DataFrame `df` 的扩展执行计划，过滤为 `age > 30` 的行，
+    只选取 `name` 列。
+  CorrectAnswer: |
+    df.filter(df.age > 30).select("name").explain("extended")
+  Hint: "链式调用 filter()、select()，然后 .explain('extended')。"
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 用 spark.sql() 编写 SQL 查询
+
+    你已经使用过 `createOrReplaceTempView` 将 DataFrame 注册为
+    SQL 表。以下是完整工作流程：
+
+    ```python
+    # 将 DataFrame 注册为 SQL 视图
+    employees_df.createOrReplaceTempView("employees")
+
+    # 用标准 SQL 查询
+    result = spark.sql("""
+        SELECT department, AVG(salary) AS avg_salary
+        FROM employees
+        WHERE hire_date > '2020-01-01'
+        GROUP BY department
+        HAVING AVG(salary) > 80000
+        ORDER BY avg_salary DESC
+    """)
+    ```
+
+    SQL 和 DataFrame 可以互换。当查询自然地表达为 SELECT 语句时用 SQL。
+    当你需要程序化组合（动态构建查询）时用 DataFrame。
+
+- Class: text
+  Depth: intermediate
+  Output: |
+    ## 用户自定义函数（UDF）
+
+    当内置函数不够用时，你可以用 UDF 编写自定义逻辑：
+
+    ```python
+    from pyspark.sql.functions import udf
+    from pyspark.sql.types import StringType
+
+    @udf(returnType=StringType())
+    def normalize_name(name):
+        return name.strip().title() if name else None
+
+    df.withColumn("clean_name", normalize_name(col("name")))
+    ```
+
+    **重要权衡：**
+    - UDF 对 Catalyst 是**不透明的** —— 优化器无法查看其内部来下推
+      过滤器或裁剪逻辑
+    - Python UDF 增加**序列化开销** —— 数据对每一行都要从 JVM 发送到
+      Python 再发回来
+    - 尽可能优先用内置函数 —— 它们在 JVM 中原生运行并由 Catalyst 优化
+
+    **文档：**
+    [udf](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.udf.html) |
+    [pandas_udf](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.pandas_udf.html) |
+    [Arrow in PySpark](https://spark.apache.org/docs/3.5.0/api/python/user_guide/sql/arrow_pandas.html)
+    —— `returnType` 参数、批量 UDF 签名和性能指导。
+
+- Class: mult_question
+  Depth: intermediate
+  Output: "为什么 Python UDF 通常比内置 Spark SQL 函数慢？"
+  AnswerChoices: "数据必须在 JVM 和 Python 之间为每一行进行序列化;UDF 使用更多内存;UDF 不能并行运行;内置函数跳过 Catalyst 优化器"
+  CorrectAnswer: "数据必须在 JVM 和 Python 之间为每一行进行序列化"
+  Hint: "PySpark 运行在 JVM 之上。当 Python 代码需要处理 JVM 数据时会发生什么？"
+
+- Class: text
+  Depth: intermediate
+  Output: |
+    ## DataFrame 与 RDD 的对比
+
+    Spark 有两个主要 API：DataFrame 和 RDD（Resilient Distributed
+    Datasets）。DataFrame 几乎总是更好，因为：
+
+    - **Catalyst 优化** —— DataFrame 经过完整的优化器管道。RDD 是
+      不透明的 —— Spark 无法优化你的 lambda。
+    - **Tungsten 内存** —— DataFrame 使用 Spark 的紧凑二进制格式。
+      RDD 使用 Java 对象序列化（更慢、更多内存）。
+    - **代码生成** —— Spark 为 DataFrame 操作生成 JVM 字节码。
+      RDD 操作是解释执行的。
+
+    除非你需要对分区进行细粒度控制，或处理不映射到 Spark 类型系统的
+    类型，否则使用 DataFrame。
+
+- Class: text
+  Depth: advanced
+  Output: |
+    ## 自适应查询执行（AQE）
+
+    自 Spark 3.2 起默认启用，AQE 在**运行时**基于实际 shuffle 统计
+    重新优化计划。它修复静态优化器无法预测的问题：
+
+    **1. 合并 shuffle 后分区** —— shuffle 后，许多分区可能很小。
+    AQE 合并它们以减少任务开销和小文件问题。
+
+    **2. 切换 join 策略** —— 如果优化器计划了 Sort Merge Join，
+    但过滤后某一边很小，AQE 在运行时将其转换为 Broadcast Hash Join。
+
+    **3. 倾斜 join 优化** —— 如果一个分区比其他分区大得多
+    （数据倾斜），AQE 将其拆分为更小的子分区以防止掉队任务。
+
+    ```python
+    # AQE 默认开启；显式配置：
+    spark.conf.set("spark.sql.adaptive.enabled", "true")
+    spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
+    spark.conf.set("spark.sql.adaptive.skewJoin.enabled", "true")
+    ```
+
+- Class: cmd_question
+  Depth: advanced
+  Output: |
+    启用 AQE 并用 `spark.conf.set` 将建议分区大小设为 128MB。
+  CorrectAnswer: |
+    spark.conf.set("spark.sql.adaptive.enabled", "true")
+    spark.conf.set("spark.sql.adaptive.advisoryPartitionSizeInBytes", "128m")
+  Hint: "用 spark.conf.set 设置 spark.sql.adaptive.enabled 和 advisoryPartitionSizeInBytes。"
+
+- Class: script
+  Depth: all
+  Output: |
+    ## 练习：DataFrame API 与 SQL
+
+    实现 `compare_plans(spark)`，用 DataFrame API 和 Spark SQL 编写
+    相同的查询，然后捕获执行计划。
+
+    这展示了两个 API 产生相同的优化计划 —— 这是在实践中选择它们时的
+    关键认知。
+
+    1. 创建一个示例员工 DataFrame
+    2. 用 DataFrame API 编写 filter → groupBy → agg → orderBy
+    3. 注册为临时视图并用 SQL 编写相同查询
+    4. 将两个 explain 计划捕获为字符串
+    5. 返回一个包含两个结果和计划的字典
+  StarterFile: starter.py
+  SolutionFile: solution.py
+  Hint: "将 DataFrame 注册为临时视图，在两个 API 中编写相同的 filter-groupBy-agg-orderBy，并用 explain() 捕获计划。"
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 小结
+
+    本课你学到了：
+
+    - **Catalyst 优化器** —— 为所有 Spark 查询提供动力的四阶段管道
+      （解析、分析、优化、物理计划）
+    - **关键优化** —— 谓词下推、列裁剪、常量折叠和 join 重排序
+      自动发生
+    - **explain()** —— 阅读执行计划以理解和调试 Spark 实际做了什么
+    - **SQL 查询** —— 带临时视图的 `spark.sql()` 让你在 DataFrame
+      API 之外使用完整 SQL
+    - **UDF** —— 带性能权衡的自定义逻辑；尽可能优先用内置函数
+    - **AQE** —— 适应实际数据的运行时重新优化
+
+    理解优化器是区分 Spark 用户和 Spark 专家的关键。在下一课中，
+    你将运用这些知识来调优性能 —— 缓存、分区和配置。
