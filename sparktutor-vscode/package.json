@@ -1,7 +1,7 @@
 {
   "name": "sparktutor",
   "displayName": "SparkTutor",
-  "description": "Interactive Apache Spark 4.1 learning environment with Claude-powered tutoring",
+  "description": "交互式 Apache Spark 4.1 学习环境，由 AI 导师辅助教学",
   "version": "0.3.0",
   "publisher": "sparktutor",
   "engines": {
@@ -19,49 +19,49 @@
     "commands": [
       {
         "command": "sparktutor.run",
-        "title": "SparkTutor: Run Code",
+        "title": "SparkTutor：运行代码",
         "icon": "$(play)"
       },
       {
         "command": "sparktutor.submit",
-        "title": "SparkTutor: Submit Code",
+        "title": "SparkTutor：提交代码",
         "icon": "$(check)"
       },
       {
         "command": "sparktutor.next",
-        "title": "SparkTutor: Next Step",
+        "title": "SparkTutor：下一步",
         "icon": "$(arrow-right)"
       },
       {
         "command": "sparktutor.back",
-        "title": "SparkTutor: Previous Step",
+        "title": "SparkTutor：上一步",
         "icon": "$(arrow-left)"
       },
       {
         "command": "sparktutor.hint",
-        "title": "SparkTutor: Show Hint",
+        "title": "SparkTutor：显示提示",
         "icon": "$(lightbulb)"
       },
       {
         "command": "sparktutor.openLesson",
-        "title": "SparkTutor: Open Lesson"
+        "title": "SparkTutor：打开课程"
       },
       {
         "command": "sparktutor.showSolution",
-        "title": "SparkTutor: Show Solution Diff"
+        "title": "SparkTutor：查看参考答案对比"
       },
       {
         "command": "sparktutor.changeDepth",
-        "title": "SparkTutor: Change Depth Level"
+        "title": "SparkTutor：切换难度级别"
       },
       {
         "command": "sparktutor.resetLesson",
-        "title": "SparkTutor: Reset Current Lesson",
+        "title": "SparkTutor：重置当前课程",
         "icon": "$(trash)"
       },
       {
         "command": "sparktutor.changeMode",
-        "title": "SparkTutor: Change Execution Mode"
+        "title": "SparkTutor：切换执行模式"
       }
     ],
     "keybindings": [
@@ -104,7 +104,7 @@
       "sparktutor": [
         {
           "id": "sparktutorCourses",
-          "name": "Courses"
+          "name": "课程"
         }
       ]
     },
