@@ -1,4 +1,4 @@
-﻿"""Configuration model for SparkTutor."""
+"""Configuration model for SparkTutor."""
 
 from __future__ import annotations
 

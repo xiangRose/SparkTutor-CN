@@ -1,8 +1,7 @@
-﻿"""Server handler: dispatches JSON-lines requests to engine components."""
+"""Server handler: dispatches JSON-lines requests to engine components."""
 
 from __future__ import annotations
 
-import sys
 from dataclasses import asdict
 from pathlib import Path
 from typing import Callable, Optional
@@ -76,7 +75,6 @@ class ServerHandler:
         """Route a request message to the appropriate handler method."""
         method = msg.get("method", "")
         params = msg.get("params", {})
-        print(f"sparktutor-server: dispatch {method}", file=sys.stderr)
 
         handler_map = {
             "listCourses": self._list_courses,
