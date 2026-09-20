@@ -117,7 +117,7 @@ export class AiRouter {
               {
                 line: null,
                 severity: "warning",
-                message: `Copilot review failed: ${err instanceof Error ? err.message : err}`,
+                message: `Copilot 评审失败：${err instanceof Error ? err.message : err}`,
                 suggestion: null,
                 category: null,
               },
@@ -153,8 +153,8 @@ export class AiRouter {
           line: null,
           severity: "info",
           message:
-            "No AI provider configured — using local checks only. " +
-            "Set an Anthropic API key or install GitHub Copilot for AI-powered review.",
+            "未配置 AI 提供方 —— 仅使用本地检查。" +
+            "请设置 Anthropic API 密钥或安装 GitHub Copilot 以启用 AI 评审。",
           suggestion: null,
           category: null,
         },
@@ -190,7 +190,7 @@ export class AiRouter {
         return { answer };
       } catch (err) {
         return {
-          answer: `Copilot chat failed: ${err instanceof Error ? err.message : err}`,
+          answer: `Copilot 对话失败：${err instanceof Error ? err.message : err}`,
         };
       }
     }
@@ -198,7 +198,7 @@ export class AiRouter {
     // No provider
     return {
       answer:
-        "No AI provider available. Set an Anthropic API key or install GitHub Copilot to enable chat.",
+        "未配置 AI 提供方。请设置 Anthropic API 密钥或安装 GitHub Copilot 以启用对话。",
     };
   }
 }

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from dataclasses import asdict
 from pathlib import Path
 from typing import Callable, Optional
@@ -253,7 +252,7 @@ class ServerHandler:
             raise ValueError("No lesson loaded")
 
         hint = self._runner.get_hint()
-        return {"hint": hint or "No hint available for this step."}
+        return {"hint": hint or "本步骤暂无提示。"}
 
     async def _chat(self, params: dict) -> dict:
         question = params["question"]

@@ -108,12 +108,12 @@ export async function activate(
   // Check for a saved session and offer to resume
   const saved = getSavedSession();
   if (saved) {
-    const resume = await vscode.window.showInformationMessage(
-      `Resume "${saved.lessonTitle}" (${saved.depth})?`,
-      "Resume",
-      "Start Fresh"
-    );
-    if (resume === "Resume") {
+    vscode.window.showInformationMessage(
+      `继续「${saved.lessonTitle}」（${saved.depth}）？`,
+      "继续",
+      "重新开始"
+    ).then((resume) => {
+    if (resume === "继续") {
       vscode.commands.executeCommand(
         "sparktutor.openLesson",
         saved.courseId,
@@ -124,6 +124,7 @@ export async function activate(
     } else if (resume === "Start Fresh") {
       clearSavedSession();
     }
+    });
   }
 }
 

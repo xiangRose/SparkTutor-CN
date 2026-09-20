@@ -4,6 +4,7 @@
 
 import * as vscode from "vscode";
 import { Bridge } from "./bridge";
+import { SparkOutputChannel } from "./outputChannel";
 import { CourseMeta, CourseProgress } from "./types";
 
 type TreeNode = CourseNode | LessonNode;
@@ -14,9 +15,9 @@ class CourseNode extends vscode.TreeItem {
     public progress: CourseProgress
   ) {
     super(course.title, vscode.TreeItemCollapsibleState.Expanded);
-    this.description = `${course.lessonCount} lessons`;
+    this.description = `${course.lessonCount} 节课`;
     if (course.prerequisites?.length) {
-      this.tooltip = course.description + "\n\nPrerequisites:\n" +
+      this.tooltip = course.description + "\n\n前置要求：\n" +
         course.prerequisites.map(p => `• ${p}`).join("\n");
     } else {
       this.tooltip = course.description;
@@ -55,7 +56,7 @@ class LessonNode extends vscode.TreeItem {
 
     this.command = {
       command: "sparktutor.openLesson",
-      title: "Open Lesson",
+      title: "打开课程",
       arguments: [courseId, lessonIdx],
     };
   }
@@ -71,6 +72,7 @@ export class CourseTreeProvider
 
   private courses: CourseMeta[] = [];
   private progressMap = new Map<string, CourseProgress>();
+  private retryCount = 0;
 
   constructor(private bridge: Bridge) {}
 
@@ -85,6 +87,7 @@ export class CourseTreeProvider
         const result = await this.bridge.call<{ courses: CourseMeta[] }>(
           "listCourses"
         );
+        this.retryCount = 0;
         this.courses = result.courses;
 
         // Fetch progress for each course
@@ -104,7 +107,18 @@ export class CourseTreeProvider
           }
         }
         return nodes;
-      } catch {
+      } catch (err) {
+        // Log the failure so it is visible in the SparkTutor output channel,
+        // then retry a few times: the tree view can render before the Python
+        // server is fully ready, and without a refresh the tree would stay
+        // empty forever.
+        const message = err instanceof Error ? err.message : String(err);
+        const channel = new SparkOutputChannel();
+        channel.appendLine(`[tree] listCourses failed: ${message}`);
+        if (this.retryCount < 3) {
+          this.retryCount++;
+          setTimeout(() => this.refresh(), 2000);
+        }
         return [];
       }
     }
