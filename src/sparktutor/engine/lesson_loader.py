@@ -1,4 +1,4 @@
-"""YAML lesson parser for SparkTutor."""
+﻿"""YAML lesson parser for SparkTutor."""
 
 from __future__ import annotations
 
