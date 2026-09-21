@@ -1,0 +1,544 @@
+"""Two-layer evaluation engine: local AST checks + Claude API review."""
+
+from __future__ import annotations
+
+import ast
+import json
+import re
+from dataclasses import dataclass, field
+from typing import Optional
+
+from sparktutor.config.settings import Settings
+from sparktutor.engine.normalizer import choices_match, code_match
+
+
+@dataclass
+class FeedbackItem:
+    line: Optional[int]
+    severity: str  # "error", "warning", "info", "success"
+    message: str
+    suggestion: Optional[str] = None
+    category: Optional[str] = None  # "bug", "convention", "best_practice"
+
+
+@dataclass
+class EvalResult:
+    passed: bool
+    feedback: list[FeedbackItem] = field(default_factory=list)
+    encouragement: str = ""
+    skill_signals: list[str] = field(default_factory=list)
+
+
+class Evaluator:
+    def __init__(self, settings: Optional[Settings] = None):
+        self.settings = settings or Settings.load()
+        self._client = None
+
+    def _get_client(self):
+        if self._client is None:
+            api_key = self.settings.claude.get_api_key()
+            if api_key:
+                import anthropic
+                self._client = anthropic.Anthropic(api_key=api_key)
+        return self._client
+
+    # --- Layer 1: Local checks (instant) ---
+
+    def check_syntax(self, code: str) -> EvalResult:
+        """Parse code and return syntax errors."""
+        try:
+            ast.parse(code)
+            return EvalResult(passed=True)
+        except SyntaxError as e:
+            return EvalResult(
+                passed=False,
+                feedback=[FeedbackItem(
+                    line=e.lineno,
+                    severity="error",
+                    message=f"SyntaxError: {e.msg}",
+                    suggestion=None,
+                )],
+            )
+
+    def check_mult_choice(self, guess: str, correct: str) -> EvalResult:
+        """Evaluate a multiple-choice answer."""
+        if choices_match(guess, correct):
+            return EvalResult(passed=True, encouragement="回答正确！")
+        return EvalResult(
+            passed=False,
+            feedback=[FeedbackItem(
+                line=None, severity="warning",
+                message=f"不太对。正确答案是：{correct}",
+            )],
+        )
+
+    def check_code_exact(self, guess: str, correct: str) -> EvalResult:
+        """Exact code match (with normalization)."""
+        if code_match(guess, correct):
+            return EvalResult(passed=True, encouragement="做得好！")
+        return EvalResult(passed=False)
+
+    def check_ast_contains(self, code: str, checks: list[dict]) -> EvalResult:
+        """Check that code AST contains required elements."""
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            return EvalResult(
+                passed=False,
+                feedback=[FeedbackItem(line=e.lineno, severity="error", message=f"SyntaxError: {e.msg}")],
+            )
+
+        feedback: list[FeedbackItem] = []
+        all_passed = True
+
+        for check in checks:
+            expr = check.get("expr", "")
+
+            # Parse ast_contains(class_def='Pipeline')
+            m = re.match(r"ast_contains\((.+)\)", expr)
+            if not m:
+                continue
+
+            params_str = m.group(1)
+            # Parse key=value pairs
+            for param in params_str.split(","):
+                param = param.strip()
+                key, _, value = param.partition("=")
+                key = key.strip()
+                value = value.strip().strip("'\"")
+
+                found = False
+                if key == "class_def":
+                    found = any(
+                        isinstance(node, ast.ClassDef) and node.name == value
+                        for node in ast.walk(tree)
+                    )
+                elif key == "method":
+                    found = any(
+                        isinstance(node, ast.FunctionDef) and node.name == value
+                        for node in ast.walk(tree)
+                    )
+                elif key == "function":
+                    found = any(
+                        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == value
+                        for node in ast.walk(tree)
+                    )
+                elif key == "args":
+                    # Check if any function has the specified args
+                    import ast as _ast
+                    target_args = [a.strip().strip("'\"") for a in value.strip("[]").split(",")]
+                    for node in ast.walk(tree):
+                        if isinstance(node, ast.FunctionDef):
+                            func_args = [arg.arg for arg in node.args.args]
+                            if func_args == target_args:
+                                found = True
+                                break
+                elif key == "import":
+                    found = any(
+                        (isinstance(node, ast.Import) and any(a.name == value for a in node.names))
+                        or (isinstance(node, ast.ImportFrom) and node.module and value in node.module)
+                        for node in ast.walk(tree)
+                    )
+                elif key == "call":
+                    found = any(
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Name)
+                        and node.func.id == value
+                        for node in ast.walk(tree)
+                    )
+
+                if not found:
+                    all_passed = False
+                    feedback.append(FeedbackItem(
+                        line=None, severity="warning",
+                        message=f"缺少必需元素：{key}='{value}'",
+                        suggestion=f"确保你的代码中包含名为 '{value}' 的 {key}",
+                    ))
+
+        return EvalResult(passed=all_passed, feedback=feedback)
+
+    # --- Layer 2: Claude API review (1-3s) ---
+
+    def build_review_prompt(
+        self,
+        code: str,
+        lesson_title: str,
+        objective: str,
+        depth: str,
+        stdout: str = "",
+        stderr: str = "",
+        solution_hint: str = "",
+    ) -> list[dict]:
+        """Build the review prompt messages. Returns [{"role": "user", "content": ...}]."""
+        prompt = f"""You are a Spark tutor evaluating a student's PySpark code for a lesson on "{lesson_title}".
+
+Student depth level: {depth}
+Lesson objective: {objective}
+{f'Solution approach hint: {solution_hint}' if solution_hint else ''}
+
+Student code:
+```python
+{code}
+```
+
+{f'Execution stdout:\\n{stdout}' if stdout else 'No execution output.'}
+{f'Execution stderr:\\n{stderr}' if stderr else ''}
+
+Respond in JSON. Be concise — 1-2 sentences per feedback item max.
+CRITICAL: All text fields below ("message", "suggestion", "encouragement", "skill_signals") MUST be written in Simplified Chinese (简体中文). Keep code identifiers, API names, and config keys in English.
+{{
+  "passed": true/false,
+  "feedback": [
+    {{
+      "line": <int or null>,
+      "severity": "error|warning|info",
+      "category": "bug|convention|best_practice",
+      "message": "<中文说明 — 行内代码用 `反引号` 包裹>",
+      "suggestion": "<中文修改建议或 null — 行内代码用 `反引号` 包裹>"
+    }}
+  ],
+  "encouragement": "<一句中文鼓励，根据学生水平调整语气>",
+  "skill_signals": ["<观察到的能力或不足，用中文>"]
+}}
+
+Category meanings:
+- "bug": code is incorrect, will not work, or does not satisfy the objective
+- "convention": code works but doesn't follow PySpark/Python conventions
+- "best_practice": code works and is correct, but could be improved (OPTIONAL — only at intermediate/advanced depth)
+
+Rules:
+- If the code satisfies the objective, set "passed": true even if there are convention/best_practice suggestions
+- Only "bug" category items should block passing
+- Keep feedback short and actionable — prefer showing a small code snippet over long explanations
+- For beginners: focus on bugs only, skip convention/best_practice unless critical
+- For intermediate: include convention items, optional best_practice
+- For advanced: include all categories, challenge on edge cases and production readiness"""
+
+        return [{"role": "user", "content": prompt}]
+
+    def parse_review_response(self, text: str) -> EvalResult:
+        """Extract EvalResult from an AI response string (Claude or GPT-4o compatible)."""
+        # Strip markdown code fences (```json ... ```) for GPT-4o compatibility
+        stripped = text.strip()
+        if stripped.startswith("```"):
+            # Remove opening fence (e.g. ```json or ```)
+            first_newline = stripped.index("\n") if "\n" in stripped else len(stripped)
+            stripped = stripped[first_newline + 1:]
+            # Remove closing fence
+            if stripped.rstrip().endswith("```"):
+                stripped = stripped.rstrip()[:-3].rstrip()
+
+        json_match = re.search(r"\{[\s\S]*\}", stripped)
+        if json_match:
+            data = json.loads(json_match.group())
+            return EvalResult(
+                passed=data.get("passed", False),
+                feedback=[
+                    FeedbackItem(
+                        line=f.get("line"),
+                        severity=f.get("severity", "info"),
+                        message=f.get("message", ""),
+                        suggestion=f.get("suggestion"),
+                        category=f.get("category"),
+                    )
+                    for f in data.get("feedback", [])
+                ],
+                encouragement=data.get("encouragement", ""),
+                skill_signals=data.get("skill_signals", []),
+            )
+        return EvalResult(passed=False)
+
+    async def claude_review(
+        self,
+        code: str,
+        lesson_title: str,
+        objective: str,
+        depth: str,
+        stdout: str = "",
+        stderr: str = "",
+        solution_hint: str = "",
+    ) -> EvalResult:
+        """Use Claude API for deep code review and adaptive feedback."""
+        client = self._get_client()
+        if client is None:
+            return EvalResult(
+                passed=False,
+                feedback=[FeedbackItem(
+                    line=None, severity="info",
+                    message="未配置 Claude API —— 仅使用本地检查。",
+                )],
+            )
+
+        messages = self.build_review_prompt(
+            code=code,
+            lesson_title=lesson_title,
+            objective=objective,
+            depth=depth,
+            stdout=stdout,
+            stderr=stderr,
+            solution_hint=solution_hint,
+        )
+
+        try:
+            response = client.messages.create(
+                model=self.settings.claude.get_model(),
+                max_tokens=1024,
+                messages=messages,
+            )
+            text = response.content[0].text
+            return self.parse_review_response(text)
+        except Exception as e:
+            return EvalResult(
+                passed=False,
+                feedback=[FeedbackItem(
+                    line=None, severity="warning",
+                    message=f"Claude 评审失败：{e}",
+                )],
+            )
+
+        return EvalResult(passed=False)
+
+    # --- Composite evaluation ---
+
+    async def evaluate(
+        self,
+        code: str,
+        step,  # Step dataclass
+        depth: str = "beginner",
+        exec_result=None,  # ExecResult
+        lesson_title: str = "",
+    ) -> EvalResult:
+        """Run the appropriate evaluation for a step."""
+        # Multiple choice
+        if step.cls == "mult_question" and step.correct_answer:
+            return self.check_mult_choice(code, step.correct_answer)
+
+        # Code questions: try local checks first
+        syntax = self.check_syntax(code)
+        if not syntax.passed:
+            return syntax
+
+        # Exact match check
+        if step.correct_answer:
+            exact = self.check_code_exact(code, step.correct_answer)
+            if exact.passed:
+                return EvalResult(passed=True, encouragement="回答正确！")
+
+        # AST structural checks
+        ast_checks = [v.params for v in step.validation if v.type == "ast_contains"]
+        if ast_checks:
+            ast_result = self.check_ast_contains(code, ast_checks)
+            if not ast_result.passed:
+                return ast_result
+
+        # Claude review for script steps or when local checks are insufficient
+        has_claude_review = any(v.type == "claude_review" for v in step.validation)
+        if has_claude_review or (step.cls == "script" and not step.correct_answer):
+            criteria = ""
+            for v in step.validation:
+                if v.type == "claude_review":
+                    criteria = v.params.get("criteria", "")
+                    break
+            return await self.claude_review(
+                code=code,
+                lesson_title=lesson_title,
+                objective=criteria or step.output,
+                depth=depth,
+                stdout=exec_result.stdout if exec_result else "",
+                stderr=exec_result.stderr if exec_result else "",
+            )
+
+        # For cmd_question steps: if AST checks passed and execution succeeded,
+        # skip the slower Claude review and pass locally
+        if step.cls == "cmd_question" and ast_checks:
+            if exec_result is None or exec_result.exit_code != 0:
+                # Execution failed or wasn't run — don't pass
+                fb = []
+                if exec_result and exec_result.stderr:
+                    fb.append(FeedbackItem(
+                        line=None, severity="error",
+                        message=f"代码执行失败（退出码 {exec_result.exit_code}）。",
+                        suggestion="请查看输出面板了解错误详情。",
+                        category="bug",
+                    ))
+                elif exec_result is None:
+                    fb.append(FeedbackItem(
+                        line=None, severity="error",
+                        message="代码需要运行但尚未执行。",
+                        suggestion="请确保你的代码能够成功运行。",
+                        category="bug",
+                    ))
+                return EvalResult(passed=False, feedback=fb)
+            return EvalResult(passed=True, encouragement="做得好！")
+
+        # If we got past exact match without passing, do Claude review as fallback
+        if step.correct_answer:
+            return await self.claude_review(
+                code=code,
+                lesson_title=lesson_title,
+                objective=step.output,
+                depth=depth,
+                stdout=exec_result.stdout if exec_result else "",
+                stderr=exec_result.stderr if exec_result else "",
+                solution_hint=step.correct_answer,
+            )
+
+        # No validation rules — pass if syntax is OK
+        return EvalResult(passed=True, encouragement="Code looks good!")
+
+    async def evaluate_local(
+        self,
+        code: str,
+        step,  # Step dataclass
+        depth: str = "beginner",
+        exec_result=None,  # ExecResult
+        lesson_title: str = "",
+    ) -> tuple[Optional[EvalResult], bool, dict]:
+        """Run local checks only. Returns (result, needs_ai, review_kwargs).
+
+        If local checks are sufficient, returns (EvalResult, False, {}).
+        If AI review is needed, returns (None, True, kwargs_for_build_review_prompt).
+        """
+        # Multiple choice
+        if step.cls == "mult_question" and step.correct_answer:
+            return self.check_mult_choice(code, step.correct_answer), False, {}
+
+        # Code questions: try local checks first
+        syntax = self.check_syntax(code)
+        if not syntax.passed:
+            return syntax, False, {}
+
+        # Exact match check
+        if step.correct_answer:
+            exact = self.check_code_exact(code, step.correct_answer)
+            if exact.passed:
+                return EvalResult(passed=True, encouragement="回答正确！"), False, {}
+
+        # AST structural checks
+        ast_checks = [v.params for v in step.validation if v.type == "ast_contains"]
+        if ast_checks:
+            ast_result = self.check_ast_contains(code, ast_checks)
+            if not ast_result.passed:
+                return ast_result, False, {}
+
+        # Claude review for script steps or when local checks are insufficient
+        has_claude_review = any(v.type == "claude_review" for v in step.validation)
+        if has_claude_review or (step.cls == "script" and not step.correct_answer):
+            criteria = ""
+            for v in step.validation:
+                if v.type == "claude_review":
+                    criteria = v.params.get("criteria", "")
+                    break
+            kwargs = dict(
+                code=code,
+                lesson_title=lesson_title,
+                objective=criteria or step.output,
+                depth=depth,
+                stdout=exec_result.stdout if exec_result else "",
+                stderr=exec_result.stderr if exec_result else "",
+            )
+            return None, True, kwargs
+
+        # For cmd_question steps: if AST checks passed and execution succeeded,
+        # skip the slower Claude review and pass locally
+        if step.cls == "cmd_question" and ast_checks:
+            if exec_result is None or exec_result.exit_code != 0:
+                fb = []
+                if exec_result and exec_result.stderr:
+                    fb.append(FeedbackItem(
+                        line=None, severity="error",
+                        message=f"代码执行失败（退出码 {exec_result.exit_code}）。",
+                        suggestion="请查看输出面板了解错误详情。",
+                        category="bug",
+                    ))
+                elif exec_result is None:
+                    fb.append(FeedbackItem(
+                        line=None, severity="error",
+                        message="代码需要运行但尚未执行。",
+                        suggestion="请确保你的代码能够成功运行。",
+                        category="bug",
+                    ))
+                return EvalResult(passed=False, feedback=fb), False, {}
+            return EvalResult(passed=True, encouragement="做得好！"), False, {}
+
+        # If we got past exact match without passing, do Claude review as fallback
+        if step.correct_answer:
+            kwargs = dict(
+                code=code,
+                lesson_title=lesson_title,
+                objective=step.output,
+                depth=depth,
+                stdout=exec_result.stdout if exec_result else "",
+                stderr=exec_result.stderr if exec_result else "",
+                solution_hint=step.correct_answer,
+            )
+            return None, True, kwargs
+
+        # No validation rules — pass if syntax is OK
+        return EvalResult(passed=True, encouragement="代码看起来不错！"), False, {}
+
+    # --- Chat: freeform Q&A ---
+
+    def build_chat_messages(
+        self,
+        question: str,
+        lesson_title: str = "",
+        step_context: str = "",
+        code_context: str = "",
+        depth: str = "beginner",
+        extra_context: str = "",
+    ) -> list[dict]:
+        """Build chat messages. Returns [{"role": "system", ...}, {"role": "user", ...}]."""
+        from sparktutor.engine.spark_knowledge import get_system_prompt
+
+        user_msg = f"""学生正在学习：「{lesson_title}」
+当前练习内容：{step_context}
+学生水平：{depth}
+
+{f'学生当前代码：\n```python\n{code_context}\n```' if code_context else '（暂无代码）'}
+{extra_context}
+
+学生问题：{question}
+
+请用简体中文回答。"""
+
+        return [
+            {"role": "system", "content": get_system_prompt()},
+            {"role": "user", "content": user_msg},
+        ]
+
+    async def chat(
+        self,
+        question: str,
+        lesson_title: str = "",
+        step_context: str = "",
+        code_context: str = "",
+        depth: str = "beginner",
+        extra_context: str = "",
+    ) -> str:
+        """Answer a freeform question about the current lesson/code using Claude."""
+        client = self._get_client()
+        if client is None:
+            return "未配置 Claude API。请设置 ANTHROPIC_API_KEY 以启用对话功能。"
+
+        messages = self.build_chat_messages(
+            question=question,
+            lesson_title=lesson_title,
+            step_context=step_context,
+            code_context=code_context,
+            depth=depth,
+            extra_context=extra_context,
+        )
+
+        try:
+            system_msg = messages[0]["content"]
+            user_messages = [m for m in messages if m["role"] != "system"]
+            response = client.messages.create(
+                model=self.settings.claude.get_model(),
+                max_tokens=1024,
+                system=system_msg,
+                messages=user_messages,
+            )
+            return response.content[0].text
+        except Exception as e:
+            return f"对话出错：{e}"

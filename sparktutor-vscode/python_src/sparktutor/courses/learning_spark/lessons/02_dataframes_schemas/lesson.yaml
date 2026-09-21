@@ -1,0 +1,312 @@
+- Class: meta
+  Lesson: DataFrame 与 Schema
+  EstimatedMinutes: 25
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 你将学到什么
+
+    在上一课中，你创建了 SparkSession 并完成了第一次聚合。现在你将深入理解
+    **DataFrame** —— Spark 的核心数据抽象 —— 以及赋予其结构的
+    **schema 系统**。
+
+    学完本课后，你将能够：
+
+    - 解释什么是 DataFrame 以及它为什么不可变
+    - 使用 `select`、`filter`、`withColumn`、`drop` 和 `withColumnRenamed`
+    - 用 `col()`、方括号语法和 `expr()` 编写列表达式
+    - 用 `StructType` 和 `StructField` 定义显式 schema
+    - 从 Python 数据创建 DataFrame
+    - 处理复杂类型：数组、映射和嵌套结构体
+
+- Class: text
+  Depth: all
+  Output: |
+    ## DataFrame：分布式表
+
+    DataFrame 是组织成具名、类型化列的分布式数据集合 —— 就像关系数据库中的表。
+    两个关键属性：
+
+    1. **不可变（Immutable）** —— 每次转换都返回一个*新的* DataFrame。
+       原始 DataFrame 永不修改。这使得 Spark 程序可以安全地并行化。
+    2. **惰性（Lazy）** —— 转换会构建一个逻辑计划。在你调用
+       `show()`、`count()` 或 `collect()` 等 action 之前，什么都不会执行。
+
+    在底层，DataFrame 跟踪一个 **schema**（列名和类型）和一个
+    **逻辑计划**（产生它的转换链）。
+
+- Class: text
+  Depth: beginner
+  Output: |
+    ## 类比：把 DataFrame 想象成电子表格
+
+    把 DataFrame 想象成电子表格。每列有名称和类型（文本、数字、日期）。
+    你不能原地修改单元格 —— 而是创建一个应用了更改的新工作表。
+
+    - `filter()` —— 高亮匹配条件的行，复制到新工作表
+    - `withColumn()` —— 添加一列由已有列计算出的新列
+    - `select()` —— 只选取你需要的列
+    - `drop()` —— 移除一列
+
+    原始工作表从不被触碰。这种"写时复制"（copy-on-write）方法正是
+    Spark 能同时在数百台机器上安全运行的原因。
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 常用 DataFrame 操作
+
+    以下是你最常用的转换：
+
+    **选取列：**
+    ```python
+    df.select("First", "Last", "Hits")
+    ```
+
+    **过滤行：**
+    ```python
+    from pyspark.sql.functions import col
+    df.filter(col("Hits") > 10000)
+    ```
+
+    **添加或替换列：**
+    ```python
+    df.withColumn("Double_Hits", col("Hits") * 2)
+    ```
+
+    **移除列：**
+    ```python
+    df.drop("Url")
+    ```
+
+    **重命名列：**
+    ```python
+    df.withColumnRenamed("First", "FirstName")
+    ```
+
+    所有这些都返回新的 DataFrame。它们是转换（惰性的）——
+    在你调用 action 之前什么都不会执行。
+
+    **文档：**
+    [select](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.select.html) |
+    [filter](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.filter.html) |
+    [withColumn](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.withColumn.html) |
+    [drop](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.drop.html)
+
+- Class: mult_question
+  Depth: all
+  Output: "哪个 DataFrame 方法用于添加新列或替换已有列？"
+  AnswerChoices: "withColumn();addColumn();setColumn();appendColumn()"
+  CorrectAnswer: "withColumn()"
+  Hint: "它以 'with' 开头，以 'Column' 结尾。"
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 列表达式
+
+    有三种等价方式引用列：
+
+    ```python
+    from pyspark.sql.functions import col, expr
+
+    col("Hits")          # 函数式（PySpark 中最常见）
+    df["Hits"]           # 方括号语法
+    expr("Hits")         # SQL 表达式字符串
+    ```
+
+    `expr()` 最强大，因为它接受完整的 SQL 语法：
+
+    ```python
+    expr("Hits * 2")
+    expr("Hits > 10000")
+    expr("CASE WHEN Hits > 10000 THEN 'big' ELSE 'small' END")
+    ```
+
+    三者都产生 **Column 对象** —— 对计算的惰性描述。它们描述*计算什么*，
+    而不是*何时计算*。Spark 只在 action 触发执行时才对它们求值。
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 用 StructType 定义 Schema
+
+    schema 描述 DataFrame 的结构：列名、数据类型和可空性。
+    你用 `StructType` 和 `StructField` 来定义：
+
+    ```python
+    from pyspark.sql.types import *
+
+    schema = StructType([
+        StructField("Id", IntegerType(), False),       # 不可为空
+        StructField("First", StringType(), False),
+        StructField("Last", StringType(), False),
+        StructField("Hits", IntegerType(), False),
+        StructField("Campaigns", ArrayType(StringType()), False),
+    ])
+    ```
+
+    每个 `StructField` 接受三个参数：**名称**、**类型**、**是否可空**。
+
+    常用类型：`StringType`、`IntegerType`、`LongType`、`DoubleType`、
+    `BooleanType`、`TimestampType`、`DateType`。
+
+    复杂类型：`ArrayType(elementType)`、`MapType(keyType, valueType)`，
+    以及用于结构体嵌套结构体的嵌套 `StructType`。
+
+    **文档：**
+    [StructType](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.types.StructType.html) |
+    [ArrayType](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.types.ArrayType.html) |
+    [MapType](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.types.MapType.html)
+    —— 用 `StructField(name, type, nullable)` 定义 schema。
+
+- Class: cmd_question
+  Depth: all
+  Output: |
+    为一个包含以下列的表定义 StructType schema：`name`（字符串，
+    不可为空）、`age`（整数，可空）和 `email`（字符串，可空）。
+  CorrectAnswer: |
+    from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+
+    schema = StructType([
+        StructField("name", StringType(), False),
+        StructField("age", IntegerType(), True),
+        StructField("email", StringType(), True),
+    ])
+  Hint: "用 StructType 传入一个 StructField(name, type, nullable) 列表。False = 不可为空，True = 可空。"
+
+- Class: text
+  Depth: intermediate
+  Output: |
+    ## Schema 推断 vs. 显式 Schema
+
+    读取 CSV 或 JSON 时，Spark 可以推断 schema：
+
+    ```python
+    df = spark.read.option("inferSchema", "true").csv("data.csv")
+    ```
+
+    然而，**inferSchema 会读取数据两次** —— 一次采样行并确定类型，
+    一次实际加载。对于生产工作负载，始终显式定义 schema：
+
+    - **更快** —— 避免额外的扫描
+    - **更可靠** —— 类型由你控制，而非 Spark 的猜测
+    - **尽早发现问题** —— 格式错误的数据在加载时就报错，
+      而不是静默产生 null
+
+    Parquet 和 ORC 将 schema 嵌入文件元数据中，因此对这些格式而言
+    推断是免费的。这是 Parquet 成为 Spark 首选格式的原因之一。
+
+- Class: text
+  Depth: intermediate
+  Output: |
+    ## 从 Python 数据创建 DataFrame
+
+    你可以从 Python 列表构建 DataFrame：
+
+    ```python
+    data = [
+        [1, "Alice", 30],
+        [2, "Bob", 25],
+    ]
+    df = spark.createDataFrame(data, schema)
+    ```
+
+    或者使用 **Row 对象**（列名来自关键字参数）：
+
+    ```python
+    from pyspark.sql import Row
+
+    rows = [
+        Row(id=1, name="Alice", age=30),
+        Row(id=2, name="Bob", age=25),
+    ]
+    df = spark.createDataFrame(rows)
+    ```
+
+    Row 对象适合快速原型开发。对于生产代码，优先使用显式 schema ——
+    它们没有歧义且自带文档。
+
+- Class: mult_question
+  Depth: intermediate
+  Output: "对 CSV 文件使用 inferSchema=True 时会发生什么？"
+  AnswerChoices: "Spark 读取数据两次 —— 一次推断类型，一次加载;Spark 仅凭列名猜测类型;Schema 推断即时完成且无额外开销;Spark 只读取第一行来检测类型"
+  CorrectAnswer: "Spark 读取数据两次 —— 一次推断类型，一次加载"
+  Hint: "CSV 把所有内容都存为文本，所以 Spark 必须采样数据来弄清楚哪些列是数字、日期等。"
+
+- Class: cmd_question
+  Depth: intermediate
+  Output: |
+    给定一个包含整数列 `Hits` 的 DataFrame `blogs_df`，添加一个新的
+    布尔列 `Big_Hitter`，当 Hits > 10000 时为 `True`。
+  CorrectAnswer: |
+    from pyspark.sql import functions as f
+
+    result = blogs_df.withColumn("Big_Hitter", f.col("Hits") > 10000)
+  Hint: "用 withColumn 传入一个布尔表达式：f.col('Hits') > 10000。"
+
+- Class: text
+  Depth: advanced
+  Output: |
+    ## 列表达式的底层原理
+
+    `col()` 和 `expr()` 都产生 Column 对象，但它们在 Spark 中走不同的路径：
+
+    - `col("name")` 直接创建一个 **UnresolvedAttribute** 引用。
+    - `expr("name * 2")` 经过 Spark 的 SQL 解析器，生成一棵支持算术运算、
+      函数调用、CASE/WHEN 和嵌套字段访问的表达式树。
+
+    因为 Column 对象是惰性的，链式调用如下转换：
+
+    ```python
+    df.select(col("a") + col("b")).filter(col("c") > 10)
+    ```
+
+    会构建一个 **逻辑计划**。Spark 的 Catalyst 优化器随后重写这个计划
+    —— 谓词下推、裁剪未使用的列、常量折叠 —— 然后才生成物理执行计划。
+
+    显式定义 schema 有助于优化器：它知道精确的类型，
+    可以选择更高效的操作（整数比较 vs. 字符串比较）。
+
+- Class: script
+  Depth: all
+  Output: |
+    ## 练习：构建博客 DataFrame
+
+    实现 `build_blogs_df` 函数，改编自《Learning Spark》中的示例 3-6。
+
+    你的函数应该：
+    1. 定义一个包含以下列的 schema：Id（int）、First（string）、Last（string）、
+       Url（string）、Published（string）、Hits（int）、Campaigns（字符串数组）
+    2. 用该 schema 从提供的 DATA 创建一个 DataFrame
+    3. 添加一个布尔列 `Big_Hitter`，当 Hits > 10000 时为 True
+    4. 返回结果 DataFrame
+
+    这个练习练习了 schema 定义、DataFrame 创建和添加计算列 ——
+    这些技能在后续每一课中都会用到。
+  StarterFile: starter.py
+  SolutionFile: solution.py
+  Hint: "Campaigns 是 ArrayType(StringType())。用 spark.createDataFrame(DATA, schema)，然后用 withColumn 添加布尔列。"
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 小结
+
+    本课你学到了：
+
+    - **DataFrame** 是不可变的、分布式的表，具有具名、类型化的列 ——
+      每次转换都返回新的 DataFrame
+    - **核心操作** —— `select`、`filter`、`withColumn`、`drop` 和
+      `withColumnRenamed` 是你的日常工具
+    - **列表达式** —— `col()`、`df["col"]` 和 `expr()` 都产生惰性
+      Column 对象；`expr()` 支持完整的 SQL 语法
+    - **Schema** —— `StructType` 和 `StructField` 定义结构；
+      生产环境中显式 schema 优于推断
+    - **复杂类型** —— `ArrayType`、`MapType` 和嵌套 `StructType`
+      处理现实中的嵌套数据
+    - **createDataFrame** —— 从 Python 列表或 Row 对象构建 DataFrame
+
+    接下来，你将学习如何以多种格式读写数据 —— CSV、JSON、Parquet 和
+    ORC —— 并理解何时使用每种格式。
