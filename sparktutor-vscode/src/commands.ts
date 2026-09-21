@@ -278,7 +278,35 @@ export function registerCommands(
           `重置失败：${err instanceof Error ? err.message : err}`
         );
       }
-    })
+    }),
+
+    vscode.commands.registerCommand(
+      "sparktutor.checkAiConnection",
+      async () => {
+        await checkAiConnection(aiRouter, outputChannel);
+      }
+    )
+  );
+}
+
+async function checkAiConnection(
+  aiRouter: AiRouter,
+  outputChannel: SparkOutputChannel
+): Promise<void> {
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "SparkTutor: Checking AI connection…",
+    },
+    async () => {
+      const result = await aiRouter.checkConnection();
+      outputChannel.appendLine(`[ai] ${result.message}`);
+      if (result.ok) {
+        vscode.window.showInformationMessage(`SparkTutor: ${result.message}`);
+      } else {
+        vscode.window.showErrorMessage(`SparkTutor: ${result.message}`);
+      }
+    }
   );
 }
 

@@ -86,8 +86,11 @@ Open VS Code settings (`Ctrl+,`) and search for "SparkTutor":
 
 | Setting | Description |
 |---------|-------------|
-| `sparktutor.aiProvider` | AI backend: `auto` (default), `anthropic`, or `copilot` |
+| `sparktutor.aiProvider` | AI backend: `auto` (default), `anthropic`, `copilot`, or `openai` |
 | `sparktutor.anthropicApiKey` | Anthropic API key (or set `ANTHROPIC_API_KEY` env var) |
+| `sparktutor.openaiBaseUrl` | OpenAI-compatible base URL (DeepSeek / GLM / Qwen / Kimi / Doubao / Ollama ...) |
+| `sparktutor.openaiApiKey` | API key for the OpenAI-compatible provider (or `SPARKTUTOR_OPENAI_API_KEY` / `OPENAI_API_KEY` env var) |
+| `sparktutor.openaiModel` | Model name for the OpenAI-compatible provider (e.g. `deepseek-chat`, `glm-4-plus`, `qwen-plus`) |
 | `sparktutor.claudeModel` | Claude model for review/chat (default: `claude-sonnet-4-6`) |
 | `sparktutor.pythonPath` | Python interpreter path (default: `python3`) |
 | `sparktutor.projectPath` | Path to sparktutor repo root (auto-detected if installed via VSIX) |
@@ -100,9 +103,10 @@ SparkTutor supports multiple AI backends for code review and chat:
 |----------|--------------|----------|
 | **Claude (Anthropic)** | Set `sparktutor.anthropicApiKey` or `ANTHROPIC_API_KEY` env var | Highest quality feedback |
 | **GitHub Copilot** | Install the [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) extension | Codespaces, students with Copilot subscriptions |
+| **OpenAI-compatible** | Set `sparktutor.openaiBaseUrl` / `openaiApiKey` / `openaiModel` (or env vars) | DeepSeek, Zhipu GLM, Alibaba Qwen, Moonshot Kimi, Volcengine Doubao, Ollama — works with most Chinese model APIs |
 | **Local only** | No API key, no Copilot | Syntax/AST checks still work, no AI review |
 
-In `auto` mode (default), SparkTutor uses Claude if an API key is set, falls back to Copilot if available, and runs local-only checks otherwise. The active provider is shown in the status bar.
+In `auto` mode (default), SparkTutor uses Claude if an API key is set, falls back to an OpenAI-compatible provider if configured, then Copilot if available, and runs local-only checks otherwise. The active provider is shown in the status bar.
 
 ## Usage
 
