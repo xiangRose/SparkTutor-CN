@@ -541,10 +541,7 @@ Rules:
             )
             return response.content[0].text
         except Exception as e:
-<<<<<<< Updated upstream
             return f"对话出错：{e}"
-=======
-            return f"Chat error: {e}"
 
     async def ping(self) -> tuple[bool, str]:
         """Send a minimal request to verify the AI client is configured and reachable."""
@@ -560,4 +557,3 @@ Rules:
             return True, "Anthropic API OK."
         except Exception as e:
             return False, f"Anthropic check failed: {e}"
->>>>>>> Stashed changes
