@@ -91,7 +91,7 @@ def _debugging(events: list[LearningEvent]) -> DimensionResult:
     )
 
 
-def _help_seeking(events: list[LearningEvent]) -> DimensionResult:
+def _hint_dependency(events: list[LearningEvent]) -> DimensionResult:
     hints = [e for e in events if e.event_type == "hint_request"]
     productive = 0
     premature = sum(e.attempt_number == 0 for e in hints)
@@ -102,12 +102,12 @@ def _help_seeking(events: list[LearningEvent]) -> DimensionResult:
             productive += 1
     score = None if not hints else round(100 * max(0, productive - .5 * premature) / len(hints), 1)
     return DimensionResult(
-        "helpSeeking", "帮助寻求与支架依赖", score, _confidence(len(hints)), len(hints),
+        "hint_dependency", "AI 提示依赖度", score, _confidence(len(hints)), len(hints),
         (f"{productive}/{len(hints)} 次求助后完成任务；{premature} 次发生在首次尝试前。"
          if hints else "尚无求助行为证据；不把“未求助”自动判定为高能力。"),
-        "遇到困难时先尝试并阅读反馈；查看提示后用自己的代码完成任务。",
+        "在卡住前先尝试理解错误与代码；提示更多用于加速，而不是替代思考。",
         {"hintRequests": len(hints), "productiveHints": productive,
-         "prematureHints": premature, "productiveHelpRate": score},
+         "prematureHints": premature, "hintDependencyRate": score},
     )
 
 
@@ -130,7 +130,7 @@ def _transfer(events: list[LearningEvent]) -> DimensionResult:
 def build_diagnosis(events: Iterable[LearningEvent]) -> dict:
     ordered = sorted(events, key=lambda e: e.timestamp)
     dimensions = [_knowledge(ordered), _debugging(ordered),
-                  _help_seeking(ordered), _transfer(ordered)]
+                  _hint_dependency(ordered), _transfer(ordered)]
     by_component = defaultdict(lambda: {"attempts": 0, "passed": 0})
     for event in ordered:
         if event.event_type != "code_submit":

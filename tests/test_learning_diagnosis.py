@@ -37,12 +37,25 @@ def test_diagnosis_reports_scores_and_confidence(tmp_path: Path):
     assert result["knowledgeComponents"]["filter"] == {"attempts": 1, "passed": 1}
 
 
-def test_help_seeking_distinguishes_premature_hint(tmp_path: Path):
+def test_hint_dependency_distinguishes_premature_hint(tmp_path: Path):
     store = LearningEventStore(tmp_path / "events.db")
-    store.record("hint_request", task_id="t1", attempt_number=0)
+    store.record("hint_request", task_id="t1", attempt_number=0, data={"hintType": "concept", "accepted": True})
     store.record("code_submit", task_id="t1", attempt_number=1, data={"passed": True})
     result = build_diagnosis(store.list_events())
-    item = next(d for d in result["dimensions"] if d["key"] == "helpSeeking")
+    item = next(d for d in result["dimensions"] if d["key"] == "hint_dependency")
     assert item["metrics"]["productiveHints"] == 1
     assert item["metrics"]["prematureHints"] == 1
     assert item["score"] == 50.0
+
+
+def test_event_store_supports_learning_lifecycle_events(tmp_path: Path):
+    store = LearningEventStore(tmp_path / "events.db")
+    event = store.record(
+        "lesson_loaded",
+        course_id="course",
+        lesson_id="lesson",
+        data={"taskCount": 3, "lessonType": "concept"},
+    )
+    assert event.event_type == "lesson_loaded"
+    assert event.data["taskCount"] == 3
+    assert event.data["lessonType"] == "concept"
