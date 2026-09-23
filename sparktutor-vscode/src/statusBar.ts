@@ -79,6 +79,7 @@ export class StatusBarManager {
     const labels: Record<string, string> = {
       anthropic: "$(sparkle) AI: Claude",
       copilot: "$(copilot) AI: Copilot",
+      "openai-compatible": "$(cloud) AI: OpenAI-compat",
       none: "$(circle-slash) AI: Local",
     };
     this.aiProviderItem.text = labels[provider] || `AI: ${provider}`;
