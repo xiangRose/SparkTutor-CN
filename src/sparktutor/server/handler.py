@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import sys
+import re
+import time
+import uuid
 
 from dataclasses import asdict
 from pathlib import Path
@@ -15,6 +18,7 @@ from sparktutor.engine.evaluator import Evaluator
 from sparktutor.engine.executor import Executor
 from sparktutor.engine.lesson_runner import LessonRunner
 from sparktutor.state.progress import ProgressStore
+from sparktutor.state.learning_events import LearningEventStore
 
 from .protocol import Notification
 
@@ -66,12 +70,50 @@ class ServerHandler:
         self.progress = ProgressStore(
             db_path=self.settings.data_dir / "progress.db"
         )
+        self.events = LearningEventStore(
+            db_path=self.settings.data_dir / "progress.db"
+        )
         self.executor = Executor(settings=self.settings)
         self.evaluator = Evaluator(settings=self.settings)
 
         self._runner: Optional[LessonRunner] = None
         self._profile = LearnerProfile()
         self._current_course_id: Optional[str] = None
+        self._session_id = uuid.uuid4().hex
+        self._task_started_at: dict[str, float] = {}
+        self._hinted_tasks: set[str] = set()
+        self.events.record("session_start", session_id=self._session_id)
+
+    def _task_id(self) -> str:
+        if self._runner is None or self._runner.state is None:
+            return ""
+        return f"{self._runner.state.lesson.id}:{self._runner.state.current_index}"
+
+    def _record_event(self, event_type: str, data: Optional[dict] = None) -> None:
+        """Record behavior metadata without storing source code or chat text."""
+        if self._runner is None or self._runner.state is None:
+            return
+        state = self._runner.state
+        task_id = self._task_id()
+        payload = dict(data or {})
+        started = self._task_started_at.get(task_id)
+        if started is not None and event_type in {"code_run", "code_submit", "task_complete"}:
+            payload.setdefault("durationMs", round((time.monotonic() - started) * 1000))
+        self.events.record(
+            event_type,
+            course_id=self._current_course_id or self._runner.course_id,
+            lesson_id=state.lesson.id,
+            task_id=task_id,
+            session_id=self._session_id,
+            task_type=state.current_step.cls if state.current_step else "",
+            attempt_number=state.attempts,
+            data=payload,
+        )
+
+    @staticmethod
+    def _error_type(stderr: str) -> str:
+        match = re.search(r"([A-Za-z]+Error|AnalysisException|ClassNotFoundException)", stderr)
+        return match.group(1) if match else ("ExecutionError" if stderr else "")
 
     async def dispatch(self, msg: dict) -> dict:
         """Route a request message to the appropriate handler method."""
@@ -96,6 +138,7 @@ class ServerHandler:
             "buildReviewPrompt": self._build_review_prompt,
             "buildChatPrompt": self._build_chat_prompt,
             "parseReviewResponse": self._parse_review_response,
+            "getLearningEvents": self._get_learning_events,
             "ping": self._ping,
         }
 
@@ -154,9 +197,23 @@ class ServerHandler:
             profile=self._profile,
         )
         state = self._runner.load_lesson(lesson_dir)
+        self._task_started_at.clear()
+        self._task_started_at[f"{state.lesson.id}:{state.current_index}"] = time.monotonic()
+        self._record_event(
+            "lesson_loaded",
+            {
+                "currentStep": state.current_index,
+                "totalSteps": len(state.filtered_steps),
+                "depth": depth,
+                "resumed": bool(restored_code := self._runner.get_restored_code()),
+            },
+        )
+        self._record_event(
+            "task_start",
+            {"currentStep": state.current_index, "totalSteps": len(state.filtered_steps)},
+        )
 
         step = state.current_step
-        restored_code = self._runner.get_restored_code()
         starter_code = self._runner.get_starter_code()
 
         result = {
@@ -197,6 +254,19 @@ class ServerHandler:
             )
 
         result = await self.executor.execute(code, on_output=on_output)
+        self._record_event(
+            "code_run",
+            {
+                "exitCode": result.exit_code,
+                "mode": result.mode.value,
+                "errorType": self._error_type(result.stderr),
+            },
+        )
+        if result.exit_code != 0:
+            self._record_event(
+                "error",
+                {"errorType": self._error_type(result.stderr), "source": "code_run"},
+            )
         return {
             "exitCode": result.exit_code,
             "stdout": result.stdout,
@@ -210,6 +280,25 @@ class ServerHandler:
 
         code = params["code"]
         result = await self._runner.submit(code)
+        hint_used = self._task_id() in self._hinted_tasks
+        self._hinted_tasks.discard(self._task_id())
+        self._record_event(
+            "code_submit",
+            {
+                "passed": result.passed,
+            "hintUsed": hint_used,
+                "errorTypes": [
+                    self._error_type(item.message)
+                    for item in result.feedback
+                    if item.severity == "error"
+                ],
+            },
+        )
+        if not result.passed:
+            self._record_event(
+                "error",
+                {"errorType": "EvaluationError", "source": "code_submit"},
+            )
         return {
             "passed": result.passed,
             "feedback": [_feedback_to_dict(f) for f in result.feedback],
@@ -221,7 +310,27 @@ class ServerHandler:
         if self._runner is None:
             raise ValueError("No lesson loaded")
 
+        previous_task_id = self._task_id()
+        previous_started = self._task_started_at.get(previous_task_id)
+        previous_state = self._runner.state
+        if previous_state and previous_state.current_step:
+            duration_ms = None
+            if previous_started is not None:
+                duration_ms = round((time.monotonic() - previous_started) * 1000)
+            self._record_event(
+                "task_complete",
+                {
+                    "passed": True,
+                    "currentStep": previous_state.current_index,
+                    "totalSteps": len(previous_state.filtered_steps),
+                    "durationMs": duration_ms,
+                },
+            )
+
         step = self._runner.advance(current_code=params.get("code", ""))
+        if self._runner.state and not self._runner.state.is_finished:
+            self._task_started_at[self._task_id()] = time.monotonic()
+            self._record_event("task_start", {"currentStep": self._runner.state.current_index})
         if self._runner.state and self._runner.state.is_finished:
             return {"finished": True}
 
@@ -256,6 +365,12 @@ class ServerHandler:
             raise ValueError("No lesson loaded")
 
         hint = self._runner.get_hint()
+        if hint:
+            self._hinted_tasks.add(self._task_id())
+        self._record_event(
+            "hint_request",
+            {"available": bool(hint), "hintType": "step"},
+        )
         return {"hint": hint or "本步骤暂无提示。"}
 
     async def _chat(self, params: dict) -> dict:
@@ -300,6 +415,7 @@ class ServerHandler:
             depth=self._profile.depth.value,
             extra_context=extra_context,
         )
+        self._record_event("chat_request", {"providerHandled": True})
         return {"answer": answer}
 
     async def _get_solution(self, params: dict) -> dict:
@@ -312,7 +428,9 @@ class ServerHandler:
 
         solution_path = self._runner.state.lesson.base_path / step.solution_code
         if solution_path.exists():
+            self._record_event("solution_view", {"available": True})
             return {"solution": solution_path.read_text()}
+        self._record_event("solution_view", {"available": False})
         return {"solution": ""}
 
     async def _reset_lesson(self, params: dict) -> dict:
@@ -330,10 +448,24 @@ class ServerHandler:
 
         code = params["code"]
         result, needs_ai, review_kwargs = await self._runner.submit_local(code)
-
         response: dict = {"needsAiReview": needs_ai}
 
         if result is not None:
+            hint_used = self._task_id() in self._hinted_tasks
+            self._hinted_tasks.discard(self._task_id())
+            self._record_event(
+                "code_submit",
+                {
+                    "passed": result.passed,
+                    "hintUsed": hint_used,
+                    "aiReview": False,
+                    "errorTypes": [
+                        self._error_type(item.message)
+                        for item in result.feedback
+                        if item.severity == "error"
+                    ],
+                },
+            )
             response["localResult"] = {
                 "passed": result.passed,
                 "feedback": [_feedback_to_dict(f) for f in result.feedback],
@@ -414,6 +546,21 @@ class ServerHandler:
             )
             # Save with empty code since we already saved during submit_local
             self._runner._save_progress("")
+            hint_used = self._task_id() in self._hinted_tasks
+            self._hinted_tasks.discard(self._task_id())
+            self._record_event(
+                "code_submit",
+                {
+                    "passed": result.passed,
+                    "hintUsed": hint_used,
+                    "aiReview": True,
+                    "errorTypes": [
+                        self._error_type(item.message)
+                        for item in result.feedback
+                        if item.severity == "error"
+                    ],
+                },
+            )
 
         return {
             "passed": result.passed,
@@ -421,6 +568,14 @@ class ServerHandler:
             "encouragement": result.encouragement,
             "skillSignals": result.skill_signals,
         }
+
+    async def _get_learning_events(self, params: dict) -> dict:
+        events = self.events.list_events(
+            course_id=params.get("courseId", ""),
+            lesson_id=params.get("lessonId", ""),
+            limit=params.get("limit", 2000),
+        )
+        return {"events": [event.as_dict() for event in events]}
 
     async def _detect_mode(self, params: dict) -> dict:
         mode = await self.executor.detect_mode()
