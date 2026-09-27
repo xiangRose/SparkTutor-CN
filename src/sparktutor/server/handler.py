@@ -466,6 +466,11 @@ class ServerHandler:
                     ],
                 },
             )
+            if not result.passed:
+                self._record_event(
+                    "error",
+                    {"errorType": "EvaluationError", "source": "local_submit"},
+                )
             response["localResult"] = {
                 "passed": result.passed,
                 "feedback": [_feedback_to_dict(f) for f in result.feedback],
@@ -561,6 +566,11 @@ class ServerHandler:
                     ],
                 },
             )
+            if not result.passed:
+                self._record_event(
+                    "error",
+                    {"errorType": "EvaluationError", "source": "ai_review"},
+                )
 
         return {
             "passed": result.passed,
