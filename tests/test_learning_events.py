@@ -84,3 +84,26 @@ async def test_server_records_runtime_events(handler):
     submit_event = next(event for event in result["events"] if event["eventType"] == "code_submit")
     assert submit_event["data"]["hintUsed"] is True
     assert submit_event["attemptNumber"] == 1
+
+
+@pytest.mark.asyncio
+async def test_server_records_edit_and_session_end_events(handler):
+    await handler.dispatch({
+        "method": "loadLesson",
+        "params": {"courseId": "test_course", "lessonIdx": 0},
+    })
+    edit_result = await handler.dispatch({
+        "method": "recordLearningEvent",
+        "params": {
+            "eventType": "code_edit",
+            "data": {"changeCount": 2, "addedChars": 8, "removedChars": 1},
+        },
+    })
+    end_result = await handler.dispatch({
+        "method": "recordLearningEvent",
+        "params": {"eventType": "session_end"},
+    })
+
+    assert edit_result["event"]["eventType"] == "code_edit"
+    assert edit_result["event"]["data"]["changeCount"] == 2
+    assert end_result["event"]["eventType"] == "session_end"

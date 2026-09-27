@@ -285,8 +285,45 @@ export function registerCommands(
       async () => {
         await checkAiConnection(aiRouter, outputChannel);
       }
-    )
+    ),
+
+    vscode.commands.registerCommand("sparktutor.showLearningEvents", async () => {
+      await showLearningEvents(bridge, outputChannel);
+    })
   );
+}
+
+async function showLearningEvents(
+  bridge: Bridge,
+  outputChannel: SparkOutputChannel
+): Promise<void> {
+  try {
+    const result = await bridge.call<{
+      events: Array<{
+        eventType: string;
+        timestamp: string;
+        taskId: string;
+        attemptNumber: number;
+        data: Record<string, unknown>;
+      }>;
+    }>("getLearningEvents", { limit: 200 });
+    outputChannel.clear();
+    outputChannel.show();
+    outputChannel.appendLine("--- SparkTutor 学习行为记录 ---");
+    if (result.events.length === 0) {
+      outputChannel.appendLine("暂无学习行为记录。");
+      return;
+    }
+    for (const event of result.events) {
+      outputChannel.appendLine(
+        `${event.timestamp} | ${event.eventType} | ${event.taskId || "session"} | attempt=${event.attemptNumber} | ${JSON.stringify(event.data)}`
+      );
+    }
+  } catch (err) {
+    vscode.window.showErrorMessage(
+      `读取学习行为记录失败：${err instanceof Error ? err.message : err}`
+    );
+  }
 }
 
 async function checkAiConnection(

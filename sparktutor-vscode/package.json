@@ -66,6 +66,10 @@
       {
         "command": "sparktutor.checkAiConnection",
         "title": "SparkTutor: Check AI Connection"
+      },
+      {
+        "command": "sparktutor.showLearningEvents",
+        "title": "SparkTutor：查看学习行为记录"
       }
     ],
     "keybindings": [

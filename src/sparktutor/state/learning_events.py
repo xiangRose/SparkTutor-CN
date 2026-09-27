@@ -18,6 +18,7 @@ EVENT_TYPES = {
     "task_open",
     "task_start",
     "task_complete",
+    "code_edit",
     "code_run",
     "code_submit",
     "error",

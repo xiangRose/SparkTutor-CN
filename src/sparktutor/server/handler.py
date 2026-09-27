@@ -89,7 +89,7 @@ class ServerHandler:
             return ""
         return f"{self._runner.state.lesson.id}:{self._runner.state.current_index}"
 
-    def _record_event(self, event_type: str, data: Optional[dict] = None) -> None:
+    def _record_event(self, event_type: str, data: Optional[dict] = None):
         """Record behavior metadata without storing source code or chat text."""
         if self._runner is None or self._runner.state is None:
             return
@@ -99,7 +99,7 @@ class ServerHandler:
         started = self._task_started_at.get(task_id)
         if started is not None and event_type in {"code_run", "code_submit", "task_complete"}:
             payload.setdefault("durationMs", round((time.monotonic() - started) * 1000))
-        self.events.record(
+        return self.events.record(
             event_type,
             course_id=self._current_course_id or self._runner.course_id,
             lesson_id=state.lesson.id,
@@ -139,6 +139,7 @@ class ServerHandler:
             "buildChatPrompt": self._build_chat_prompt,
             "parseReviewResponse": self._parse_review_response,
             "getLearningEvents": self._get_learning_events,
+            "recordLearningEvent": self._record_learning_event,
             "ping": self._ping,
         }
 
@@ -586,6 +587,22 @@ class ServerHandler:
             limit=params.get("limit", 2000),
         )
         return {"events": [event.as_dict() for event in events]}
+
+    async def _record_learning_event(self, params: dict) -> dict:
+        event_type = params.get("eventType", "")
+        data = params.get("data") or {}
+        if event_type == "session_end":
+            event = self.events.record(
+                event_type,
+                course_id=self._current_course_id or "",
+                session_id=self._session_id,
+                data=data,
+            )
+        else:
+            if self._runner is None or self._runner.state is None:
+                raise ValueError("No lesson loaded")
+            event = self._record_event(event_type, data)
+        return {"event": event.as_dict()}
 
     async def _detect_mode(self, params: dict) -> dict:
         mode = await self.executor.detect_mode()

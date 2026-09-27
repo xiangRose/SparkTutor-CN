@@ -60,6 +60,32 @@ export async function activate(
     aiRouter
   );
 
+  // Record edits without sending source code: only aggregate change metadata.
+  let editTimer: NodeJS.Timeout | undefined;
+  let pendingEdit = { changeCount: 0, addedChars: 0, removedChars: 0 };
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument((event) => {
+      if (!event.document.uri.fsPath.endsWith("exercise.py")) {
+        return;
+      }
+      for (const change of event.contentChanges) {
+        pendingEdit.changeCount += 1;
+        pendingEdit.addedChars += change.text.length;
+        pendingEdit.removedChars += change.rangeLength;
+      }
+      if (editTimer) {
+        clearTimeout(editTimer);
+      }
+      editTimer = setTimeout(() => {
+        const data = pendingEdit;
+        pendingEdit = { changeCount: 0, addedChars: 0, removedChars: 0 };
+        bridge
+          .call("recordLearningEvent", { eventType: "code_edit", data })
+          .catch(() => {});
+      }, 500);
+    })
+  );
+
   // Stream output notifications to the output channel
   bridge.onNotification("output", (params) => {
     outputChannel.appendLine(params.line as string);
@@ -134,6 +160,11 @@ export async function activate(
   }
 }
 
-export function deactivate(): void {
+export async function deactivate(): Promise<void> {
+  if (bridge?.isAlive()) {
+    await bridge
+      .call("recordLearningEvent", { eventType: "session_end" })
+      .catch(() => {});
+  }
   bridge?.dispose();
 }
