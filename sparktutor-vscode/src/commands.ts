@@ -11,6 +11,7 @@ import { LessonPanel } from "./lessonPanel";
 import { SparkOutputChannel } from "./outputChannel";
 import { StatusBarManager } from "./statusBar";
 import { WorkspaceManager } from "./workspaceManager";
+import { stepIdentity } from "./lessonHelpers";
 import {
   AdvanceResult,
   EvalResult,
@@ -230,7 +231,18 @@ export function registerCommands(
     }),
 
     vscode.commands.registerCommand("sparktutor.changeMode", async () => {
-      await pickExecutionMode();
+      try {
+        const mode = await pickExecutionMode();
+        if (mode) {
+          const result = await bridge.call<{ mode: string }>("setExecutionMode", { mode });
+          statusBar.setMode(result.mode);
+          vscode.window.showInformationMessage(result.mode === "dry_run"
+            ? "执行模式已更新；未找到可用的 Spark 环境，目前仅能检查语法。"
+            : "执行模式已更新，下次运行和提交将使用新模式。");
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage(`切换执行模式失败：${err instanceof Error ? err.message : err}`);
+      }
     }),
 
     vscode.commands.registerCommand("sparktutor.resetLesson", async () => {
@@ -240,7 +252,7 @@ export function registerCommands(
       }
 
       const confirm = await vscode.window.showWarningMessage(
-        `重置「${currentLessonTitle || currentLessonId}」？这将清除本课程的所有进度和已保存的代码。`,
+        `重置「${currentLessonTitle || currentLessonId}」？这将清除此课的进度和练习文件，其他课的作业及旧版课程文件会保留。`,
         { modal: true },
         "重置"
       );
@@ -255,7 +267,7 @@ export function registerCommands(
         });
 
         // Delete the exercise file on disk
-        workspace.deleteExerciseFile(currentCourseId, currentLessonId);
+        await workspace.deleteExerciseFile(currentCourseId, currentLessonId);
 
         // Refresh tree and re-open the lesson from step 0
         treeProvider.refresh();
@@ -296,7 +308,7 @@ async function checkAiConnection(
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: "SparkTutor: Checking AI connection…",
+      title: "SparkTutor：正在检查 AI 连接……",
     },
     async () => {
       const result = await aiRouter.checkConnection();
@@ -311,26 +323,26 @@ async function checkAiConnection(
 }
 
 async function pickExecutionMode(): Promise<string | undefined> {
-  const items: vscode.QuickPickItem[] = [
+  const items: (vscode.QuickPickItem & { value: string })[] = [
     {
-      label: "Local",
-      description: "pip install pyspark —— 无需 Docker",
-      detail: "在同一 Python 环境中运行 Spark",
+      label: "本地 Spark", value: "local",
+      description: "PySpark 和 Java 17+，无需 Docker",
+      detail: "在本地运行；缺少 Spark 时仅检查语法，综合题不能通过测试",
     },
     {
-      label: "Lakehouse",
+      label: "湖仓环境", value: "lakehouse",
       description: "带 Kafka、Iceberg 等的 Docker 容器",
       detail: "需要 lakehouse-stack 和 Docker Desktop",
     },
     {
-      label: "Databricks",
+      label: "Databricks", value: "databricks",
       description: "通过 Spark Connect 连接远程 Databricks 集群",
       detail: "需要 databricks-connect 和集群访问权限",
     },
     {
-      label: "Auto",
+      label: "自动检测", value: "auto",
       description: "自动检测",
-      detail: "容器运行时使用 Lakehouse，否则使用 Local",
+      detail: "优先湖仓容器，否则使用本地 Spark；均不可用时仅检查语法",
     },
   ];
   const pick = await vscode.window.showQuickPick(items, {
@@ -340,7 +352,7 @@ async function pickExecutionMode(): Promise<string | undefined> {
   if (!pick) {
     return undefined;
   }
-  const value = pick.label.toLowerCase();
+  const value = pick.value;
   await vscode.workspace
     .getConfiguration("sparktutor")
     .update("executionMode", value, vscode.ConfigurationTarget.Global);
@@ -348,19 +360,19 @@ async function pickExecutionMode(): Promise<string | undefined> {
 }
 
 async function pickDepth(): Promise<string | undefined> {
-  const items: vscode.QuickPickItem[] = [
+  const items: (vscode.QuickPickItem & { value: string })[] = [
     {
-      label: "Beginner",
+      label: "入门", value: "beginner",
       description: "核心概念、引导式示例、鼓励性反馈",
       detail: "适合 Spark 或 PySpark 新手",
     },
     {
-      label: "Intermediate",
+      label: "中级", value: "intermediate",
       description: "设计模式、权衡分析、配置调优",
       detail: "已了解 DataFrame，希望深入学习",
     },
     {
-      label: "Advanced",
+      label: "高级", value: "advanced",
       description: "内部原理、性能优化、生产就绪",
       detail: "已有生产环境 Spark 经验，追求精通",
     },
@@ -369,7 +381,7 @@ async function pickDepth(): Promise<string | undefined> {
     placeHolder: "选择你的经验水平",
     title: "SparkTutor —— 设置你的水平",
   });
-  return pick?.label.toLowerCase();
+  return pick?.value;
 }
 
 async function openLesson(
@@ -385,6 +397,7 @@ async function openLesson(
   skipResumePrompt?: boolean
 ): Promise<void> {
   try {
+    await workspace.saveCurrentExercise();
     // Prompt for depth on first lesson open
     if (!depth && !currentDepth) {
       const picked = await pickDepth();
@@ -408,6 +421,9 @@ async function openLesson(
     };
 
     let result = await bridge.call<LoadLessonResult>("loadLesson", params);
+    if (result.legacyCode) {
+      workspace.backupLegacyCode(courseId, result.lessonId, result.legacyCode);
+    }
 
     // If there's saved progress, ask whether to resume or start fresh
     if (result.currentIndex > 0 && !skipResumePrompt) {
@@ -421,7 +437,7 @@ async function openLesson(
           courseId,
           lessonId: result.lessonId,
         });
-        workspace.deleteExerciseFile(courseId, result.lessonId);
+        await workspace.deleteExerciseFile(courseId, result.lessonId);
         result = await bridge.call<LoadLessonResult>("loadLesson", params);
       } else if (!choice) {
         return; // dismissed — do nothing
@@ -461,13 +477,13 @@ async function openLesson(
       await workspace.openExercise(
         courseId,
         result.lessonId,
-        result.currentIndex,
+        stepIdentity(result.step),
         result.starterCode || "",
         result.restoredCode || undefined
       );
     } else {
       // Non-code steps: open exercise file (pre-populated with first starter code if missing)
-      await workspace.openExerciseIfExists(courseId, result.lessonId, result.lessonTitle, result.firstStarterCode);
+      await workspace.openExerciseIfExists(courseId, result.lessonId, result.lessonTitle);
     }
 
     // THEN show the lesson panel (in Column Two) so it doesn't get displaced
@@ -495,6 +511,11 @@ async function runCode(
   workspace: WorkspaceManager,
   outputChannel: SparkOutputChannel
 ): Promise<void> {
+  if (currentStep?.cls !== "script" && currentStep?.cls !== "cmd_question") {
+    vscode.window.showInformationMessage("请进入编程题后运行代码。");
+    lessonPanel.notifyExecDone();
+    return;
+  }
   const code = workspace.getCurrentCode();
   if (!code.trim()) {
     vscode.window.showWarningMessage(
@@ -510,10 +531,13 @@ async function runCode(
 
   try {
     const result = await bridge.call<ExecResult>("run", { code });
-    outputChannel.appendLine(`\n--- Exit code: ${result.exitCode} (${result.mode}) ---`);
+    outputChannel.appendLine(`\n--- 退出码：${result.exitCode}（${result.mode}）---`);
+    outputChannel.appendLine(result.mode === "dry_run"
+      ? "当前仅检查 Python 语法，未执行 Spark 或课程测试，不能据此判断答案通过。"
+      : "运行结果已显示；请点击「提交判题」检查本题答案。");
   } catch (err) {
     outputChannel.appendLine(
-      `\n--- Error: ${err instanceof Error ? err.message : err} ---`
+      `\n--- 错误：${err instanceof Error ? err.message : err} ---`
     );
   } finally {
     lessonPanel.notifyExecDone();
@@ -527,6 +551,7 @@ async function submitCode(
   diagnostics: DiagnosticsManager,
   outputChannel: SparkOutputChannel
 ): Promise<void> {
+  const submittedStep = currentStep;
   const code = workspace.getCurrentCode();
   if (!code.trim()) {
     if (currentStep?.cls === "mult_question") {
@@ -538,6 +563,7 @@ async function submitCode(
         "没有可提交的代码。请在左侧编辑器标签页中编写代码，然后点击提交。"
       );
     }
+    lessonPanel.notifyExecDone();
     return;
   }
 
@@ -548,6 +574,7 @@ async function submitCode(
 
   try {
     const result = await aiRouter.submitCode({ code });
+    if (currentStep !== submittedStep) { return; }
     lessonPanel.showFeedback(result);
 
     // Set diagnostics on the exercise file (code steps only)
@@ -576,6 +603,8 @@ async function submitCode(
     const msg = err instanceof Error ? err.message : String(err);
     outputChannel.appendLine(`\n--- 错误：${msg} ---`);
     vscode.window.showErrorMessage(`提交失败：${msg}`);
+  } finally {
+    lessonPanel.notifyExecDone();
   }
 }
 
@@ -608,7 +637,7 @@ async function loadStepUI(
     await workspace.openExercise(
       currentCourseId,
       currentLessonId,
-      stepIndex,
+      stepIdentity(step),
       starterCode
     );
   } else if (currentCourseId && currentLessonId) {
@@ -633,6 +662,7 @@ async function nextStep(
   try {
     // Send current code so the server persists it for resume
     const code = workspace.getCurrentCode();
+    await workspace.saveCurrentExercise();
     const result = await bridge.call<AdvanceResult>("advance", { code });
 
     if (result.finished) {
@@ -673,6 +703,7 @@ async function prevStep(
   try {
     // Send current code so the server persists it for resume
     const code = workspace.getCurrentCode();
+    await workspace.saveCurrentExercise();
     const result = await bridge.call<GoBackResult>("goBack", { code });
 
     if (result.atStart) {

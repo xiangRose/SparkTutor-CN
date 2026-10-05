@@ -4,6 +4,7 @@
 
 import * as vscode from "vscode";
 import { EvalResult, StepData } from "./types";
+import { choiceButton, escapeHtml, shuffledChoices, stepIdentity } from "./lessonHelpers";
 
 export class LessonPanel {
   private panel: vscode.WebviewPanel | null = null;
@@ -30,7 +31,7 @@ export class LessonPanel {
 
     this.panel = vscode.window.createWebviewPanel(
       "sparktutorLesson",
-      "SparkTutor Lesson",
+      "SparkTutor 课程",
       vscode.ViewColumn.Two,
       {
         enableScripts: true,
@@ -153,15 +154,13 @@ export class LessonPanel {
       </div>`;
     } else if (step.cls === "mult_question") {
       // Multiple choice — pick an answer, then Submit
-      const choices = step.answerChoices
+      const sourceChoices = step.answerChoices
         ? step.answerChoices.split(";").map((c) => c.trim())
         : [];
+      const choices = shuffledChoices(sourceChoices, `${lessonTitle}:${stepIdentity(step)}`);
       instructionHtml = `<div class="instruction-banner prompt">在下方选择一个答案，然后点击<strong>提交</strong>。</div>`;
       choicesHtml = `<div class="choices">${choices
-        .map(
-          (c) =>
-            `<button class="choice-btn" onclick="selectChoice('${escapeHtml(c)}')">${escapeHtml(c)}</button>`
-        )
+        .map(choiceButton)
         .join("")}</div>`;
       actionButtonsHtml = `<div class="actions">
         <button class="btn btn-success" onclick="send('submit')">&check; 提交</button>
@@ -170,17 +169,17 @@ export class LessonPanel {
       // Code step — write code in editor, Run/Submit
       const label =
         step.cls === "script"
-          ? "在<strong>左侧编辑器标签页</strong>中编写你的解决方案，然后运行或提交。"
-          : "在<strong>左侧编辑器标签页</strong>中编写代码，然后点击提交。";
+          ? "在<strong>左侧独立练习文件</strong>中完成综合练习。<strong>运行代码</strong>查看输出；<strong>提交判题</strong>执行课程测试并检查答案。需要可用的 Spark 环境；仅语法检查不能通过综合题。"
+          : "在<strong>左侧本课练习文件</strong>中编写代码。<strong>运行代码</strong>查看执行结果；<strong>提交判题</strong>检查本题答案。每次运行都会启动新进程，所需变量和导入须在文件中定义。";
       instructionHtml = `<div class="instruction-banner prompt">${label}</div>`;
       actionButtonsHtml = `<div class="actions">
-        <button class="btn btn-primary" onclick="send('run')">&#9654; 运行</button>
-        <button class="btn btn-success" onclick="send('submit')">&check; 提交</button>
+        <button class="btn btn-primary" onclick="send('run')">&#9654; 运行代码</button>
+        <button class="btn btn-success" onclick="send('submit')">&check; 提交判题</button>
       </div>`;
     }
 
     this.panel.webview.html = `<!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -242,14 +241,6 @@ export class LessonPanel {
     this.panel?.dispose();
     this.panel = null;
   }
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 /** Map internal depth level to a Chinese label for the badge. */

@@ -21,6 +21,7 @@ export interface CourseProgress {
 }
 
 export interface StepData {
+  id?: string;
   cls: string;
   depth: string;
   output: string;
@@ -69,6 +70,7 @@ export interface LoadLessonResult {
   lessonTitle: string;
   lessonId: string;
   restoredCode: string;
+  legacyCode?: string;
   starterCode: string;
   firstStarterCode?: string;
   coursePrerequisites?: string[];

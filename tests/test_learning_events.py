@@ -84,3 +84,19 @@ async def test_server_records_runtime_events(handler):
     submit_event = next(event for event in result["events"] if event["eventType"] == "code_submit")
     assert submit_event["data"]["hintUsed"] is True
     assert submit_event["attemptNumber"] == 1
+
+
+@pytest.mark.asyncio
+async def test_reading_is_not_recorded_as_a_passed_assessment(handler):
+    await handler.dispatch({"method": "loadLesson", "params": {"courseId": "test_course", "lessonIdx": 0}})
+    await handler.dispatch({"method": "advance", "params": {}})
+    with pytest.raises(ValueError):
+        await handler.dispatch({"method": "advance", "params": {}})
+    events = handler.events.list_events()
+    completed = [e for e in events if e.event_type == "task_complete"]
+    assert len(completed) == 1
+    assert completed[0].data["passed"] is None
+    await handler.dispatch({"method": "submit", "params": {"code": "4"}})
+    await handler.dispatch({"method": "advance", "params": {}})
+    completed = [e for e in handler.events.list_events() if e.event_type == "task_complete"]
+    assert any(e.task_type == "mult_question" and e.data["passed"] is True for e in completed)

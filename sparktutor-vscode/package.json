@@ -61,11 +61,11 @@
       },
       {
         "command": "sparktutor.changeMode",
-        "title": "SparkTutor: Change Execution Mode"
+        "title": "SparkTutor：切换执行模式"
       },
       {
         "command": "sparktutor.checkAiConnection",
-        "title": "SparkTutor: Check AI Connection"
+        "title": "SparkTutor：检查 AI 连接"
       }
     ],
     "keybindings": [
@@ -118,17 +118,17 @@
         "sparktutor.pythonPath": {
           "type": "string",
           "default": "python3",
-          "description": "Path to the Python interpreter with sparktutor installed"
+          "description": "已安装 sparktutor 的 Python 解释器路径。Windows 可使用 python 或虚拟环境中 python.exe 的完整路径。"
         },
         "sparktutor.projectPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the sparktutor project root (containing src/sparktutor/). Leave empty for auto-detection."
+          "description": "SparkTutor 项目根目录（包含 src/sparktutor/）；留空时自动查找。"
         },
         "sparktutor.anthropicApiKey": {
           "type": "string",
           "default": "",
-          "description": "Anthropic API key for Claude-powered code review and chat. Leave empty to use ANTHROPIC_API_KEY environment variable.",
+          "description": "用于 Claude 代码评审和对话的 Anthropic API 密钥；留空时读取 ANTHROPIC_API_KEY 环境变量。",
           "order": 0
         },
         "sparktutor.claudeModel": {
@@ -139,91 +139,101 @@
             "claude-haiku-4-5-20251001",
             "claude-opus-4-6"
           ],
-          "description": "Claude model to use for code review and chat"
+          "description": "用于代码评审和对话的 Claude 模型。"
         },
         "sparktutor.autoCloseTabs": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically close exercise tabs from the previous course when switching courses"
+          "description": "切换课程时自动关闭上一门课程的练习标签页。"
         },
         "sparktutor.lakehouseStackPath": {
           "type": "string",
           "default": "",
-          "description": "Path to shared lakehouse stack (e.g. ~/lakehouse-stack). Used for courses requiring Spark/Kafka services. Leave empty to use per-course docker-compose."
+          "description": "共享湖仓环境 lakehouse-stack 的路径（如 ~/lakehouse-stack）。留空时使用课程自带的 docker-compose。"
         },
         "sparktutor.aiProvider": {
           "type": "string",
           "default": "auto",
-          "enum": ["anthropic", "copilot", "openai-compatible", "auto"],
-          "enumDescriptions": [
-            "Use Anthropic API directly (requires API key)",
-            "Use VS Code Copilot (GitHub Copilot subscription required)",
-            "Use any OpenAI-compatible API (DeepSeek, Zhipu GLM, Alibaba Qwen, Moonshot Kimi, Volcengine Doubao, Ollama, ...)",
-            "Auto: Anthropic if API key set, else OpenAI-compatible if configured, else Copilot if available, else local-only"
+          "enum": [
+            "anthropic",
+            "copilot",
+            "openai-compatible",
+            "auto"
           ],
-          "description": "Which AI provider to use for code review and chat"
+          "enumDescriptions": [
+            "直接使用 Anthropic API（需要 API 密钥）",
+            "使用 VS Code Copilot（需要 GitHub Copilot 订阅）",
+            "使用 OpenAI 兼容接口，例如 DeepSeek、智谱、通义千问、Kimi、豆包或 Ollama",
+            "自动选择：Anthropic → 已配置的 OpenAI 兼容接口 → 可用的 Copilot → 仅本地检查"
+          ],
+          "description": "用于代码评审和导师对话的 AI 提供方。"
         },
         "sparktutor.openaiBaseUrl": {
           "type": "string",
           "default": "https://api.openai.com/v1",
-          "description": "Base URL of an OpenAI-compatible API. Examples: DeepSeek https://api.deepseek.com/v1, Zhipu GLM https://open.bigmodel.cn/api/paas/v4, Alibaba Qwen https://dashscope.aliyuncs.com/compatible-mode/v1, Moonshot Kimi https://api.moonshot.cn/v1, Volcengine Doubao https://ark.cn-beijing.volces.com/api/v3, Ollama http://localhost:11434/v1",
+          "description": "OpenAI 兼容接口的基础地址，例如 DeepSeek：https://api.deepseek.com/v1；本地 Ollama：http://localhost:11434/v1。",
           "order": 1
         },
         "sparktutor.openaiApiKey": {
           "type": "string",
           "default": "",
-          "description": "API key for the OpenAI-compatible provider. Leave empty to use SPARKTUTOR_OPENAI_API_KEY or OPENAI_API_KEY environment variable.",
+          "description": "OpenAI 兼容接口的 API 密钥；留空时读取 SPARKTUTOR_OPENAI_API_KEY 或 OPENAI_API_KEY 环境变量。",
           "order": 2
         },
         "sparktutor.openaiModel": {
           "type": "string",
           "default": "gpt-4o-mini",
-          "description": "Model name for the OpenAI-compatible provider. Examples: deepseek-chat, glm-4-plus, qwen-plus, moonshot-v1-8k, doubao-seed-1-6-250615, or an Ollama model name.",
+          "description": "OpenAI 兼容接口的模型名称，例如 deepseek-chat、qwen-plus，或本地 Ollama 模型名；须与提供方支持的模型一致。",
           "order": 3
         },
         "sparktutor.openaiExtraHeaders": {
           "type": "object",
           "default": {},
-          "description": "Extra HTTP headers (JSON object) sent to the OpenAI-compatible endpoint, e.g. for x-api-key authentication or a custom Authorization header. Overrides the default Bearer auth when present.",
+          "description": "发送到 OpenAI 兼容接口的额外 HTTP 请求头（JSON 对象），例如 x-api-key 或自定义 Authorization；同名请求头会覆盖默认值。",
           "order": 4
         },
         "sparktutor.copilotModel": {
           "type": "string",
           "default": "",
-          "description": "Preferred GitHub Copilot model id or family (e.g. gpt-4o, claude-sonnet-4-6). Leave empty to auto-select.",
+          "description": "首选 GitHub Copilot 模型 ID 或系列名称；留空时自动选择可用模型。",
           "order": 5
         },
         "sparktutor.executionMode": {
           "type": "string",
           "default": "local",
-          "enum": ["local", "lakehouse", "databricks", "auto"],
-          "enumDescriptions": [
-            "Run Spark locally (pip install pyspark, no Docker needed)",
-            "Run via lakehouse-stack Docker containers (Kafka, Iceberg)",
-            "Run on a Databricks cluster via Spark Connect",
-            "Auto-detect: lakehouse if container running, otherwise local"
+          "enum": [
+            "local",
+            "lakehouse",
+            "databricks",
+            "auto"
           ],
-          "description": "How SparkTutor runs Spark code"
+          "enumDescriptions": [
+            "本地运行 Spark（需要 PySpark 和 Java 17+，无需 Docker）",
+            "通过 lakehouse-stack 的 Docker 容器运行",
+            "通过 Spark Connect 连接 Databricks 集群",
+            "自动检测：优先已运行的湖仓容器，否则使用本地 Spark；均不可用时仅检查语法"
+          ],
+          "description": "Spark 代码的执行方式。缺少 Spark 时只能检查语法，综合练习无法通过真实测试。"
         },
         "sparktutor.databricksHost": {
           "type": "string",
           "default": "",
-          "description": "Databricks workspace host (e.g. adb-1234567890.12.azuredatabricks.net)"
+          "description": "Databricks 工作区主机名，例如 adb-1234567890.12.azuredatabricks.net。"
         },
         "sparktutor.databricksToken": {
           "type": "string",
           "default": "",
-          "description": "Databricks personal access token"
+          "description": "Databricks 个人访问令牌。"
         },
         "sparktutor.databricksClusterId": {
           "type": "string",
           "default": "",
-          "description": "Databricks cluster ID to connect to"
+          "description": "要连接的 Databricks 集群 ID。"
         },
         "sparktutor.databricksProfile": {
           "type": "string",
           "default": "",
-          "description": "Databricks config profile name from ~/.databrickscfg (alternative to host/token/cluster)"
+          "description": "~/.databrickscfg 中的配置名称，可替代主机、令牌和集群配置。"
         }
       }
     }
@@ -232,7 +242,8 @@
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "lint": "tsc --noEmit",
-    "package": "npm run build && vsce package --no-dependencies"
+    "package": "npm run build && vsce package --no-dependencies",
+    "test": "node --test tests/*.test.cjs"
   },
   "overrides": {
     "cheerio": "1.0.0"

@@ -26,10 +26,10 @@ export async function activate(
 
   try {
     await bridge.start();
-    outputChannel.appendLine("SparkTutor server started successfully");
+    outputChannel.appendLine("SparkTutor 后端已启动");
   } catch (err) {
     const msg =
-      err instanceof Error ? err.message : "Unknown error starting server";
+      err instanceof Error ? err.message : "启动后端时发生未知错误";
     vscode.window.showErrorMessage(`SparkTutor: ${msg}`);
     return;
   }
@@ -101,7 +101,7 @@ export async function activate(
 
   // Show the output channel so the user knows it exists
   outputChannel.show();
-  outputChannel.appendLine("SparkTutor extension activated");
+  outputChannel.appendLine("SparkTutor 扩展已启用");
 
   // Auto-focus the SparkTutor sidebar so courses are visible on startup
   vscode.commands.executeCommand("sparktutorCourses.focus").then(

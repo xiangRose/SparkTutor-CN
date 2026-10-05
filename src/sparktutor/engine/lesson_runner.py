@@ -5,11 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+import uuid
 from typing import Optional
 
 from sparktutor.engine.adaptive import Depth, LearnerProfile
 from sparktutor.engine.evaluator import EvalResult, Evaluator
-from sparktutor.engine.executor import ExecResult, Executor
+from sparktutor.engine.executor import ExecMode, ExecResult, Executor
+from sparktutor.engine.exercise_validation import VALIDATION_MARKER, build_validation_script
 from sparktutor.engine.feedback import parse_stderr
 from sparktutor.engine.lesson_loader import Lesson, Step, load_lesson
 from sparktutor.state.progress import ProgressStore
@@ -68,9 +70,15 @@ class LessonRunner:
         self.progress = progress or ProgressStore()
         self.profile = profile or LearnerProfile()
         self.state: Optional[RunnerState] = None
+        self._pending_code: str = ""
+        self._hint_used: bool = False
+        self.pending_review_id: Optional[str] = None
 
     def load_lesson(self, lesson_dir: Path) -> RunnerState:
         """Load a lesson and filter steps by depth."""
+        self.pending_review_id = None
+        self._hint_used = False
+        self._pending_code = ""
         lesson = load_lesson(lesson_dir)
         depth = self.profile.depth.value
         filtered = lesson.steps_for_depth(depth)
@@ -82,11 +90,15 @@ class LessonRunner:
 
         # Resume from saved progress (only if depth matches)
         saved = self.progress.get(self.course_id, lesson.id)
+        self._restored_code = ""
+        self._legacy_code = ""
         if saved and not saved.completed and saved.depth == depth:
-            self.state.current_index = min(saved.current_step, len(filtered) - 1)
-            self._restored_code = saved.last_code
-        else:
-            self._restored_code = ""
+            matches = [i for i, step in enumerate(filtered) if step.id == saved.current_step_id]
+            self.state.current_index = matches[0] if matches else max(0, min(saved.current_step, len(filtered) - 1))
+            if saved.current_step_id and matches:
+                self._restored_code = saved.last_code
+            else:
+                self._legacy_code = saved.last_code
 
         return self.state
 
@@ -96,58 +108,24 @@ class LessonRunner:
         self._restored_code = ""  # Only return once
         return code
 
+    def get_legacy_code(self) -> str:
+        """Unbound legacy source is backed up by the UI, never inserted into a task."""
+        code = getattr(self, "_legacy_code", "")
+        self._legacy_code = ""
+        return code
+
     def current_step(self) -> Optional[Step]:
         if self.state is None:
             return None
         return self.state.current_step
 
     async def submit(self, user_input: str) -> EvalResult:
-        """Submit user answer/code for the current step."""
-        if self.state is None or self.state.current_step is None:
-            return EvalResult(passed=False, feedback=[])
-
-        step = self.state.current_step
-        self.state.step_state = StepState.EVALUATING
-        self.state.attempts += 1
-
-        # Execute if needed
-        exec_result = None
-        if step.requires_execution and step.cls in ("script", "cmd_question"):
-            exec_result = await self.executor.execute(user_input)
-            self.state.last_exec = exec_result
-
-            # Parse stderr for additional feedback
-            if exec_result.stderr:
-                stderr_feedback = parse_stderr(exec_result.stderr)
-
-        # Evaluate
-        result = await self.evaluator.evaluate(
-            code=user_input,
-            step=step,
-            depth=self.profile.depth.value,
-            exec_result=exec_result,
-            lesson_title=self.state.lesson.title,
-        )
-
-        # Merge execution feedback
-        if exec_result and exec_result.stderr:
-            stderr_items = parse_stderr(exec_result.stderr)
-            result.feedback.extend(stderr_items)
-
-        self.state.last_result = result
-        self.state.step_state = StepState.FEEDBACK
-
-        # Track signals
-        self.profile.record_attempt(
-            passed=result.passed,
-            used_hint=False,
-            signals=result.skill_signals,
-        )
-
-        # Save progress
-        self._save_progress(user_input)
-
-        return result
+        """Use the same execution gates for Anthropic and external providers."""
+        result, needs_ai, kwargs = await self.submit_local(user_input)
+        if needs_ai:
+            result = await self.evaluator.claude_review(**kwargs)
+            self.complete_review(result)
+        return result or EvalResult(passed=False)
 
     async def submit_local(self, user_input: str) -> tuple[Optional[EvalResult], bool, dict]:
         """Submit and run local checks only. Returns (result, needs_ai, review_kwargs).
@@ -161,15 +139,33 @@ class LessonRunner:
         step = self.state.current_step
         self.state.step_state = StepState.EVALUATING
         self.state.attempts += 1
+        self.state.last_result = None
+        self.state.last_exec = None
+        self.pending_review_id = None
+        self._pending_code = user_input
+        self._save_progress(user_input)
 
         # Execute if needed
         exec_result = None
         if step.requires_execution and step.cls in ("script", "cmd_question"):
-            exec_result = await self.executor.execute(user_input)
+            code_to_run = user_input
+            if step.cls == "script":
+                try:
+                    if not step.starter_code:
+                        raise ValueError("本练习缺少起始代码和课程测试。")
+                    template = (self.state.lesson.base_path / step.starter_code).read_text(encoding="utf-8")
+                    code_to_run = build_validation_script(user_input, template)
+                except (SyntaxError, ValueError, OSError) as error:
+                    exec_result = ExecResult(ExecMode.LOCAL, 1, "", str(error))
+            if exec_result is None:
+                exec_result = await self.executor.execute(code_to_run)
+            if step.cls == "script":
+                exec_result.validation_passed = (
+                    exec_result.mode != ExecMode.DRY_RUN
+                    and exec_result.success
+                    and VALIDATION_MARKER in exec_result.stdout.splitlines()
+                )
             self.state.last_exec = exec_result
-
-            if exec_result.stderr:
-                stderr_feedback = parse_stderr(exec_result.stderr)
 
         # Evaluate locally
         result, needs_ai, review_kwargs = await self.evaluator.evaluate_local(
@@ -180,36 +176,53 @@ class LessonRunner:
             lesson_title=self.state.lesson.title,
         )
 
+        if needs_ai:
+            self.pending_review_id = uuid.uuid4().hex
         if result is not None:
-            # Local checks were sufficient — merge execution feedback
-            if exec_result and exec_result.stderr:
-                stderr_items = parse_stderr(exec_result.stderr)
-                result.feedback.extend(stderr_items)
-
-            self.state.last_result = result
-            self.state.step_state = StepState.FEEDBACK
-
-            self.profile.record_attempt(
-                passed=result.passed,
-                used_hint=False,
-                signals=result.skill_signals,
-            )
-            self._save_progress(user_input)
+            self.complete_review(result)
 
         return result, needs_ai, review_kwargs
+
+    def complete_review(self, result: EvalResult) -> None:
+        """Finalize local or remote feedback without losing submitted code."""
+        if self.state is None:
+            return
+        self.pending_review_id = None
+        if self.state.last_exec and not self.state.last_exec.success:
+            result.feedback.extend(parse_stderr(self.state.last_exec.stderr))
+        self.state.last_result = result
+        self.state.step_state = StepState.FEEDBACK
+        self.profile.record_attempt(
+            passed=result.passed, used_hint=self._hint_used,
+            first_attempt=self.state.attempts == 1, signals=result.skill_signals,
+        )
+        self._hint_used = False
+        self._save_progress(self._pending_code)
+
+    def require_can_advance(self) -> None:
+        if self.state and self.state.current_step:
+            if self.state.current_step.cls in ("mult_question", "cmd_question", "script"):
+                if not self.state.last_result or not self.state.last_result.passed:
+                    raise ValueError("请先提交并通过当前练习，再进入下一步。")
 
     def advance(self, current_code: str = "") -> Optional[Step]:
         """Move to the next step (only if current step passed)."""
         if self.state is None:
             return None
 
+        self.require_can_advance()
+
         self.state.current_index += 1
         self.state.attempts = 0
         self.state.step_state = StepState.PRESENTING
         self.state.last_result = None
         self.state.last_exec = None
+        self._hint_used = False
+        self.pending_review_id = None
 
-        self._save_progress(current_code)
+        # The next step may use a different file. Never restore the previous
+        # exercise's source into its newly selected step.
+        self._save_progress("")
 
         return self.state.current_step
 
@@ -225,8 +238,10 @@ class LessonRunner:
         self.state.step_state = StepState.PRESENTING
         self.state.last_result = None
         self.state.last_exec = None
+        self._hint_used = False
+        self.pending_review_id = None
 
-        self._save_progress(current_code)
+        self._save_progress("")
 
         return self.state.current_step
 
@@ -241,13 +256,14 @@ class LessonRunner:
             completed=self.state.is_finished,
             depth=self.profile.depth.value,
             last_code=last_code,
+            current_step_id=self.state.current_step.id if self.state.current_step else "finished",
         )
 
     def get_hint(self) -> Optional[str]:
         """Return the hint for the current step, if available."""
         step = self.current_step()
         if step and step.hint:
-            self.profile.record_attempt(passed=False, used_hint=True)
+            self._hint_used = True
             return step.hint
         return None
 
@@ -260,6 +276,16 @@ class LessonRunner:
         step = self.current_step()
         if step is None:
             return ""
+
+        if step.starter_code and self.state:
+            return (self.state.lesson.base_path / step.starter_code).read_text(encoding="utf-8")
+
+        from sparktutor.engine.scaffolding import generate_scaffold
+        return generate_scaffold(
+            step_output=step.output, step_cls=step.cls, depth=self.profile.depth.value,
+            correct_answer=step.correct_answer or "", hint=step.hint or "",
+            lesson_title=self.state.lesson.title if self.state else "",
+        )
 
     def get_first_starter_code(self) -> str:
         """Scan ahead for the first code step's starter code.
@@ -275,7 +301,7 @@ class LessonRunner:
             if step.starter_code:
                 starter_path = self.state.lesson.base_path / step.starter_code
                 if starter_path.exists():
-                    return starter_path.read_text()
+                    return starter_path.read_text(encoding="utf-8")
             from sparktutor.engine.scaffolding import generate_scaffold
             return generate_scaffold(
                 step_output=step.output,
@@ -285,25 +311,4 @@ class LessonRunner:
                 hint=step.hint or "",
                 lesson_title=self.state.lesson.title,
             )
-        return ""
-
-        # Use explicit starter file if available
-        if step.starter_code and self.state:
-            starter_path = self.state.lesson.base_path / step.starter_code
-            if starter_path.exists():
-                return starter_path.read_text()
-
-        # Generate scaffolding for code steps without an explicit starter
-        if step.cls in ("cmd_question", "script"):
-            from sparktutor.engine.scaffolding import generate_scaffold
-
-            return generate_scaffold(
-                step_output=step.output,
-                step_cls=step.cls,
-                depth=self.profile.depth.value,
-                correct_answer=step.correct_answer or "",
-                hint=step.hint or "",
-                lesson_title=self.state.lesson.title if self.state else "",
-            )
-
         return ""

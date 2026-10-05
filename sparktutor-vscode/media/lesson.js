@@ -103,12 +103,20 @@ function send(type) {
 function selectChoice(choice) {
   document.querySelectorAll('.choice-btn').forEach(function (btn) {
     btn.classList.remove('selected');
-    if (btn.textContent.trim() === choice) {
+    btn.setAttribute('aria-pressed', 'false');
+    if (btn.dataset.choice === choice) {
       btn.classList.add('selected');
+      btn.setAttribute('aria-pressed', 'true');
     }
   });
   vscode.postMessage({ type: 'choiceSelect', choice: choice });
 }
+
+document.querySelectorAll('.choice-btn').forEach(function (button) {
+  button.addEventListener('click', function () {
+    selectChoice(button.dataset.choice);
+  });
+});
 
 /**
  * Send a chat question.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import json
 import re
 import time
 import uuid
@@ -11,7 +12,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Callable, Optional
 
-from sparktutor.config.settings import Settings
+from sparktutor.config.settings import ExecutionMode, Settings
 from sparktutor.courses.registry import CourseRegistry
 from sparktutor.engine.adaptive import Depth, LearnerProfile
 from sparktutor.engine.evaluator import Evaluator
@@ -28,6 +29,7 @@ def _step_to_dict(step) -> dict:
     if step is None:
         return {}
     return {
+        "id": step.id,
         "cls": step.cls,
         "depth": step.depth,
         "output": step.output,
@@ -87,7 +89,9 @@ class ServerHandler:
     def _task_id(self) -> str:
         if self._runner is None or self._runner.state is None:
             return ""
-        return f"{self._runner.state.lesson.id}:{self._runner.state.current_index}"
+        step = self._runner.state.current_step
+        step_id = step.id if step else "finished"
+        return f"{self._runner.state.lesson.id}:{step_id}"
 
     def _record_event(self, event_type: str, data: Optional[dict] = None) -> None:
         """Record behavior metadata without storing source code or chat text."""
@@ -133,11 +137,13 @@ class ServerHandler:
             "getHint": self._get_hint,
             "chat": self._chat,
             "detectMode": self._detect_mode,
+            "setExecutionMode": self._set_execution_mode,
             "resetLesson": self._reset_lesson,
             "getSolution": self._get_solution,
             "buildReviewPrompt": self._build_review_prompt,
             "buildChatPrompt": self._build_chat_prompt,
             "parseReviewResponse": self._parse_review_response,
+            "completeReviewFailure": self._complete_review_failure,
             "getLearningEvents": self._get_learning_events,
             "ping": self._ping,
         }
@@ -198,7 +204,7 @@ class ServerHandler:
         )
         state = self._runner.load_lesson(lesson_dir)
         self._task_started_at.clear()
-        self._task_started_at[f"{state.lesson.id}:{state.current_index}"] = time.monotonic()
+        self._task_started_at[self._task_id()] = time.monotonic()
         self._record_event(
             "lesson_loaded",
             {
@@ -223,6 +229,7 @@ class ServerHandler:
             "lessonTitle": state.lesson.title,
             "lessonId": state.lesson.id,
             "restoredCode": restored_code,
+            "legacyCode": self._runner.get_legacy_code(),
             "starterCode": starter_code,
             "firstStarterCode": self._runner.get_first_starter_code(),
         }
@@ -254,6 +261,8 @@ class ServerHandler:
             )
 
         result = await self.executor.execute(code, on_output=on_output)
+        if self._runner and self._runner.state:
+            self._runner.state.last_exec = result
         self._record_event(
             "code_run",
             {
@@ -272,6 +281,7 @@ class ServerHandler:
             "stdout": result.stdout,
             "stderr": result.stderr,
             "mode": result.mode.value,
+            "validationPassed": result.validation_passed,
         }
 
     async def _submit(self, params: dict) -> dict:
@@ -310,6 +320,7 @@ class ServerHandler:
         if self._runner is None:
             raise ValueError("No lesson loaded")
 
+        self._runner.require_can_advance()
         previous_task_id = self._task_id()
         previous_started = self._task_started_at.get(previous_task_id)
         previous_state = self._runner.state
@@ -320,7 +331,10 @@ class ServerHandler:
             self._record_event(
                 "task_complete",
                 {
-                    "passed": True,
+                    "passed": (
+                        previous_state.last_result.passed
+                        if previous_state.last_result else None
+                    ),
                     "currentStep": previous_state.current_index,
                     "totalSteps": len(previous_state.filtered_steps),
                     "durationMs": duration_ms,
@@ -429,7 +443,7 @@ class ServerHandler:
         solution_path = self._runner.state.lesson.base_path / step.solution_code
         if solution_path.exists():
             self._record_event("solution_view", {"available": True})
-            return {"solution": solution_path.read_text()}
+            return {"solution": solution_path.read_text(encoding="utf-8")}
         self._record_event("solution_view", {"available": False})
         return {"solution": ""}
 
@@ -481,6 +495,7 @@ class ServerHandler:
         if needs_ai and review_kwargs:
             messages = self.evaluator.build_review_prompt(**review_kwargs)
             response["messages"] = messages
+            response["reviewId"] = self._runner.pending_review_id
 
         return response
 
@@ -529,28 +544,15 @@ class ServerHandler:
 
     async def _parse_review_response(self, params: dict) -> dict:
         """Parse raw AI response text into EvalResult."""
+        if (self._runner is None or not self._runner.pending_review_id
+                or params.get("reviewId") != self._runner.pending_review_id):
+            raise ValueError("这次 AI 评审对应的提交已失效，请在当前练习重新提交。")
         raw_text = params["rawText"]
         result = self.evaluator.parse_review_response(raw_text)
 
         # Complete the state tracking that submit_local() left pending
         if self._runner and self._runner.state:
-            from sparktutor.engine.feedback import parse_stderr
-
-            if self._runner.state.last_exec and self._runner.state.last_exec.stderr:
-                stderr_items = parse_stderr(self._runner.state.last_exec.stderr)
-                result.feedback.extend(stderr_items)
-
-            self._runner.state.last_result = result
-            from sparktutor.engine.lesson_runner import StepState
-            self._runner.state.step_state = StepState.FEEDBACK
-
-            self._runner.profile.record_attempt(
-                passed=result.passed,
-                used_hint=False,
-                signals=result.skill_signals,
-            )
-            # Save with empty code since we already saved during submit_local
-            self._runner._save_progress("")
+            self._runner.complete_review(result)
             hint_used = self._task_id() in self._hinted_tasks
             self._hinted_tasks.discard(self._task_id())
             self._record_event(
@@ -579,6 +581,17 @@ class ServerHandler:
             "skillSignals": result.skill_signals,
         }
 
+    async def _complete_review_failure(self, params: dict) -> dict:
+        """End an unavailable external review with the same tracking as Claude."""
+        return await self._parse_review_response({
+            "reviewId": params.get("reviewId"),
+            "rawText": json.dumps({
+                "passed": False,
+                "feedback": [{"severity": "warning", "category": None,
+                              "message": str(params.get("message", "AI 评审暂不可用，请稍后重试。"))[:1500]}],
+            }, ensure_ascii=False),
+        })
+
     async def _get_learning_events(self, params: dict) -> dict:
         events = self.events.list_events(
             course_id=params.get("courseId", ""),
@@ -590,6 +603,11 @@ class ServerHandler:
     async def _detect_mode(self, params: dict) -> dict:
         mode = await self.executor.detect_mode()
         return {"mode": mode.value}
+
+    async def _set_execution_mode(self, params: dict) -> dict:
+        self.settings.execution_mode = ExecutionMode(params["mode"])
+        self.executor._detected_mode = None
+        return await self._detect_mode({})
 
     async def _ping(self, params: dict) -> dict:
         """Health check for the configured AI provider (Anthropic client)."""

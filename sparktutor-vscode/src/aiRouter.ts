@@ -25,6 +25,7 @@ const HEALTH_COOLDOWN_MS = 60_000;
 
 interface BuildReviewResult {
   needsAiReview: boolean;
+  reviewId?: string;
   localResult?: EvalResult;
   messages?: { role: string; content: string }[];
 }
@@ -150,11 +151,11 @@ export class AiRouter {
           [{ role: "user", content: "ping" }],
           8
         );
-        const message = `OpenAI-compatible OK (${cfg.baseUrl} · ${cfg.model}) in ${Date.now() - started}ms`;
+        const message = `OpenAI 兼容接口连接成功（${cfg.baseUrl} · ${cfg.model}），用时 ${Date.now() - started} 毫秒`;
         this.recordHealth("openai-compatible", true);
         return { ok: true, message };
       } catch (err) {
-        const message = `OpenAI-compatible check failed: ${
+        const message = `OpenAI 兼容接口检查失败：${
           err instanceof Error ? err.message : err
         }`;
         this.recordHealth("openai-compatible", false);
@@ -167,16 +168,16 @@ export class AiRouter {
         const available = await this.copilot.isAvailable();
         if (!available) {
           this.recordHealth("copilot", false);
-          return { ok: false, message: "Copilot is not available." };
+          return { ok: false, message: "Copilot 不可用。" };
         }
         await this.copilot.sendRequest(
           [{ role: "user", content: "ping" }],
           8
         );
         this.recordHealth("copilot", true);
-        return { ok: true, message: "Copilot OK." };
+        return { ok: true, message: "Copilot 连接成功。" };
       } catch (err) {
-        const message = `Copilot check failed: ${
+        const message = `Copilot 检查失败：${
           err instanceof Error ? err.message : err
         }`;
         this.recordHealth("copilot", false);
@@ -193,7 +194,7 @@ export class AiRouter {
         this.recordHealth("anthropic", result.ok);
         return result;
       } catch (err) {
-        const message = `Anthropic check failed: ${
+        const message = `Anthropic 检查失败：${
           err instanceof Error ? err.message : err
         }`;
         this.recordHealth("anthropic", false);
@@ -204,7 +205,7 @@ export class AiRouter {
     return {
       ok: false,
       message:
-        "No AI provider configured. Set one up in SparkTutor settings first.",
+        "未配置 AI 提供方，请先在 SparkTutor 设置中配置。",
     };
   }
 
@@ -244,22 +245,9 @@ export class AiRouter {
       return buildResult.localResult;
     }
 
-    return {
-      passed: false,
-      feedback: [
-        {
-          line: null,
-          severity: "info",
-          message:
-            "未配置 AI 提供方 —— 仅使用本地检查。" +
-            "请设置 Anthropic API 密钥、配置 OpenAI 兼容接口，或安装 GitHub Copilot 以启用 AI 评审。",
-          suggestion: null,
-          category: null,
-        },
-      ],
-      encouragement: "",
-      skillSignals: [],
-    };
+    return this.completeReviewFailure(buildResult.reviewId,
+      "本题需要 AI 评审，但尚未配置 AI 提供方。" +
+      "请设置 Anthropic API 密钥、配置 OpenAI 兼容接口，或安装 GitHub Copilot 后重新提交。");
   }
 
   /**
@@ -319,41 +307,45 @@ export class AiRouter {
 
     // AI review needed — call the external provider
     if (buildResult.messages) {
+      let rawText: string;
       try {
-        const rawText = await send(buildResult.messages);
-        const parsed = await this.bridge.call<EvalResult>(
-          "parseReviewResponse",
-          { rawText }
-        );
-        return parsed;
+        rawText = await send(buildResult.messages);
       } catch (err) {
-        // Provider failed — return local result if available, else error
-        if (buildResult.localResult) {
-          return buildResult.localResult;
-        }
-        return {
-          passed: false,
-          feedback: [
-            {
-              line: null,
-              severity: "warning",
-              message: `${providerName} review failed: ${
-                err instanceof Error ? err.message : err
-              }`,
-              suggestion: null,
-              category: null,
-            },
-          ],
-          encouragement: "",
-          skillSignals: [],
-        };
+        return this.completeReviewFailure(buildResult.reviewId,
+          `${providerName} 评审失败：${err instanceof Error ? err.message : err}`);
+      }
+      try {
+        return await this.bridge.call<EvalResult>(
+          "parseReviewResponse",
+          { rawText, reviewId: buildResult.reviewId }
+        );
+      } catch (err) {
+        // Parsing can reject a stale submission. Do not finalize it again or
+        // accidentally alter the newer pending review on the backend.
+        return this.failedReview(`评审结果未应用：${err instanceof Error ? err.message : err}`);
       }
     }
 
     // No messages and no local result — shouldn't happen, but handle gracefully
-    return buildResult.localResult || {
+    return buildResult.localResult || this.completeReviewFailure(buildResult.reviewId,
+      "未收到有效的 AI 评审请求，请重新提交。");
+  }
+
+  /** Finish a failed external request so code and attempt statistics are persisted. */
+  private async completeReviewFailure(reviewId: string | undefined, message: string): Promise<EvalResult> {
+    if (!reviewId) { return this.failedReview(message); }
+    try {
+      return await this.bridge.call<EvalResult>("completeReviewFailure", { reviewId, message });
+    } catch (err) {
+      // An expired id must never complete the active step's newer submission.
+      return this.failedReview(`${message} 失败记录未应用：${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  private failedReview(message: string): EvalResult {
+    return {
       passed: false,
-      feedback: [],
+      feedback: [{ line: null, severity: "warning", message, suggestion: null, category: null }],
       encouragement: "",
       skillSignals: [],
     };
@@ -378,7 +370,7 @@ export class AiRouter {
       return { answer };
     } catch (err) {
       return {
-        answer: `${providerName} chat failed: ${
+        answer: `${providerName} 对话失败：${
           err instanceof Error ? err.message : err
         }`,
       };

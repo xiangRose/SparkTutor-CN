@@ -1,8 +1,10 @@
 """Tests for the evaluation engine."""
 
 import pytest
+from pathlib import Path
 
 from sparktutor.engine.evaluator import Evaluator, EvalResult, FeedbackItem
+from sparktutor.engine.lesson_loader import load_lesson
 from sparktutor.engine.normalizer import choices_match, code_match, normalize_code
 
 
@@ -15,6 +17,26 @@ class TestNormalizer:
 
     def test_choices_no_match(self):
         assert not choices_match("create()", "getOrCreate()")
+
+    def test_chinese_choices_keep_their_meaning(self):
+        assert choices_match("协调执行并规划查询", "协调执行并规划查询")
+        assert not choices_match("将数据存储在磁盘上", "协调执行并规划查询")
+        assert not choices_match("", "协调执行并规划查询")
+        assert not choices_match(" \n ", "")
+
+    def test_choice_full_width_ascii_and_whitespace(self):
+        assert choices_match("　调用：getOrCreate（）　", "调用:getOrCreate()")
+        assert choices_match("Spark  SQL\n查询", "Spark SQL 查询")
+
+    @pytest.mark.parametrize("guess,correct", [
+        ("a + b", "a - b"),
+        ("count()", "count"),
+        ("is_null", "isnull"),
+        ("x²", "x2"),
+        ("x < 2", "x > 2"),
+    ])
+    def test_choices_keep_code_and_math_distinctions(self, guess, correct):
+        assert not choices_match(guess, correct)
 
     def test_code_match_quotes(self):
         assert code_match('x = "hello"', "x = 'hello'")
@@ -76,3 +98,25 @@ class TestEvaluator:
         result = evaluator.check_ast_contains("def (:", [{"expr": "ast_contains(function='foo')"}])
         assert not result.passed
         assert result.feedback[0].severity == "error"
+
+
+def test_all_course_choices_reject_every_wrong_option():
+    courses_dir = Path(__file__).resolve().parents[1] / "src" / "sparktutor" / "courses"
+    evaluator = Evaluator()
+    questions_checked = 0
+    for lesson_path in courses_dir.rglob("lesson.yaml"):
+        lesson = load_lesson(lesson_path.parent)
+        for step in lesson.steps:
+            if step.cls != "mult_question":
+                continue
+            questions_checked += 1
+            assert step.correct_answer
+            options = [option.strip() for option in step.answer_choices.split(";")]
+            assert step.correct_answer in options
+            for option in options:
+                expected = option == step.correct_answer
+                result = evaluator.check_mult_choice(option, step.correct_answer)
+                assert result.passed is expected, (
+                    f"{lesson_path}: {option!r} compared with {step.correct_answer!r}"
+                )
+    assert questions_checked > 0

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "sparktutor"
 version = "0.1.0"
-description = "Interactive Spark 4.1 learning environment with Claude-powered tutoring"
+description = "Chinese Spark 4.1 learning environment with executable exercises and AI tutoring"
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.1",
@@ -17,6 +17,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+spark = [
+    "pyspark==4.1.1",
+    "numpy>=1.22",
+]
 tui = [
     "textual>=1.0.0",
 ]
@@ -30,3 +34,6 @@ sparktutor = "sparktutor.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sparktutor"]
+
+[tool.pytest.ini_options]
+markers = ["spark: real Spark 4.1 course execution (set SPARKTUTOR_TEST_SPARK=1)"]
