@@ -228,10 +228,11 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：湖仓模拟
 
-    由于本练习以 dry-run 模式运行（不需要 Delta/Iceberg JAR），
+    本练习需要运行本地 Spark，但不需要 Delta/Iceberg JAR 或外部服务；
     你将使用带版本的 Parquet 目录来模拟湖仓概念。
 
     实现 `lakehouse_simulation(spark, base_path)`：
@@ -243,6 +244,15 @@
     5. 返回一个包含两个版本和 schema 对比的字典
 
     这模拟了核心湖仓工作流：写入、演进、查询历史版本。
+    **输入、输出与通过条件**
+
+    输入：`lakehouse_simulation(spark, base_path)` 使用给定 INITIAL_DATA、NEW_EMPLOYEES、SCHEMA。
+    在 base_path/v0 保存三名原员工，在 base_path/v1 保存包含新增员工的五行完整快照。
+    返回字典键：version_0、version_1（从磁盘读回的 DataFrame），v0_count、v1_count（整数），
+    schemas_match（布尔值）。通过条件：两个快照分别包含 id 1–3 和 1–5，内容与样本一致、
+    列类型一致；写 v1 不能改变 v0。目录模拟不提供 ACID、自动版本管理或并发控制。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
   Hint: "用 spark.createDataFrame 配合 SCHEMA，将每个版本写入带版本号的子目录，读回两者并比较 schema。"

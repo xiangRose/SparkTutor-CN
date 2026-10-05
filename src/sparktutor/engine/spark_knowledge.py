@@ -6,16 +6,16 @@ and JIRA. No random blog posts.
 
 # Canonical source URLs the tutor should reference
 CANONICAL_SOURCES = {
-    "docs": "https://spark.apache.org/docs/4.1.0/",
-    "api_python": "https://spark.apache.org/docs/4.1.0/api/python/",
-    "api_scala": "https://spark.apache.org/docs/4.1.0/api/scala/",
-    "sql_ref": "https://spark.apache.org/docs/4.1.0/sql-ref.html",
-    "migration": "https://spark.apache.org/docs/4.1.0/migration-guide.html",
+    "docs": "https://spark.apache.org/docs/4.1.1/",
+    "api_python": "https://spark.apache.org/docs/4.1.1/api/python/",
+    "api_scala": "https://spark.apache.org/docs/4.1.1/api/scala/",
+    "sql_ref": "https://spark.apache.org/docs/4.1.1/sql-ref.html",
+    "migration": "https://spark.apache.org/docs/4.1.1/migration-guide.html",
     "source": "https://github.com/apache/spark",
     "jira": "https://issues.apache.org/jira/browse/SPARK-",
-    "structured_streaming": "https://spark.apache.org/docs/4.1.0/structured-streaming-programming-guide.html",
-    "configuration": "https://spark.apache.org/docs/4.1.0/configuration.html",
-    "tuning": "https://spark.apache.org/docs/4.1.0/tuning.html",
+    "structured_streaming": "https://spark.apache.org/docs/4.1.1/structured-streaming-programming-guide.html",
+    "configuration": "https://spark.apache.org/docs/4.1.1/configuration.html",
+    "tuning": "https://spark.apache.org/docs/4.1.1/tuning.html",
     "iceberg": "https://iceberg.apache.org/docs/latest/spark-configuration/",
 }
 
@@ -24,14 +24,14 @@ SPARK_41_REFERENCE = """## Apache Spark 4.1 Reference
 
 ### Key changes in Spark 4.0/4.1 (vs 3.x)
 - Scala 2.13 only (dropped 2.12)
-- Java 17+ required (dropped Java 8/11)
+- Java 17 or 21 and Python 3.10+; install the JDK separately and configure JAVA_HOME
 - ANSI SQL mode ON by default (spark.sql.ansi.enabled=true)
-- SparkSession.builder is the sole entry point (SQLContext/HiveContext fully removed)
+- SparkSession.builder is the recommended entry point for DataFrame and SQL applications
 - Adaptive Query Execution (AQE) on by default since 3.2, refined in 4.x
-- Real-Time Mode (RTM) via transformWithState: stateful streaming with update output mode
+- transformWithState provides arbitrary stateful processing; it is not synonymous with a real-time execution mode
 - Spark Connect: client-server decoupled architecture (thin client over gRPC)
-- Iceberg as a first-class catalog integration
-- Arrow-optimized Python UDFs by default
+- Iceberg integration requires a compatible external runtime and catalog configuration
+- pandas UDFs and Arrow-optimized scalar Python UDFs are different APIs; check dependencies and configuration
 - Structured logging with LogKey/MDC pattern
 
 ### SparkSession
@@ -64,9 +64,8 @@ SPARK_41_REFERENCE = """## Apache Spark 4.1 Reference
 - Triggers: `processingTime="10 seconds"`, `availableNow=True`, `once=True`
 - Watermarks: `df.withWatermark("ts", "10 minutes")`
 - `transformWithState`: custom stateful logic with `getValueState`, `getListState`
-  - Requires pyarrow + protobuf>=5.26 on executors
-  - Only supports update output mode
-  - `timeMode="None"` or `timeMode="ProcessingTime"`
+  - Select output/time modes and Python dependencies using the 4.1 API documentation for the specific operation
+  - Do not infer end-to-end exactly-once guarantees without checking source, sink, and checkpoint semantics
 
 ### Performance tuning
 - `spark.sql.shuffle.partitions` — reduce for small datasets (default 200)
@@ -75,7 +74,9 @@ SPARK_41_REFERENCE = """## Apache Spark 4.1 Reference
 - `spark.sql.adaptive.coalescePartitions.enabled=true`
 - `spark.sql.files.maxPartitionBytes` — default 128MB per partition
 - Broadcast hints: `df.join(broadcast(small_df), "key")`
-- Cache: `df.cache()` / `df.persist(StorageLevel.MEMORY_AND_DISK)`
+- DataFrame cache default: `StorageLevel.MEMORY_AND_DISK_DESER`; cache is lazy and needs an action
+- Run downstream actions before `unpersist()` if they are meant to reuse a cached DataFrame
+- PySpark has no `StorageLevel.MEMORY_ONLY_SER` constant
 - Avoid UDFs when native functions exist (Column expressions are optimized, UDFs are not)
 
 ### Iceberg integration
@@ -87,11 +88,20 @@ SPARK_41_REFERENCE = """## Apache Spark 4.1 Reference
 - Partition evolution: `ALTER TABLE t ADD PARTITION FIELD bucket(16, id)`
 
 ### Common errors and fixes
-- `AnalysisException: cannot resolve column` → check column names, case sensitivity in ANSI mode
+- `AnalysisException: cannot resolve column` → check column names and spark.sql.caseSensitive (separate from ANSI mode)
+- Malformed numeric strings under default ANSI mode → `cast` raises; use `Column.try_cast` to return null for parsing failures
 - `OutOfMemoryError` on driver → increase `spark.driver.memory`, reduce `collect()` usage
-- Shuffle spill → increase `spark.executor.memory`, reduce partition count
+- Shuffle spill → inspect per-task data size, skew, partitioning, and memory before changing configuration
 - Skew → enable AQE (`spark.sql.adaptive.skewJoin.enabled=true`)
-- `NoSuchMethodError` with Delta 4.0.1 on Spark 4.1 → binary incompatibility, use Iceberg instead
+- `NoSuchMethodError` with external table formats → verify the Spark/Scala/runtime compatibility matrix; do not assume changing table formats fixes it
+
+### Course scope and statistical interpretation
+- The course's custom Pipeline class is a teaching framework, not official Spark Declarative Pipelines (pyspark.pipelines)
+- Its materialized_view decorator registers a Python function; createOrReplaceTempView creates a session-local logical view, not durable materialization
+- Regex-based dependency detection only supports the documented simple literal spark.table calls
+- Overwrite and dropDuplicates do not alone guarantee idempotence; timestamps, conflicting duplicate rows, retries, and atomic commits matter
+- R-squared can be negative; the best value is 1, and a negative value is worse than the corresponding mean baseline (default centered definition)
+- The streaming and lakehouse exercises execute local batch Spark jobs; dry-run is only a syntax check
 """
 
 SYSTEM_PROMPT_TEMPLATE = """You are SparkTutor, an expert Apache Spark 4.1 tutor embedded in a VS Code learning extension.

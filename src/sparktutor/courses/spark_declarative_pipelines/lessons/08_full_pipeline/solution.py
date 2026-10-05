@@ -31,7 +31,7 @@ class Pipeline:
     def _topo_sort(self, graph):
         in_degree = {n: 0 for n in graph}
         for node, deps in graph.items():
-            for dep in deps:
+            for dep in set(deps):
                 if dep in in_degree:
                     in_degree[node] += 1
         queue = deque(n for n, d in in_degree.items() if d == 0)
@@ -54,7 +54,7 @@ class Pipeline:
         for name in order:
             df = self._flows[name](self.spark)
             df.createOrReplaceTempView(name)
-            print(f"已物化：{name}（{df.count()} 行）")
+            print(f"已注册临时视图：{name}（{df.count()} 行）")
 
 
 # ---- 流水线层 ----
@@ -90,8 +90,8 @@ def build_pipeline(spark, csv_path):
         bronze = spark.table("bronze_orders")
 
         typed = (bronze
-            .withColumn("price", f.col("price").cast("double"))
-            .withColumn("quantity", f.col("quantity").cast("int"))
+            .withColumn("price", f.col("price").try_cast("double"))
+            .withColumn("quantity", f.col("quantity").try_cast("int"))
         )
 
         with_total = typed.withColumn("total", f.col("price") * f.col("quantity"))
@@ -130,7 +130,7 @@ def build_pipeline(spark, csv_path):
 if __name__ == "__main__":
     import tempfile, os
 
-    spark = SparkSession.builder.appName("FullPipelineTest").master("local[*]").getOrCreate()
+    spark = SparkSession.builder.appName("FullPipelineTest").master("local[*]").config("spark.sql.ansi.enabled", "true").getOrCreate()
 
     tmp = tempfile.mkdtemp()
     csv_path = os.path.join(tmp, "orders.csv")
@@ -158,6 +158,17 @@ if __name__ == "__main__":
     gold = spark.table("gold_product_summary")
     assert gold.count() == 3, f"Gold：预期 3 个产品，实际得到 {gold.count()}"
     assert "revenue_rank" in gold.columns, "Gold：缺少 'revenue_rank'"
+
+    from pyspark.sql.types import DoubleType, IntegerType
+    assert "_source_file" in bronze.columns
+    assert all(bronze.schema[c].dataType == StringType() for c in ["order_id", "product", "price", "quantity", "order_ts"])
+    assert silver.schema["price"].dataType == DoubleType() and silver.schema["quantity"].dataType == IntegerType()
+    assert {r.order_id: r.order_hour for r in silver.collect()} == {"1": 14, "2": 9, "3": 16, "4": 11}
+    expected = {"widget": (2, 69.93, 34.965, 1), "gizmo": (1, 49.90, 49.90, 2), "gadget": (1, 24.99, 24.99, 3)}
+    for row in gold.collect():
+        count, revenue, avg, rank = expected[row.product]
+        assert row.order_count == count and row.revenue_rank == rank
+        assert abs(row.total_revenue - revenue) < 1e-8 and abs(row.avg_order_value - avg) < 1e-8
 
     print("\n所有测试通过！完整流水线端到端运行正常。")
     gold.show(truncate=False)

@@ -76,7 +76,7 @@
 
     这些优化自动发生。你通过使用 DataFrame API 或 SQL 免费获得它们。
 
-    **文档：** [Spark SQL Programming Guide](https://spark.apache.org/docs/3.5.0/sql-programming-guide.html)
+    **文档：** [Spark SQL Programming Guide](https://spark.apache.org/docs/4.1.1/sql-programming-guide.html)
     —— 涵盖 Catalyst 阶段、谓词下推、列裁剪和计划优化。
 
 - Class: text
@@ -165,9 +165,9 @@
     - 尽可能优先用内置函数 —— 它们在 JVM 中原生运行并由 Catalyst 优化
 
     **文档：**
-    [udf](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.udf.html) |
-    [pandas_udf](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.pandas_udf.html) |
-    [Arrow in PySpark](https://spark.apache.org/docs/3.5.0/api/python/user_guide/sql/arrow_pandas.html)
+    [udf](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.udf.html) |
+    [pandas_udf](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.pandas_udf.html) |
+    [Arrow in PySpark](https://spark.apache.org/docs/4.1.1/api/python/user_guide/sql/arrow_pandas.html)
     —— `returnType` 参数、批量 UDF 签名和性能指导。
 
 - Class: mult_question
@@ -230,6 +230,7 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：DataFrame API 与 SQL
 
@@ -244,6 +245,16 @@
     3. 注册为临时视图并用 SQL 编写相同查询
     4. 将两个 explain 计划捕获为字符串
     5. 返回一个包含两个结果和计划的字典
+    **输入、输出与通过条件**
+
+    输入：`compare_plans(spark)` 使用给定 EMPLOYEE_DATA 和 SCHEMA。
+    两种查询都先筛选 salary > 50000，再按 department 求 avg_salary 并降序排序。
+    返回字典键：df_result、sql_result（两份 DataFrame），df_plan、sql_plan（计划字符串）。
+    通过条件：两份结果内容一致，三部门均值为 Engineering=95666.6667（允许浮点误差）、
+    Sales=63500、Marketing=59000；计划应包含聚合算子，不要求计划字符串完全相同。
+    本练习使用经典本地 Spark 的 _jdf 接口查看计划，不适用于 Spark Connect。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
   Hint: "将 DataFrame 注册为临时视图，在两个 API 中编写相同的 filter-groupBy-agg-orderBy，并用 explain() 捕获计划。"

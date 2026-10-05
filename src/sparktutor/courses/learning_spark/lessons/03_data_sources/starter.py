@@ -76,6 +76,12 @@ if __name__ == "__main__":
         assert "total_delay" in cols, f"缺少 total_delay 列，实际得到 {cols}"
         top = df.collect()[0]
         assert top.destination == "ORD", f"预期 ORD 为排名第一的目的地，实际得到 {top.destination}"
+        assert [(r.destination, r.total_delay) for r in df.collect()] == [("ORD", 120), ("JFK", 105), ("DEN", 35)]
+        assert spark.read.parquet(out_path).count() == len(FLIGHT_DATA)
+        assert spark.table("flights").count() == len(FLIGHT_DATA)
+        again = data_pipeline(spark, out_path)
+        assert [(r.destination, r.total_delay) for r in again.collect()] == [("ORD", 120), ("JFK", 105), ("DEN", 35)]
+
         print("所有测试通过！")
         df.show(truncate=False)
     finally:

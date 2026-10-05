@@ -1,13 +1,14 @@
 course:
   id: spark_declarative_pipelines
-  title: "Spark 4.1 声明式管道"
-  description: "构建生产级别的 Bronze-Silver-Gold 数据管道"
+  title: "Spark 4.1 教学管道：自制框架与分层处理"
+  description: "通过简化的 Python Pipeline 框架学习 Bronze-Silver-Gold 分层；与官方 Spark Declarative Pipelines 区分"
   version: "1.0.0"
-  requires_lakehouse: true
+  requires_lakehouse: false
   prerequisites:
-    - "Python 3.10+"
-    - "pip install pyspark"
-    - "Docker Desktop（用于 Lakehouse Stack 模式 —— Kafka、Iceberg）"
+    - "Python 3.10+，熟悉函数、字典与类；装饰器和拓扑排序会在课程中讲解"
+    - "Java 17 或 21（需单独安装 JDK 并配置 JAVA_HOME）"
+    - "pip install pyspark==4.1.1"
+    - "Docker Desktop（可选，仅 Lakehouse Stack 拓展需要；综合练习可用本地 Spark）"
     - "lakehouse-stack 仓库（可选，用于完整基础设施）"
   lessons:
     - 01_spark_session

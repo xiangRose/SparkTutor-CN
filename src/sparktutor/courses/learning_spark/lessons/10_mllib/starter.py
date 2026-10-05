@@ -118,8 +118,8 @@ if __name__ == "__main__":
     assert result["predictions"] is not None, "预测为 None"
     assert result["rmse"] is not None, "RMSE 为 None"
     assert result["r2"] is not None, "R2 为 None"
-    assert result["rmse"] > 0, f"RMSE 应为正数，实际得到 {result['rmse']}"
-    assert 0 < result["r2"] <= 1, f"R2 应在 0 到 1 之间，实际得到 {result['r2']}"
+    assert result["rmse"] >= 0, f"RMSE 应为非负数，实际得到 {result['rmse']}"
+    assert result["r2"] <= 1, f"R2 不应大于 1，允许负数，实际得到 {result['r2']}"
     print(f"训练样本数：{result['train_count']}")
     print(f"测试样本数：{result['test_count']}")
     print(f"RMSE：{result['rmse']:.2f}")
@@ -127,5 +127,17 @@ if __name__ == "__main__":
     print("\n预测示例：")
     result["predictions"].select("neighborhood", "condition", "bedrooms",
                                   "sqft", "age", "price", "prediction").show(10)
+    import math
+    from pyspark.ml import PipelineModel
+    assert isinstance(result["model"], PipelineModel) and len(result["model"].stages) == 4
+    assert result["train_count"] > 0 and result["test_count"] > 0
+    assert result["train_count"] + result["test_count"] == 500
+    assert result["predictions"].count() == result["test_count"]
+    assert {"features", "price", "prediction"} <= set(result["predictions"].columns)
+    check_evaluator = RegressionEvaluator(labelCol="price", predictionCol="prediction")
+    for metric in ["rmse", "r2"]:
+        measured = check_evaluator.setMetricName(metric).evaluate(result["predictions"])
+        assert math.isfinite(result[metric]) and math.isclose(result[metric], measured, rel_tol=1e-9, abs_tol=1e-9)
+
     print("所有测试通过！")
     spark.stop()

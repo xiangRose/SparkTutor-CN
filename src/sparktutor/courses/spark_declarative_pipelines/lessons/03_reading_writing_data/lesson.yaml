@@ -61,11 +61,11 @@
     ```
 
     **文档：**
-    [DataFrameReader.csv](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.csv.html) |
-    [.json](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.json.html) |
-    [.parquet](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.parquet.html) |
-    [DataFrameWriter.mode](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.mode.html) |
-    [.parquet](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.parquet.html)
+    [DataFrameReader.csv](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.csv.html) |
+    [.json](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.json.html) |
+    [.parquet](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.parquet.html) |
+    [DataFrameWriter.mode](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.mode.html) |
+    [.parquet](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.parquet.html)
 
 - Class: mult_question
   Depth: all
@@ -84,7 +84,7 @@
   Hint: "spark.read.csv(path, header=True, inferSchema=True)"
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## 显式 schema：生产环境标准
 
@@ -115,8 +115,8 @@
     （schema-on-read），**silver 层**再转换为正确的类型。
 
     **文档：**
-    [StructType](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.types.StructType.html) |
-    [StructField](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.types.StructField.html)
+    [StructType](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.types.StructType.html) |
+    [StructField](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.types.StructField.html)
     —— `StructField(name, dataType, nullable)` 及所有类型类。
 
 - Class: cmd_question
@@ -155,8 +155,8 @@
     | `append` | 在已有数据旁追加新数据 |
     | `ignore` | 数据已存在则静默跳过 |
 
-    对于我们的管道：批量运行用 `overwrite`（保证幂等性），
-    只有增量/流处理管道才用 `append`。
+    本课程的全量重建示例使用 `overwrite`。批处理也可以用 `append`，
+    但重试时需要批次标识、去重或事务机制防止重复；覆盖模式本身不保证完整的幂等性。
 
 - Class: mult_question
   Depth: all
@@ -256,9 +256,9 @@
     你现在知道如何在 Spark 中读写数据了：
 
     - **DataFrameReader** —— format、options、schema、load
-    - **显式 schema** —— 生产环境始终使用（不要用 inferSchema）
+    - **显式 schema** —— 稳定的数据接口优先显式定义；探索数据时可推断
     - **Parquet** —— 分析和管道的默认格式
-    - **写入模式** —— 幂等批量管道用 overwrite
+    - **写入模式** —— 全量重建可用 overwrite；增量追加需设计重试去重
     - **Iceberg** —— 生产级表存储的 ACID 事务
 
     你已经掌握了所有构建块：SparkSession、转换和 I/O。

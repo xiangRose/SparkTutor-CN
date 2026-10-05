@@ -39,7 +39,6 @@ if __name__ == "__main__":
         .master("local[*]")
         .getOrCreate())
 
-    # 创建测试 CSV 文件
     tmp = tempfile.mkdtemp()
     csv_path = os.path.join(tmp, "mnm_dataset.csv")
     with open(csv_path, "w") as fh:
@@ -56,6 +55,10 @@ if __name__ == "__main__":
     states = [row.State for row in df.collect()]
     assert all(s == "CA" for s in states), f"预期仅包含 CA 行，实际得到 {states}"
     assert df.count() == 2, f"预期 2 个 CA 颜色分组，实际得到 {df.count()}"
+    rows = df.collect()
+    assert df.columns == ["State", "Color", "Total"]
+    assert [(r.State, r.Color, r.Total) for r in rows] == [("CA", "Yellow", 2030), ("CA", "Brown", 1500)]
+
     print("所有测试通过！")
     df.show(truncate=False)
     spark.stop()

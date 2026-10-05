@@ -193,22 +193,18 @@
     那么这个管道是**幂等的**。这对生产环境至关重要，因为
     管道在失败后会被重试。
 
-    你的管道已经是幂等的，因为：
+    本练习只替换会话中的临时视图，不会向持久化表追加数据，
+    因而在输入不变时业务聚合通常保持一致，但不能据此宣称完全幂等：
+    `_ingested_at` 每次运行都会变化；同一 order_id 有冲突行时，
+    `dropDuplicates` 不保证保留哪一行，需要业务定义确定性去重规则。
 
-    1. **Bronze 按 `order_id` 去重** —— 重复接入同一个
-       CSV 会产生相同的行集合
-    2. **Silver 使用确定性转换** —— 转换、过滤和算术对
-       相同输入产生相同输出
-    3. **临时视图是替换的** —— `createOrReplaceTempView`
-       会覆盖之前的结果，而不是追加
-
-    如果你把结果持久化到存储，使用 `mode("overwrite")` 或
-    Iceberg 的 `createOrReplace` —— 批处理管道永远不要用
-    `mode("append")`，因为重跑会产生重复行。
+    全量重建可以选择 `overwrite`；增量批处理也可以选择 `append`，
+    并配合批次标识、去重或事务表的合并写入。原子提交、并发和失败恢复
+    仍需要单独设计，临时视图和普通 Parquet 覆盖不提供完整事务保证。
 
 - Class: mult_question
   Depth: advanced
-  Output: "为什么批处理管道写数据时应避免使用 mode('append')？"
+  Output: "对同一批数据重试写入且没有去重措施时，mode('append') 有什么风险？"
   AnswerChoices: "因为重跑管道会产生重复行;因为 append 比 overwrite 慢;因为 append 不支持 Parquet;因为 append 会锁定表"
   CorrectAnswer: "因为重跑管道会产生重复行"
   Hint: "如果你把管道跑两次，append 会把相同数据写两遍。"
@@ -247,6 +243,7 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 结业练习：端到端管道
 
@@ -268,6 +265,17 @@
 
     测试框架会喂入一个同时包含干净行和脏行的 CSV，然后
     验证三层是否都产出正确输出。
+    **输入、输出与通过条件**
+
+    输入：`build_pipeline(spark, csv_path)` 接收含表头 order_id、product、price、quantity、order_ts 的 CSV，
+    返回已注册三个函数但尚未运行的 Pipeline；测试调用 pipe.run()。
+    Bronze 业务列全为 string，并添加 _ingested_at、_source_file；Silver 使用 try_cast 并保留原列、
+    增加 total 和 order_hour；Gold 列为 product、order_count、total_revenue、avg_order_value、revenue_rank。
+    通过条件：六行输入去重后 Bronze 为五行，过滤 N/A 后 Silver 为四行；
+    Gold 为三个产品，widget 的总营收 69.93、订单数 2、均值 34.965、排名 1。
+    所有层都只注册临时视图；该练习不提供持久化事务保证。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
   Hint: "综合第 04-07 课的所有内容。用管道装饰器注册三个函数。"
@@ -287,9 +295,9 @@
     | 3. 读写数据 | DataFrameReader/Writer、schema、Parquet、写入模式 |
     | 4. Pipeline 框架 | 装饰器注册、依赖检测、拓扑排序 |
     | 5. Bronze 层 | 原始数据接入、元数据列、去重 |
-    | 6. Silver 层 | 类型转换、null 处理、丰富性 join、JSON 解析 |
+    | 6. Silver 层 | 类型转换、null 处理、关联补充字段、JSON 解析 |
     | 7. Gold 层 | 聚合、窗口函数、排名 |
-    | 8. 完整管道 | 端到端接线、错误处理、幂等性 |
+    | 8. 完整管道 | 端到端组装、错误处理、幂等性 |
 
     前三课给了你 Spark 的词汇。第 4 课给了你编排框架。
     第 5-7 课用这两者构建了三层 medallion 架构。而这一课

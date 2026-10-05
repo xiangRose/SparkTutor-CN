@@ -34,7 +34,7 @@
     每一步都让数据对 gold 层的聚合和分析更有用。
 
 - Class: text
-  Depth: beginner
+  Depth: all
   Output: |
     最常见的 silver 操作是转换 bronze 字符串列：
 
@@ -44,47 +44,49 @@
     def silver_orders(spark):
         bronze = spark.table("bronze_orders")
         return (bronze
-            .withColumn("price", f.col("price").cast("double"))
-            .withColumn("quantity", f.col("quantity").cast("int"))
+            .withColumn("price", f.col("price").try_cast("double"))
+            .withColumn("quantity", f.col("quantity").try_cast("int"))
             .withColumn("order_date",
                 f.to_date(f.col("order_date_str"), "yyyy-MM-dd"))
             .drop("order_date_str")
         )
     ```
 
-    如果某个值无法转换（例如把 "N/A" 转成 double），Spark
-    会产生 `null`。这些行可以被过滤掉，或发送到隔离表。
+    Spark 4.1.1 默认开启 ANSI 模式：`cast` 遇到无法解析的值
+    （例如 "N/A" 转 double）会在执行时抛出异常。清洗脏数据时使用
+    `try_cast`，让解析失败返回 `null`，再按业务规则过滤或隔离。
+    示例中的日期格式为有效的 yyyy-MM-dd；脏日期也需要容错解析。
 
     **文档：**
-    [Column.cast](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Column.cast.html) —— `cast("double")`、`cast("int")`、`cast(TimestampType())` |
-    [f.to_date](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.to_date.html) —— 日期模式的 `format` 参数 |
-    [f.from_json](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.from_json.html) —— 解析 JSON 字符串的 `schema` 参数
+    [Column.try_cast](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.Column.try_cast.html) —— 容错类型转换；另见 [ANSI 模式](https://spark.apache.org/docs/4.1.1/sql-ref-ansi-compliance.html) |
+    [f.to_date](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.to_date.html) —— 日期模式的 `format` 参数 |
+    [f.from_json](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.from_json.html) —— 解析 JSON 字符串的 `schema` 参数
 
 - Class: mult_question
   Depth: all
-  Output: "在 Spark 中把字符串 'N/A' 转成 DoubleType 会发生什么？"
+  Output: "Spark 4.1.1 默认 ANSI 模式下，用 try_cast 将字符串 'N/A' 转成 double 会发生什么？"
   AnswerChoices: "它变成 null;它抛出异常;它变成 0.0;它保持为字符串 'N/A'"
   CorrectAnswer: "它变成 null"
-  Hint: "Spark 的 cast 是宽容的 —— 无法解析的值变成 null，而不是报错。"
+  Hint: "try_cast 对解析失败返回 null；默认 ANSI 模式下普通 cast 会在执行时抛异常。"
 
 - Class: cmd_question
   Depth: all
   Output: |
     给定一个包含字符串列 `price` 和 `quantity` 的 bronze
     DataFrame `bronze_df`，把 `price` 转成 double，把
-    `quantity` 转成 integer。
+    `quantity` 转成 integer。使用 `try_cast`，使无效数值返回 null。
   CorrectAnswer: |
     from pyspark.sql import functions as f
     silver_df = (bronze_df
-        .withColumn("price", f.col("price").cast("double"))
-        .withColumn("quantity", f.col("quantity").cast("int"))
+        .withColumn("price", f.col("price").try_cast("double"))
+        .withColumn("quantity", f.col("quantity").try_cast("int"))
     )
-  Hint: "用 .withColumn 配合 f.col(...).cast('double') 和 .cast('int')。"
+  Hint: "用 .withColumn 配合 f.col(...).try_cast('double') 和 .try_cast('int')。"
 
 - Class: text
   Depth: intermediate
   Output: |
-    ## 用关联做数据丰富
+    ## 通过关联补充字段
 
     Silver 是把事务数据与参考数据关联的地方。对小的查找表
     使用 `f.broadcast()`，以避免代价高昂的 shuffle：
@@ -100,10 +102,10 @@
     ```
 
     `f.broadcast()` 把小表发送到每个 executor，因此大的
-    orders 表保持原地不动。这比 shuffle join 快得多。
+    orders 表通常不需要为该关联重新分区。是否更快取决于数据规模、内存和执行计划。
 
-    **文档：** [f.broadcast](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.broadcast.html) —— 包装小 DataFrame |
-    [DataFrame.join](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html) —— `on`、`how` 参数
+    **文档：** [f.broadcast](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.broadcast.html) —— 包装小 DataFrame |
+    [DataFrame.join](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html) —— `on`、`how` 参数
 
 - Class: mult_question
   Depth: intermediate
@@ -131,7 +133,7 @@
     silver 层把它们解析成结构化列：
 
     ```python
-    from pyspark.sql.types import StructType, StructField, StringType
+    from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 
     payload_schema = StructType([
         StructField("action", StringType()),
@@ -204,13 +206,14 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：构建 Silver 转换
 
     打开 starter 文件，实现 `silver_orders(spark)`：
 
     1. 从 `bronze_orders` 临时视图读取
-    2. 把 `price` 转成 double，`quantity` 转成 int
+    2. 用 `try_cast` 把 `price` 转成 double，`quantity` 转成 int
     3. 添加 `total` 列（price * quantity）
     4. 过滤掉 price 为 null 的行（坏数据导致的转换失败）
     5. 从 `order_ts` 提取出 `order_hour` 列
@@ -218,9 +221,18 @@
 
     测试框架会创建包含一行坏数据（price 为 "N/A"）的
     bronze 数据，并验证你的函数是否正确处理。
+    **输入、输出与通过条件**
+
+    输入：`silver_orders(spark)` 读取测试提供的 bronze_orders 临时视图；
+    原列为 order_id、product、price、quantity、order_ts（字符串）以及 _ingested_at。
+    输出保留原列，price 为 double、quantity 为 int，并增加 total（double）、order_hour（int）。
+    通过条件：默认 ANSI 模式下不因 N/A 报错；过滤坏价格行后保留订单 1、2，
+    总额分别为 19.98、24.99，小时分别为 14、9；题目保证 quantity 和 order_ts 有效。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
-  Hint: "转换列类型，用乘法计算 total，过滤 price 不为 null 的行，用 f.hour(f.to_timestamp(...)) 提取小时。"
+  Hint: "用 try_cast 转换列类型，用乘法计算 total，过滤 price 不为 null 的行，用 f.hour(f.to_timestamp(...)) 提取小时。"
 
 - Class: text
   Depth: all

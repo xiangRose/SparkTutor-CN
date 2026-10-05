@@ -49,20 +49,21 @@ def optimize_pipeline(spark):
 
     sales_df = spark.createDataFrame(generate_data(), SCHEMA)
 
-    # TODO: 按 department 和 region 聚合 — 对 revenue 求和和求平均值
+    # TODO: 按 department 和 region 聚合 — 对 revenue 求和、求平均值，并统计 sale_count
     #       这模拟了一个值得缓存的耗时操作
     agg_df = None  # 替换
 
     # TODO: 缓存聚合后的 DataFrame 并触发物化
     # 在此编写代码
 
-    # TODO: 分析 1 — 从缓存的 agg_df 中，按总营收找出排名第一的部门
+    # TODO: 分析 1 — 从缓存的 agg_df 中，按总营收降序排列所有部门（department、dept_revenue）
     top_dept = None  # 替换
 
-    # TODO: 分析 2 — 从缓存的 agg_df 中，按平均营收找出排名第一的区域
+    # TODO: 分析 2 — 从缓存的 agg_df 中，按每笔交易平均营收降序排列所有区域（region、region_avg_revenue）
+    #       用 sum(total_revenue) / sum(sale_count)，不要对分组均值简单平均
     top_region = None  # 替换
 
-    # TODO: 解除缓存的 DataFrame
+    # TODO: 先对 top_dept 和 top_region 执行 action，再解除 agg_df 的缓存
     # 在此编写代码
 
     # TODO: 将 top_dept 合并为 1 个分区
@@ -96,5 +97,22 @@ if __name__ == "__main__":
     result["top_dept"].show()
     print("按平均营收排名的区域：")
     result["top_region"].show()
+    from collections import defaultdict
+    import math
+    dept_sums, region_sums, region_counts = defaultdict(float), defaultdict(float), defaultdict(int)
+    for _, dept, region, revenue in generate_data():
+        dept_sums[dept] += revenue
+        region_sums[region] += revenue
+        region_counts[region] += 1
+    dept_rows = result["top_dept"].collect()
+    region_rows = result["top_region"].collect()
+    assert len(dept_rows) == 5 and len(region_rows) == 4
+    assert [r.department for r in dept_rows] == sorted(dept_sums, key=dept_sums.get, reverse=True)
+    assert all(math.isclose(r.dept_revenue, dept_sums[r.department], rel_tol=1e-10) for r in dept_rows)
+    averages = {region: value / region_counts[region] for region, value in region_sums.items()}
+    assert [r.region for r in region_rows] == sorted(averages, key=averages.get, reverse=True)
+    assert all(math.isclose(r.region_avg_revenue, averages[r.region], rel_tol=1e-10) for r in region_rows)
+    assert isinstance(result["agg_partitions"], int) and result["agg_partitions"] > 0
+
     print("所有测试通过！")
     spark.stop()

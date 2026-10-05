@@ -78,5 +78,13 @@ if __name__ == "__main__":
     result["df_result"].show()
     print("SQL 结果：")
     result["sql_result"].show()
+    expected = [("Engineering", 287000 / 3), ("Sales", 63500.0), ("Marketing", 59000.0)]
+    for key in ["df_result", "sql_result"]:
+        rows = result[key].collect()
+        assert [r.department for r in rows] == [dept for dept, _ in expected]
+        assert all(abs(row.avg_salary - avg) < 1e-6 for row, (_, avg) in zip(rows, expected))
+    assert result["df_result"].collect() == result["sql_result"].collect()
+    assert "Aggregate" in result["df_plan"] and "Aggregate" in result["sql_plan"]
+
     print("所有测试通过！")
     spark.stop()

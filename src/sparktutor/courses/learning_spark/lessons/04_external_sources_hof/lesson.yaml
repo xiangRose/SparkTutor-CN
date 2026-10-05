@@ -143,12 +143,12 @@
     这些保持你的 DataFrame 结构完整 —— 不会产生行的爆炸式增长。
 
     **文档：**
-    [transform](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.transform.html) |
-    [filter (HOF)](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.filter.html) |
-    [exists](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.exists.html) |
-    [aggregate](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.aggregate.html) |
-    [explode](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.explode.html) |
-    [collect_list](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.collect_list.html)
+    [transform](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.transform.html) |
+    [filter (HOF)](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.filter.html) |
+    [exists](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.exists.html) |
+    [aggregate](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.aggregate.html) |
+    [explode](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.explode.html) |
+    [collect_list](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.collect_list.html)
 
 - Class: mult_question
   Depth: all
@@ -266,6 +266,7 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：用 HOF 进行订单分析
 
@@ -278,6 +279,15 @@
     5. 返回结果
 
     这个练习将复杂类型操作与窗口函数结合 —— 这是真实分析中常见的模式。
+    **输入、输出与通过条件**
+
+    输入：`analyze_orders(spark)` 使用给定六行 ORDER_DATA 和 SCHEMA。
+    输出保留原列，并添加 items_upper、p_items、region_rank。
+    p_items 从原始小写 items 中选择以 p 开头的元素；排名使用 rank()。
+    通过条件：所有数组转换正确，六行完整保留；每个 region 内按 total 降序排名，
+    West 的 order_id 2、5、1 和 East 的 4、6、3 分别排名 1、2、3。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
   Hint: "用 f.transform 配合 f.upper()，f.filter 配合 startswith()，以及 Window.partitionBy().orderBy() 配合 f.rank()。"

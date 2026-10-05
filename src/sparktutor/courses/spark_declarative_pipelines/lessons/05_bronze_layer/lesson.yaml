@@ -58,9 +58,9 @@
     的源头。
 
     **文档：**
-    [f.current_timestamp](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.current_timestamp.html) |
-    [f.input_file_name](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.input_file_name.html) |
-    [dropDuplicates](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.dropDuplicates.html)
+    [f.current_timestamp](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.current_timestamp.html) |
+    [f.input_file_name](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.input_file_name.html) |
+    [dropDuplicates](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.dropDuplicates.html)
     —— `subset` 参数用于按指定列去重。
 
 - Class: mult_question
@@ -85,7 +85,7 @@
   Hint: "使用 spark.read.json()，并用 .withColumn 配合 f.current_timestamp()。"
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## Schema-on-Read（读取时定义 Schema）
 
@@ -115,7 +115,7 @@
   Hint: "如果 price 列包含 'N/A'，转成 double 会变成 null，丢失原始值。"
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## 去重
 
@@ -194,6 +194,7 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：构建 Bronze 接入
 
@@ -209,6 +210,14 @@
 
     测试框架会喂入一个包含重复行的 CSV，并验证你的函数
     是否正确处理。
+    **输入、输出与通过条件**
+
+    输入：`bronze_orders(spark, csv_path)` 接收含表头 order_id、product、price、quantity 的 CSV。
+    返回这四个字符串列及 _ingested_at（timestamp）、_source_file（string）。
+    通过条件：三行样本中重复的 order_id="1" 被去掉，结果为两行；业务值不改变，
+    元数据不为 null 且来源文件非空。相同 id 内容冲突时的优先规则不在本题范围内。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
   Hint: "用 StringType schema 读取 CSV，用 withColumn 添加元数据列，然后 dropDuplicates。"
