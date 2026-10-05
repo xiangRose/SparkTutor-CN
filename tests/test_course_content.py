@@ -4,6 +4,7 @@ import ast
 from pathlib import Path
 import re
 import runpy
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -95,3 +96,85 @@ def test_teaching_pipeline_runs_in_dependency_order_without_spark():
 
     pipeline.run()
     assert registered == ["bronze", "silver", "gold"]
+
+
+@pytest.mark.parametrize("filename", ["starter.py", "solution.py"])
+def test_data_source_harness_finishes_actions_before_overwrite_cleanup(filename, capsys):
+    """A lazy file scan becomes invalid when overwrite replaces its source files."""
+    path = COURSES / "learning_spark/lessons/03_data_sources" / filename
+    module = ast.parse(path.read_text(encoding="utf-8"))
+    main = next(node for node in module.body if isinstance(node, ast.If)
+                and ast.unparse(node.test) == "__name__ == '__main__'")
+    generation = 0
+    written_paths = []
+    shown_generations = []
+
+    class LazyFrame:
+        columns = ["destination", "total_delay"]
+
+        def __init__(self, source, row_count=3):
+            self.source = Path(source)
+            self.generation = generation
+            self.row_count = row_count
+
+        def check_source(self):
+            assert self.source.exists(), "Action ran after temporary files were removed"
+            assert self.generation == generation, "Action reused a stale plan after overwrite"
+
+        def count(self):
+            self.check_source()
+            return self.row_count
+
+        def collect(self):
+            self.check_source()
+            return [SimpleNamespace(destination=destination, total_delay=total_delay)
+                    for destination, total_delay in [("ORD", 120), ("JFK", 105), ("DEN", 35)]]
+
+        def show(self, **kwargs):
+            self.check_source()
+            shown_generations.append(self.generation)
+            print("result displayed")
+
+    class Session:
+        stopped = False
+
+        def __init__(self):
+            self.read = SimpleNamespace(parquet=lambda source: LazyFrame(source, 9))
+
+        def table(self, name):
+            assert name == "flights"
+            return LazyFrame(written_paths[-1], 9)
+
+        def stop(self):
+            self.stopped = True
+
+    session = Session()
+
+    class Builder:
+        def appName(self, name):
+            return self
+
+        def master(self, name):
+            return self
+
+        def getOrCreate(self):
+            return session
+
+    def data_pipeline(spark, source):
+        nonlocal generation
+        generation += 1
+        Path(source).mkdir(exist_ok=True)
+        written_paths.append(Path(source))
+        return LazyFrame(source)
+
+    namespace = {
+        "SparkSession": SimpleNamespace(builder=Builder()),
+        "data_pipeline": data_pipeline,
+        "FLIGHT_DATA": [None] * 9,
+    }
+    exec(compile(ast.Module(body=main.body, type_ignores=[]), str(path), "exec"), namespace)
+    assert shown_generations == [2]
+    assert session.stopped
+    assert all(not source.exists() for source in written_paths)
+    output = capsys.readouterr().out
+    assert output.index("result displayed") < output.index("所有测试通过！")
