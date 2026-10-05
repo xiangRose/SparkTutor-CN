@@ -80,6 +80,8 @@
     —— 每种格式的安装、读写、时间旅行和 schema 演进。
 
 - Class: mult_question
+  KnowledgeComponents: [lakehouse.transactions]
+  Context: versioned_events
   Depth: all
   Output: "湖仓格式解决了普通数据湖文件（Parquet/CSV）无法解决的什么关键问题？"
   AnswerChoices: "ACID 事务、schema 约束和可靠的并发写入;更便宜的存储成本;更快的文件 I/O 速度;更好的压缩比"
@@ -156,6 +158,8 @@
     - **可复现性** —— 在最初使用的确切数据上重新运行分析
 
 - Class: mult_question
+  KnowledgeComponents: [lakehouse.time_travel]
+  Context: versioned_events
   Depth: all
   Output: "在湖仓表的语境中，什么是时间旅行？"
   AnswerChoices: "查询数据在过去某个时间点存在的历史版本;在时区之间移动数据;安排未来执行的写入;压缩旧数据文件"
@@ -163,6 +167,8 @@
   Hint: "每次写入创建一个新版本。时间旅行让你查看任何历史版本。"
 
 - Class: cmd_question
+  KnowledgeComponents: [lakehouse.delta]
+  Context: versioned_events
   Depth: intermediate
   Output: |
     将 DataFrame `df` 写入 `'/data/events'` 的 Delta 表，
@@ -220,6 +226,8 @@
     在低于默认保留期（Delta 为 7 天）的情况下执行 vacuum。
 
 - Class: mult_question
+  KnowledgeComponents: [lakehouse.formats]
+  Context: versioned_events
   Depth: advanced
   Output: "哪种湖仓格式通常被认为在不同查询引擎间可移植性最好？"
   AnswerChoices: "Apache Iceberg;Delta Lake;Apache Hudi;Apache Parquet"
@@ -227,6 +235,8 @@
   Hint: "这种格式在设计时就将多引擎支持作为核心目标。"
 
 - Class: script
+  KnowledgeComponents: [dataframe.io, lakehouse.time_travel]
+  Context: versioned_events
   Depth: all
   RequiresExecution: true
   Output: |

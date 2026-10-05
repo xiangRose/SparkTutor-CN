@@ -98,6 +98,8 @@
     —— `inputCol`、`outputCol`、`inputCols`、`handleInvalid` 参数。
 
 - Class: mult_question
+  KnowledgeComponents: [ml.features]
+  Context: housing_prices
   Depth: all
   Output: "VectorAssembler 在 MLlib 管道中做什么？"
   AnswerChoices: "将多个特征列合并为单个向量列;将数据拆分为训练集和测试集;将特征值标准化为零均值;从 DataFrame 中移除 null 值"
@@ -105,6 +107,8 @@
   Hint: "MLlib 模型需要一个向量列作为输入。VectorAssembler 从多个列创建它。"
 
 - Class: cmd_question
+  KnowledgeComponents: [ml.features]
+  Context: housing_prices
   Depth: all
   Output: |
     创建一个 VectorAssembler，将列 `'age'`、`'income'` 和 `'score'`
@@ -194,6 +198,8 @@
     - **MAE**（平均绝对误差）—— 平均误差幅度；越低越好
 
 - Class: mult_question
+  KnowledgeComponents: [ml.evaluation]
+  Context: housing_prices
   Depth: intermediate
   Output: "哪个评估指标通常用于衡量模型解释方差的程度，最佳值为 1，也可能为负数？"
   AnswerChoices: "R2（决定系数）;RMSE（均方根误差）;MAE（平均绝对误差）;MSE（均方误差）"
@@ -201,6 +207,8 @@
   Hint: "决定系数可以为负；标签恒定时还需要关注定义和实现对退化情况的处理。"
 
 - Class: cmd_question
+  KnowledgeComponents: [ml.evaluation]
+  Context: housing_prices
   Depth: intermediate
   Output: |
     为标签列 `'price'` 和预测列 `'prediction'` 创建一个
@@ -287,6 +295,8 @@
     以及可复现的实验跟踪。它与 Spark MLlib 管道原生集成。
 
 - Class: script
+  KnowledgeComponents: [ml.features, ml.regression, ml.evaluation]
+  Context: housing_prices
   Depth: all
   RequiresExecution: true
   Output: |

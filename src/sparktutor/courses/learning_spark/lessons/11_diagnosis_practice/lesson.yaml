@@ -1,0 +1,184 @@
+- Class: meta
+  Lesson: 调试与新场景迁移练习
+  EstimatedMinutes: 35
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 用真实任务检验理解
+
+    本课有三道练习：修复订单处理错误、把分组求和应用到传感器数据、
+    把显式 Schema 和布尔列应用到天气观测。请先完成第 1 课的 M&M 综合练习
+    和第 2 课的博客 DataFrame 综合练习，再尝试相应的新场景。
+
+    这些练习使用内置合成数据，不需要外部数据服务。请使用 PySpark 4.1.1
+    和独立安装的 Java 17 或以上受支持版本运行。只有真实 Spark 评估通过
+    课程测试才算完成；本地模拟或仅通过语法检查不能证明结果正确。
+
+    遇到错误时，可以先比较预期与实际，提出一个原因假设，再用少量记录验证。
+    需要时可以使用提示；合理求助不会降低知识或调试表现的通过率。
+    看过答案后可以继续练习，新的独立任务会更适合检验自己的理解。
+
+- Class: script
+  Id: debug_orders
+  Depth: all
+  RequiresExecution: true
+  ExerciseTitle: 修复订单清洗与金额计算
+  KnowledgeComponents: [dataframe.filter, dataframe.with_column]
+  DiagnosisTargets: [debugging, knowledge]
+  Context: orders_debugging
+  Prerequisites:
+    - courseId: learning_spark
+      lessonId: 02_dataframes_schemas
+      stepId: '14'
+  StarterCode: debug_orders_starter.py
+  SolutionCode: debug_orders_solution.py
+  Output: |
+    ## 调试：哪些订单可以计入金额？
+
+    `debug_orders` 已有一段可以运行、但结果不正确的实现。
+    它会把部分无效订单保留下来，金额计算也有错误。请修复该函数。
+
+    **输入、输出与通过条件**
+
+    函数签名：`debug_orders(spark, orders)`。
+    `spark` 是 SparkSession，`orders` 是四元组列表，字段顺序为
+    `(order_id, product, unit_price, quantity)`，
+    `order_id` 是整数，`product` 是字符串，单价和数量是原始字符串或 None。
+    单价示例为 "7.5"，数量示例为 "3"；异常值包括 "N/A"、"bad" 和 None。
+    本题只提供有限小数单价，不涉及 NaN、Infinity 或货币舍入规则。
+
+    返回 DataFrame，列顺序和类型必须为：
+    `order_id`（int）、`product`（string）、`unit_price`（double）、
+    `quantity`（int）、`total`（double）。
+    原始数字用容错转换解析；转换失败的值成为 null。
+    只有单价非负且数量为正、两者均非 null 的记录才保留。
+    单价为 0 的赠品仍是有效记录。`total = unit_price * quantity`。
+    不需要去重或保证输出行顺序，也不能直接写死示例结果。
+
+    测试检查主样例只保留订单 1、2、6，其金额分别为 20.0、22.5、0.0；
+    同时检查另一组输入、空输入、列类型和逐行结果。
+
+    建议先运行错误实现，观察第一个失败的断言：
+    1. 对比实际订单编号与预期，找出本应被过滤的记录。
+    2. 提出筛选逻辑的假设，用负单价或零数量记录检查。
+    3. 再检查金额公式，用单价 7.5、数量 3 验证。
+    4. 修改后重新运行全部测试。可简记哪个检查验证了你的假设。
+
+    请只修复函数，保留函数名、参数和测试区；课程会使用原始断言评估。
+  Hint: |
+    有效记录要同时满足两个条件，检查筛选表达式中的 & / |。
+    计算金额时应组合单价和数量，别把二者相加。容错转换可以使用
+    expr("try_cast(unit_price AS DOUBLE)") 与 try_cast(quantity AS INT)。
+
+- Class: script
+  Id: sensor_transfer
+  Depth: all
+  RequiresExecution: true
+  ExerciseTitle: 迁移到传感器上报统计
+  KnowledgeComponents: [dataframe.group_by, dataframe.aggregate]
+  DiagnosisTargets: [transfer, knowledge]
+  Context: sensors
+  Prerequisites:
+    - courseId: learning_spark
+      lessonId: 01_getting_started
+      stepId: '15'
+  Transfer:
+    sources:
+      - courseId: learning_spark
+        lessonId: 01_getting_started
+        stepId: '15'
+    context: sensors
+  StarterCode: sensor_transfer_starter.py
+  SolutionCode: sensor_transfer_solution.py
+  Output: |
+    ## 迁移：按站点和类型汇总传感器上报
+
+    M&M 练习按州和颜色汇总数量。现在，每条输入记录表示某站点某类传感器
+    的一个批次，其中 `reading_count` 是这个批次包含的上报条数。
+    请把分组、求和、筛选和排序应用到这个新业务场景。
+
+    **输入、输出与通过条件**
+
+    函数签名：`transfer_sensor_aggregation(spark, readings, target_site)`。
+    `readings` 是 `(site, sensor_type, reading_count)` 三元组列表，类型分别为
+    string、string、int；上报条数为非负整数。`target_site` 是要保留的站点字符串。
+    请以显式 Schema 创建 DataFrame，按 `site` 和 `sensor_type` 分组，
+    对 `reading_count` 求和，保留目标站点。
+
+    返回三列，顺序为 `site`（string）、`sensor_type`（string）、
+    `total_readings`（long）。按总上报条数降序排列；总数相同时，按类型名字升序排列。
+    找不到目标站点或输入为空时，返回具有相同列和类型的空 DataFrame。
+    注意：一行代表一个批次，统计行数不等于累计上报条数。
+
+    主样例中 north 的 temperature 为 10，humidity 和 pressure 都为 9，
+    因此输出类型顺序为 temperature、humidity、pressure。
+    测试还检查 south 站点、缺失站点、空输入及另一组数据，不能写死 north 或主样例结果。
+
+    请保留函数名、参数和测试区；用真实 Spark 运行全部断言。
+  Hint: |
+    先识别旧题与新题的角色对应：State → site，Color → sensor_type，
+    Count → reading_count。使用 groupBy 后的 sum，并给结果起别名 total_readings。
+    聚合之后仍可按 site 筛选；orderBy 可以同时接收降序总数和升序类型。
+
+- Class: script
+  Id: weather_transfer
+  Depth: all
+  RequiresExecution: true
+  ExerciseTitle: 迁移到天气观测 Schema
+  KnowledgeComponents: [dataframe.schema, dataframe.with_column]
+  DiagnosisTargets: [transfer, knowledge]
+  Context: weather
+  Prerequisites:
+    - courseId: learning_spark
+      lessonId: 02_dataframes_schemas
+      stepId: '14'
+  Transfer:
+    sources:
+      - courseId: learning_spark
+        lessonId: 02_dataframes_schemas
+        stepId: '14'
+    context: weather
+  StarterCode: weather_transfer_starter.py
+  SolutionCode: weather_transfer_solution.py
+  Output: |
+    ## 迁移：为天气观测定义 Schema 和复核标志
+
+    博客练习把 Python 数据转换成具有显式 Schema 的 DataFrame，
+    并增加布尔列。现在请为天气观测实现相同的数据建模过程，使用新的字段和判定条件。
+
+    **输入、输出与通过条件**
+
+    函数签名：`transfer_weather_schema(spark, observations)`。
+    `observations` 是五元组列表，字段顺序和 Schema 为：
+    `observation_id`（int）、`station`（string）、`temperature_c`（double）、
+    `rainfall_mm`（double）、`tags`（字符串数组）。
+    输入中没有 null，温度与降雨值以 Python float 提供。请显式定义这些类型，
+    保留全部原始字段和记录，追加 boolean 类型的 `needs_review`。
+
+    本题的复核规则是：温度 >= 35.0 **或** 降雨量 >= 50.0 时为 True，
+    否则为 False。这是合成数据的教学规则，不是气象预警标准。
+    返回六列，顺序为上述五列加 `needs_review`；不要求结果行顺序。
+    空输入也应返回具有相同 Schema 的空 DataFrame。
+
+    测试检查原始数组内容、各列类型、温度恰好为 35.0、降雨恰好为 50.0、
+    两个条件均未达到及同时达到的情形，还会使用另一组输入，不能直接写死标志。
+
+    请保留函数名、参数和测试区；用真实 Spark 运行全部断言。
+  Hint: |
+    使用 StructType/StructField 和 ArrayType(StringType()) 定义原始五列。
+    withColumn 添加列表达式产生的布尔值。两个 Column 条件各加括号后用 | 连接；
+    边界值也要符合规则，因此比较符是 >=。
+
+- Class: text
+  Depth: all
+  Output: |
+    ## 回看证据，而不是只看百分比
+
+    调试表现需要观察到“失败 → 经测试确认通过”的过程；
+    如果首次就完成，不代表调试能力是满分或零分。
+    新场景迁移需要先有来源练习的通过记录，再观察新任务的首次有效评估。
+    重做新题可以继续巩固知识，但不会改变首次迁移表现。
+
+    提示使用比例只是平台记录到的求助行为。你可以在需要时继续使用提示，
+    并在完成后想一想：哪些知识保持不变，哪些输入字段或边界条件发生了变化？

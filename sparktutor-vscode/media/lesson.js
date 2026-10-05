@@ -169,7 +169,7 @@ window.addEventListener('message', function (event) {
       break;
     case 'finished':
       setLoading(false);
-      showFinished();
+      showFinished(Boolean(msg.practiceMode));
       break;
   }
 });
@@ -243,15 +243,19 @@ function showHint(hint) {
   section.innerHTML = markdownToHtml(hint);
 }
 
-function showFinished() {
+function showFinished(practiceMode) {
   const content = document.querySelector('.step-content');
   if (content) {
     content.innerHTML =
       '<div class="finished-banner">' +
-      '<h2>课程完成！</h2>' +
-      '<p>做得好！从侧边栏选择另一节课继续学习。</p>' +
+      (practiceMode
+        ? '<h2>推荐练习已完成</h2><p>可刷新学习画像查看变化，或从侧边栏继续原课节。</p>' +
+          '<button class="btn btn-primary" onclick="send(\'diagnosis\')">查看学习诊断</button>'
+        : '<h2>课程完成！</h2><p>做得好！从侧边栏选择另一节课继续学习。</p>') +
       '</div>';
   }
   const actions = document.querySelector('.actions');
   if (actions) actions.style.display = 'none';
+  const navigation = document.querySelector('.nav-buttons');
+  if (practiceMode && navigation) navigation.style.display = 'none';
 }

@@ -95,6 +95,8 @@
     [drop](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.drop.html)
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.with_column]
+  Context: blog_records
   Depth: all
   Output: "哪个 DataFrame 方法用于添加新列或替换已有列？"
   AnswerChoices: "withColumn();addColumn();setColumn();appendColumn()"
@@ -162,6 +164,8 @@
     —— 用 `StructField(name, type, nullable)` 定义 schema。
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.schema]
+  Context: blog_records
   Depth: all
   Output: |
     为一个包含以下列的表定义 StructType schema：`name`（字符串，
@@ -229,6 +233,8 @@
     它们没有歧义且自带文档。
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.schema]
+  Context: blog_records
   Depth: intermediate
   Output: "对 CSV 文件使用 inferSchema=True 时会发生什么？"
   AnswerChoices: "Spark 读取数据两次 —— 一次推断类型，一次加载;Spark 仅凭列名猜测类型;Schema 推断即时完成且无额外开销;Spark 只读取第一行来检测类型"
@@ -236,6 +242,8 @@
   Hint: "CSV 把所有内容都存为文本，所以 Spark 必须采样数据来弄清楚哪些列是数字、日期等。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.with_column]
+  Context: blog_records
   Depth: intermediate
   Output: |
     给定一个包含整数列 `Hits` 的 DataFrame `blogs_df`，添加一个新的
@@ -270,6 +278,8 @@
     可以选择更高效的操作（整数比较 vs. 字符串比较）。
 
 - Class: script
+  KnowledgeComponents: [dataframe.schema, dataframe.with_column, dataframe.array]
+  Context: blog_records
   Depth: all
   RequiresExecution: true
   Output: |

@@ -64,6 +64,8 @@
     分离开来。你声明步骤；框架负责排序。
 
 - Class: mult_question
+  KnowledgeComponents: [pipeline.decorator]
+  Context: view_dependency_graph
   Depth: all
   Output: "@pipeline.materialized_view() 装饰器做什么？"
   AnswerChoices: "将函数注册为管道步骤;将 DataFrame 物化到内存;创建一个 SQL 视图;将结果缓存到 Spark 中"
@@ -71,6 +73,8 @@
   Hint: "装饰器将函数加入管道的内部注册表。"
 
 - Class: cmd_question
+  KnowledgeComponents: [pipeline.framework]
+  Context: view_dependency_graph
   Depth: all
   Output: |
     编写一个 Pipeline 类，`__init__` 接收 `spark` 并初始化一个空字典
@@ -113,6 +117,8 @@
     正则表达式无法可靠处理注释、动态表名或复杂代码。生产框架应使用显式依赖或语法分析。
 
 - Class: mult_question
+  KnowledgeComponents: [pipeline.dependencies]
+  Context: view_dependency_graph
   Depth: intermediate
   Output: "管道如何自动检测 silver_orders 依赖 bronze_orders？"
   AnswerChoices: "通过扫描函数源码中的 spark.table() 调用;通过检查 Spark catalog;通过运行函数并捕获错误;通过分析 DataFrame 血缘"
@@ -161,6 +167,8 @@
     ```
 
 - Class: cmd_question
+  KnowledgeComponents: [pipeline.dependencies]
+  Context: view_dependency_graph
   Depth: advanced
   Output: |
     为 Pipeline 类编写一个 `_detect_deps` 方法，接收一个函数，
@@ -203,6 +211,8 @@
     `spark.table("step_name")` 引用它。这正是让依赖检测生效的契约。
 
 - Class: script
+  KnowledgeComponents: [pipeline.framework, pipeline.dependencies]
+  Context: view_dependency_graph
   Depth: all
   RequiresExecution: true
   Output: |
@@ -235,6 +245,8 @@
   Hint: "实现全部四个方法。参考课程正文中的示例代码。"
 
 - Class: mult_question
+  KnowledgeComponents: [pipeline.dependencies]
+  Context: view_dependency_graph
   Depth: all
   Output: "如果步骤 A 依赖步骤 B，而步骤 B 又依赖步骤 A，拓扑排序时会发生什么？"
   AnswerChoices: "检测到环并抛出错误;步骤 A 先运行;步骤 B 先运行;两者并行运行"

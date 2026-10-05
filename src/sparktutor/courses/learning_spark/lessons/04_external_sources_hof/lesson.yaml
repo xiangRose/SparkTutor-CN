@@ -86,6 +86,8 @@
     当你需要将数组元素逐行分析时，使用 explode。
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.array]
+  Context: order_arrays
   Depth: all
   Output: |
     给定一个包含 `id` 和 `tags`（字符串数组）列的 DataFrame `df`，
@@ -151,6 +153,8 @@
     [collect_list](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.collect_list.html)
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.hof]
+  Context: order_arrays
   Depth: all
   Output: "哪个高阶函数对数组的每个元素应用转换，而不创建新行？"
   AnswerChoices: "transform();explode();map();foreach()"
@@ -158,6 +162,8 @@
   Hint: "这个函数像 Python 的 map() 一样工作，但直接操作数组列。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.hof]
+  Context: order_arrays
   Depth: all
   Output: |
     给定一个包含数组列 `items`（字符串）的 DataFrame `df`，用
@@ -201,6 +207,8 @@
     ```
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.hof]
+  Context: order_arrays
   Depth: intermediate
   Output: "aggregate() 对数组列做什么？"
   AnswerChoices: "用累加器函数将数组折叠为单个值;将数组拆分为多行;对数组元素排序;统计元素个数"
@@ -254,6 +262,8 @@
     **何时用 HOF**：你需要在保持行结构不变的同时转换、过滤或归约数组内容。
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.hof]
+  Context: order_arrays
   Depth: intermediate
   Output: |
     给定一个包含数组列 `items`（字符串）的 DataFrame `df`，用
@@ -265,6 +275,8 @@
   Hint: "用 f.filter('items', lambda x: x.startswith('p')) 只保留以 'p' 开头的元素。"
 
 - Class: script
+  KnowledgeComponents: [dataframe.array, dataframe.hof, dataframe.window]
+  Context: order_arrays
   Depth: all
   RequiresExecution: true
   Output: |

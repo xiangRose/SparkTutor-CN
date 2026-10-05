@@ -60,6 +60,8 @@
     `spark.executor.memory`、`spark.memory.fraction` 等。
 
 - Class: mult_question
+  KnowledgeComponents: [spark.shuffle]
+  Context: transaction_optimization
   Depth: all
   Output: "spark.sql.shuffle.partitions 控制的是什么？"
   AnswerChoices: "shuffle 操作后创建的分区数量;每个分区的最大内存;执行器核心数;每个数据块的大小"
@@ -93,6 +95,8 @@
     增加分区、重新均衡数据，或大幅减少分区导致并行度不足时，考虑 `repartition`。
 
 - Class: cmd_question
+  KnowledgeComponents: [spark.partition]
+  Context: transaction_optimization
   Depth: all
   Output: |
     一个数据量较小、分布较均衡的 DataFrame 有 1000 个分区。
@@ -148,6 +152,8 @@
     根据复用次数、内存容量和重算成本选择是否缓存；PySpark 不提供 `MEMORY_ONLY_SER` 常量。
 
 - Class: mult_question
+  KnowledgeComponents: [spark.cache]
+  Context: transaction_optimization
   Depth: all
   Output: "cache() 和 persist() 之间的区别是什么？"
   AnswerChoices: "cache() 默认使用 MEMORY_AND_DISK_DESER；persist() 让你选择 StorageLevel;cache() 比 persist() 更快;persist() 只使用磁盘存储;cache() 只对 RDD 有效"
@@ -174,6 +180,8 @@
     并可能在后续 stage 中导致 OOM 错误。
 
 - Class: cmd_question
+  KnowledgeComponents: [spark.cache]
+  Context: transaction_optimization
   Depth: intermediate
   Output: |
     缓存 DataFrame `df`，用 `count()` 触发物化，打印计数，
@@ -223,6 +231,8 @@
     才是合适的缓存候选。
 
 - Class: script
+  KnowledgeComponents: [spark.partition, spark.cache, dataframe.aggregate]
+  Context: transaction_optimization
   Depth: all
   RequiresExecution: true
   Output: |

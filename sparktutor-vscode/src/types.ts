@@ -64,6 +64,7 @@ export interface ExecResult {
 }
 
 export interface LoadLessonResult {
+  practiceMode?: boolean;
   step: StepData;
   currentIndex: number;
   totalSteps: number;
@@ -85,6 +86,7 @@ export interface StepResult {
 
 export interface AdvanceResult {
   finished: boolean;
+  practiceMode?: boolean;
   step?: StepData;
   currentIndex?: number;
   totalSteps?: number;
@@ -97,4 +99,43 @@ export interface GoBackResult {
   currentIndex?: number;
   totalSteps?: number;
   starterCode?: string;
+}
+
+export interface DiagnosisDimension {
+  key: string;
+  name: string;
+  score: number | null;
+  confidence?: string;
+  evidenceLevel?: "none" | "limited" | "available";
+  sampleSize?: number;
+  direction: "higher_is_better" | "descriptive";
+  evidenceCount: number;
+  summary: string;
+  metrics?: Record<string, unknown>;
+}
+
+export interface RecommendedExercise {
+  courseId: string;
+  lessonId: string;
+  stepId: string;
+  lessonIndex: number;
+  title: string;
+  dimension: string;
+  reason: string;
+}
+
+export interface DiagnosisResult {
+  diagnosis: string;
+  disclaimer: string;
+  eventCount: number;
+  eligibleEventCount: number;
+  dimensions: DiagnosisDimension[];
+  recommendedExercise: RecommendedExercise | null;
+  recommendationReason: string;
+}
+
+export interface OpenRecommendedExerciseResult extends LoadLessonResult {
+  courseId: string;
+  lessonIdx: number;
+  depth: string;
 }

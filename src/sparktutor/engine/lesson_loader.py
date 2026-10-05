@@ -39,6 +39,12 @@ class Step:
     solution_code: Optional[str] = None  # filename for script steps
     validation: list[ValidationRule] = field(default_factory=list)
     requires_execution: bool = False
+    knowledge_components: list[str] = field(default_factory=list)
+    diagnosis_targets: list[str] = field(default_factory=list)
+    prerequisites: list[dict] = field(default_factory=list)
+    context: str = ""
+    exercise_title: str = ""
+    transfer: dict = field(default_factory=dict)
     # Meta fields
     lesson_title: Optional[str] = None
     estimated_minutes: Optional[int] = None
@@ -105,16 +111,22 @@ def load_lesson(lesson_dir: Path) -> Lesson:
     title = ""
     estimated = 15
     steps: list[Step] = []
+    metadata = next((raw for raw in raw_steps if raw.get("Class") == "meta"), {})
+    seen_ids: set[str] = set()
 
     for index, raw in enumerate(raw_steps):
         cls = raw.get("Class", "text")
+        step_id = str(raw.get("Id", index))
+        if not step_id or step_id in seen_ids:
+            raise ValueError(f"Duplicate or empty step Id in {lesson_file}: {step_id}")
+        seen_ids.add(step_id)
 
         if cls == "meta":
             title = raw.get("Lesson", "")
             estimated = raw.get("EstimatedMinutes", 15)
             steps.append(Step(
                 cls="meta",
-                id=str(index),
+                id=step_id,
                 lesson_title=title,
                 estimated_minutes=estimated,
             ))
@@ -122,7 +134,7 @@ def load_lesson(lesson_dir: Path) -> Lesson:
 
         step = Step(
             cls=cls,
-            id=str(index),
+            id=step_id,
             depth=raw.get("Depth", "all"),
             output=raw.get("Output", ""),
             answer_choices=raw.get("AnswerChoices"),
@@ -132,6 +144,12 @@ def load_lesson(lesson_dir: Path) -> Lesson:
             solution_code=raw.get("SolutionCode") or raw.get("SolutionFile"),
             validation=_parse_validation(raw.get("Validation")),
             requires_execution=raw.get("RequiresExecution", False),
+            knowledge_components=raw.get("KnowledgeComponents", metadata.get("KnowledgeComponents", [])),
+            diagnosis_targets=raw.get("DiagnosisTargets", ["knowledge"] if cls != "script" else ["knowledge", "debugging"]),
+            prerequisites=raw.get("Prerequisites", []),
+            context=raw.get("Context", metadata.get("Context", "")),
+            exercise_title=raw.get("ExerciseTitle", ""),
+            transfer=raw.get("Transfer", {}),
         )
         steps.append(step)
 

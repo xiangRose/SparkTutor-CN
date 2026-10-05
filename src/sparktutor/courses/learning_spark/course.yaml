@@ -19,3 +19,4 @@ course:
     - 08_structured_streaming
     - 09_data_lakes
     - 10_mllib
+    - 11_diagnosis_practice

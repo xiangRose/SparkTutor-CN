@@ -69,6 +69,8 @@
     [f.when](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.when.html)
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.column]
+  Context: product_transforms
   Depth: all
   Output: "哪个函数按名称创建对 DataFrame 列的引用？"
   AnswerChoices: "f.col();f.ref();f.column();f.field()"
@@ -76,6 +78,8 @@
   Hint: "它是 pyspark.sql.functions 中一个三个字母的函数。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.select]
+  Context: product_transforms
   Depth: all
   Output: |
     给定一个包含列 `product`、`price` 和 `quantity` 的 DataFrame `df`，
@@ -85,6 +89,8 @@
   Hint: "将列名作为字符串传给 df.select()。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.filter]
+  Context: product_transforms
   Depth: all
   Output: |
     过滤 DataFrame `df`，只保留 `price` 大于 10.0 的行。
@@ -93,6 +99,8 @@
   Hint: "用 f.col('price') 引用列，然后用 > 比较。"
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.column]
+  Context: product_transforms
   Depth: all
   Output: "f.lit(value) 做什么？"
   AnswerChoices: "创建一个带有常量值的列;将列转换为小写;限制行数;点亮 Spark UI"
@@ -100,6 +108,8 @@
   Hint: "'lit' 是 'literal' 的缩写 —— 它将一个 Python 值包装成 Spark 列表达式。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.with_column]
+  Context: product_transforms
   Depth: intermediate
   Output: |
     向 DataFrame `df` 添加一个名为 `total` 的新列，其值等于
@@ -130,6 +140,8 @@
     积累词汇。
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.with_column]
+  Context: product_transforms
   Depth: intermediate
   Output: |
     使用 `f.when`，向 `df` 添加一个名为 `tier` 的列：当
@@ -166,6 +178,8 @@
     适合内置函数无法表达的自定义业务逻辑。
 
 - Class: mult_question
+  KnowledgeComponents: [spark.udf]
+  Context: product_transforms
   Depth: advanced
   Output: "pandas UDF 相比经典逐行 Python UDF，主要的潜在性能优势是什么？"
   AnswerChoices: "它们通过 Arrow 批量处理，避免逐行序列化;它们在 GPU 上运行;它们跳过了 Catalyst 优化器;它们占用更少内存"
@@ -173,6 +187,8 @@
   Hint: "关键是 Arrow 列式传输与向量化处理；实际流程并非所有环节都能零拷贝。"
 
 - Class: cmd_question
+  KnowledgeComponents: [spark.udf]
+  Context: product_transforms
   Depth: advanced
   Output: |
     编写一个名为 `normalize` 的 pandas UDF，接收一个 double 类型的

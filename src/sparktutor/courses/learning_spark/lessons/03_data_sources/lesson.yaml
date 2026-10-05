@@ -127,6 +127,8 @@
     `StructType`，将数组映射为 `ArrayType`。
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.io]
+  Context: flight_delays
   Depth: all
   Output: "哪个文件格式是 Spark 的默认推荐格式，提供列式存储和内置压缩？"
   AnswerChoices: "Parquet;CSV;JSON;ORC"
@@ -178,6 +180,8 @@
     根据数据保留和重试去重策略选择，写入模式不由开发/生产环境单独决定。
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.io, dataframe.schema]
+  Context: flight_delays
   Depth: all
   Output: |
     读取 `'/data/flights.csv'` 处的 CSV 文件，设置 `header=true` 和
@@ -217,6 +221,8 @@
     对它们一视同仁。根据你的用例选择更易读的那个。
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.io]
+  Context: flight_delays
   Depth: intermediate
   Output: "对于分析型工作负载，Parquet 相比 CSV 的主要优势是什么？"
   AnswerChoices: "列式存储支持列裁剪和谓词下推;Parquet 文件人类可读;CSV 文件不能存储数字;Parquet 总是更小"
@@ -249,6 +255,8 @@
     小文件，这对性能的伤害大于帮助。
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.io]
+  Context: flight_delays
   Depth: intermediate
   Output: |
     将 DataFrame `df` 以 overwrite 模式写入 `'/output/data'` 处的
@@ -277,6 +285,8 @@
     （跳过行组）。CSV 和 JSON 做不到 —— Spark 必须读取并过滤所有行。
 
 - Class: script
+  KnowledgeComponents: [dataframe.schema, dataframe.io, dataframe.group_by, dataframe.aggregate]
+  Context: flight_delays
   Depth: all
   RequiresExecution: true
   Output: |
