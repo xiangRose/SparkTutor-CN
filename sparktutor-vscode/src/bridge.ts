@@ -64,7 +64,7 @@ export class Bridge extends EventEmitter {
       const env = { ...process.env };
       env.PYTHONUTF8 = "1";
       env.PYTHONPATH = env.PYTHONPATH
-        ? `${srcDir}:${env.PYTHONPATH}`
+        ? `${srcDir}${path.delimiter}${env.PYTHONPATH}`
         : srcDir;
 
       // Forward VS Code settings as environment variables for the Python server
@@ -158,7 +158,7 @@ export class Bridge extends EventEmitter {
       setTimeout(() => {
         if (!settled) {
           settled = true;
-          reject(new Error("Server startup timed out after 30s"));
+          reject(new Error("SparkTutor 后端启动超过 30 秒，请检查 Python 环境后重试。"));
         }
       }, 30000);
     });
@@ -206,11 +206,11 @@ export class Bridge extends EventEmitter {
   async call<T = unknown>(
     method: string,
     params: Record<string, unknown> = {},
-    timeoutMs = 120000
+    timeoutMs = ["run", "submit", "buildReviewPrompt"].includes(method) ? 180000 : 120000
   ): Promise<T> {
     if (!this.isAlive()) {
       throw new Error(
-        "SparkTutor server is not running. Try reloading the window (Ctrl+Shift+P → Reload Window)."
+        "SparkTutor 后端未运行。请在命令面板执行「Developer: Reload Window」重新加载窗口。"
       );
     }
 
@@ -221,8 +221,8 @@ export class Bridge extends EventEmitter {
         this.pending.delete(id);
         reject(
           new Error(
-            `Request "${method}" timed out after ${Math.round(timeoutMs / 1000)}s. ` +
-              "The server may be overloaded — try again or reload the window."
+            `请求「${method}」超过 ${Math.round(timeoutMs / 1000)} 秒未完成。` +
+              "请检查执行环境，稍后重试或重新加载窗口。"
           )
         );
       }, timeoutMs);

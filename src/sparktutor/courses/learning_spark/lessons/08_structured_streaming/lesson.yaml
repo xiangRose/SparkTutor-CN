@@ -79,7 +79,7 @@
     **重要**：流式数据源**必须**显式指定 schema。
     `inferSchema` 不可用，因为没有完整的数据集可供采样。
 
-    **文档：** [Structured Streaming Programming Guide](https://spark.apache.org/docs/3.5.0/structured-streaming-programming-guide.html)
+    **文档：** [Structured Streaming Programming Guide](https://spark.apache.org/docs/4.1.1/structured-streaming-programming-guide.html)
     —— 数据源、数据汇、输出模式、触发器、水位线、容错，
     以及流-流 join，均有完整代码示例。
 
@@ -170,7 +170,7 @@
     按计划运行（例如通过 cron 每小时一次）来处理积累的数据。
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## 窗口聚合
 
@@ -219,9 +219,10 @@
     10 分钟的事件都会被丢弃。这让 Spark 能够丢弃旧状态并
     限制内存使用。
 
-    没有水位线，有状态操作会永远保留所有状态，最终耗尽内存。
+    没有水位线或其他状态清理策略时，持续增长的窗口状态可能耗尽资源。
+    是否清理状态还取决于查询类型、输出模式与水位线条件。
 
-    **文档：** [f.window](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.window.html)
+    **文档：** [f.window](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.window.html)
     —— 滚动窗口和滑动窗口的 `windowDuration`、`slideDuration`
     和 `startTime` 参数。
 
@@ -295,11 +296,12 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：流式词频统计
 
-    实现流式词频统计的批处理模式模拟（兼容 dry-run ——
-    不需要真实的流式数据源）。
+    实现流式词频统计的批处理模式模拟（需要实际运行本地 Spark，
+    不需要 Kafka 或其他外部流式数据源；dry-run 只能检查语法）。
 
     完成两个函数：
     1. `streaming_word_count(spark, lines_df)` —— 将行拆分成单词，
@@ -309,6 +311,17 @@
 
     这些练习使用批处理 DataFrame 来实践核心流处理模式
     （split/explode、groupBy、window）。
+    **输入、输出与通过条件**
+
+    输入：两个函数均接收已有 SparkSession，并使用 starter 的本地样本。
+    `streaming_word_count(spark)` 返回 word、count，按 count 降序；预期 spark=5、
+    hello=4、world=4、streaming=3、data=2、is/great/of 各 1（并列顺序不限）。
+    `streaming_windowed_count(spark)` 返回 window、word、count；窗口为 10 分钟滚动窗口。
+    通过条件：12:00 窗口 hello=3、spark=3、world=1、streaming=1；
+    12:10 窗口 streaming/world/spark/data 各 1。窗口为左闭右开，不要求返回行排序。
+    本题验证批处理转换逻辑，不验证持续查询、checkpoint 或水位线行为。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
   Hint: "单词用 f.split() + f.explode()，聚合用 groupBy().count()，时间分组用 f.window()。"

@@ -48,12 +48,9 @@ def join_comparison(spark):
 
     broadcast_plan = broadcast_result._jdf.queryExecution().simpleString()
 
-    spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "-1")
-    smj_result = orders_df.join(users_df, "user_id")
+    smj_result = orders_df.hint("merge").join(users_df.hint("merge"), "user_id")
 
     smj_plan = smj_result._jdf.queryExecution().simpleString()
-
-    spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "10485760")
 
     return {
         "broadcast_result": broadcast_result,
@@ -81,5 +78,17 @@ if __name__ == "__main__":
     print(f"两种 join 均产生 {bc_count} 行")
     print(f"\n广播计划包含 'broadcast'：{'broadcast' in result['broadcast_plan'].lower()}")
     print(f"SMJ 计划包含 'SortMerge' 或 'sort'：{'sort' in result['smj_plan'].lower()}")
+    assert "BroadcastHashJoin" in result["broadcast_plan"]
+    assert "SortMergeJoin" in result["smj_plan"]
+    columns = ["user_id", "name", "city", "order_id", "amount"]
+    bc_rows = result["broadcast_result"].select(*columns).orderBy("order_id").collect()
+    smj_rows = result["smj_result"].select(*columns).orderBy("order_id").collect()
+    assert bc_rows == smj_rows, "两种关联应产生相同内容"
+    user_lookup = {uid: (name, city) for uid, name, city in generate_users()}
+    orders = generate_orders()
+    for row, (oid, uid, amount) in zip(bc_rows, orders):
+        assert (row.order_id, row.user_id, row.amount) == (oid, uid, amount)
+        assert (row.name, row.city) == user_lookup[uid]
+
     print("所有测试通过！")
     spark.stop()

@@ -53,8 +53,8 @@
     Transformer.transform(data)  →  DataFrame with predictions
     ```
 
-    **文档：** [MLlib Guide](https://spark.apache.org/docs/3.5.0/ml-guide.html) |
-    [ML Pipelines](https://spark.apache.org/docs/3.5.0/ml-pipeline.html)
+    **文档：** [MLlib Guide](https://spark.apache.org/docs/4.1.1/ml-guide.html) |
+    [ML Pipelines](https://spark.apache.org/docs/4.1.1/ml-pipeline.html)
     —— Transformer/Estimator 模式、`Pipeline.fit()`、
     `PipelineModel.transform()` 以及阶段链接。
 
@@ -92,9 +92,9 @@
     ```
 
     **文档：**
-    [VectorAssembler](https://spark.apache.org/docs/3.5.0/api/python/reference/api/pyspark.ml.feature.VectorAssembler.html) |
-    [StringIndexer](https://spark.apache.org/docs/3.5.0/api/python/reference/api/pyspark.ml.feature.StringIndexer.html) |
-    [OneHotEncoder](https://spark.apache.org/docs/3.5.0/api/python/reference/api/pyspark.ml.feature.OneHotEncoder.html)
+    [VectorAssembler](https://spark.apache.org/docs/4.1.1/api/python/reference/api/pyspark.ml.feature.VectorAssembler.html) |
+    [StringIndexer](https://spark.apache.org/docs/4.1.1/api/python/reference/api/pyspark.ml.feature.StringIndexer.html) |
+    [OneHotEncoder](https://spark.apache.org/docs/4.1.1/api/python/reference/api/pyspark.ml.feature.OneHotEncoder.html)
     —— `inputCol`、`outputCol`、`inputCols`、`handleInvalid` 参数。
 
 - Class: mult_question
@@ -151,7 +151,7 @@
     手动操作时这是常见的 bug 来源。
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## 回归模型
 
@@ -189,15 +189,16 @@
     ```
 
     - **RMSE**（均方根误差）—— 对大误差惩罚更多；越低越好
-    - **R2**（决定系数）—— 模型解释了多少方差；越接近 1.0 越好
+    - **R² / R2**（决定系数）—— 通常越接近 1 越好；可以为负，
+      负值表示平方误差比用测试标签均值预测更大（默认非 throughOrigin 定义）。
     - **MAE**（平均绝对误差）—— 平均误差幅度；越低越好
 
 - Class: mult_question
   Depth: intermediate
-  Output: "哪个评估指标范围为 0 到 1，表示模型解释数据方差的程度？"
+  Output: "哪个评估指标通常用于衡量模型解释方差的程度，最佳值为 1，也可能为负数？"
   AnswerChoices: "R2（决定系数）;RMSE（均方根误差）;MAE（平均绝对误差）;MSE（均方误差）"
   CorrectAnswer: "R2（决定系数）"
-  Hint: "这个指标衡量模型解释的方差比例。"
+  Hint: "决定系数可以为负；标签恒定时还需要关注定义和实现对退化情况的处理。"
 
 - Class: cmd_question
   Depth: intermediate
@@ -287,6 +288,7 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：构建预测管道
 
@@ -302,6 +304,18 @@
 
     本练习将本课的所有内容串联起来：特征准备、管道构建、
     训练和评估。
+    **输入、输出与通过条件**
+
+    输入：`build_pipeline(spark)` 使用 generate_housing_data() 的 500 行数据及 SCHEMA。
+    用 randomSplit([0.8, 0.2], seed=42) 拆分；两个 StringIndexer 分别生成
+    neighborhoodIndex 和 conditionIndex，再由 VectorAssembler 合并这两列及 bedrooms、sqft、age。
+    RandomForestRegressor 使用 labelCol="price"、numTrees=20、maxDepth=5、seed=42。
+    返回字典键：model、predictions、rmse、r2、train_count、test_count。
+    通过条件：四阶段 Pipeline 训练完成，训练/测试均非空且总数 500；预测含 prediction、price、features，
+    RMSE 为有限非负数、R² 为有限且不大于 1 的数，二者与独立评估一致；不要求 R² 必须为正。
+    随机划分比例是近似值，不要求测试集恰好 100 行。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
   Hint: "类别列用 StringIndexer，VectorAssembler 合并所有特征，模型用 RandomForestRegressor，指标用 RegressionEvaluator。"

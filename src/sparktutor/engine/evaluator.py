@@ -170,6 +170,8 @@ class Evaluator:
         solution_hint: str = "",
     ) -> list[dict]:
         """Build the review prompt messages. Returns [{"role": "user", "content": ...}]."""
+        stdout_context = "Execution stdout:\n" + stdout if stdout else "No execution output."
+        stderr_context = "Execution stderr:\n" + stderr if stderr else ""
         prompt = f"""You are a Spark tutor evaluating a student's PySpark code for a lesson on "{lesson_title}".
 
 Student depth level: {depth}
@@ -181,8 +183,8 @@ Student code:
 {code}
 ```
 
-{f'Execution stdout:\\n{stdout}' if stdout else 'No execution output.'}
-{f'Execution stderr:\\n{stderr}' if stderr else ''}
+{stdout_context}
+{stderr_context}
 
 Respond in JSON. Be concise — 1-2 sentences per feedback item max.
 CRITICAL: All text fields below ("message", "suggestion", "encouragement", "skill_signals") MUST be written in Simplified Chinese (简体中文). Keep code identifiers, API names, and config keys in English.
@@ -230,9 +232,18 @@ Rules:
 
         json_match = re.search(r"\{[\s\S]*\}", stripped)
         if json_match:
-            data = json.loads(json_match.group())
+            try:
+                data = json.loads(json_match.group())
+            except json.JSONDecodeError:
+                data = None
+            if (not isinstance(data, dict) or type(data.get("passed")) is not bool
+                    or not isinstance(data.get("feedback", []), list)
+                    or any(not isinstance(item, dict) for item in data.get("feedback", []))):
+                return EvalResult(passed=False, feedback=[FeedbackItem(
+                    line=None, severity="warning", message="AI 返回的评审格式无效，请重新提交。",
+                )])
             return EvalResult(
-                passed=data.get("passed", False),
+                passed=data.get("passed") is True,
                 feedback=[
                     FeedbackItem(
                         line=f.get("line"),
@@ -246,7 +257,9 @@ Rules:
                 encouragement=data.get("encouragement", ""),
                 skill_signals=data.get("skill_signals", []),
             )
-        return EvalResult(passed=False)
+        return EvalResult(passed=False, feedback=[FeedbackItem(
+            line=None, severity="warning", message="AI 未返回可解析的评审结果，请重新提交。",
+        )])
 
     async def claude_review(
         self,
@@ -308,83 +321,13 @@ Rules:
         exec_result=None,  # ExecResult
         lesson_title: str = "",
     ) -> EvalResult:
-        """Run the appropriate evaluation for a step."""
-        # Multiple choice
-        if step.cls == "mult_question" and step.correct_answer:
-            return self.check_mult_choice(code, step.correct_answer)
-
-        # Code questions: try local checks first
-        syntax = self.check_syntax(code)
-        if not syntax.passed:
-            return syntax
-
-        # Exact match check
-        if step.correct_answer:
-            exact = self.check_code_exact(code, step.correct_answer)
-            if exact.passed:
-                return EvalResult(passed=True, encouragement="回答正确！")
-
-        # AST structural checks
-        ast_checks = [v.params for v in step.validation if v.type == "ast_contains"]
-        if ast_checks:
-            ast_result = self.check_ast_contains(code, ast_checks)
-            if not ast_result.passed:
-                return ast_result
-
-        # Claude review for script steps or when local checks are insufficient
-        has_claude_review = any(v.type == "claude_review" for v in step.validation)
-        if has_claude_review or (step.cls == "script" and not step.correct_answer):
-            criteria = ""
-            for v in step.validation:
-                if v.type == "claude_review":
-                    criteria = v.params.get("criteria", "")
-                    break
-            return await self.claude_review(
-                code=code,
-                lesson_title=lesson_title,
-                objective=criteria or step.output,
-                depth=depth,
-                stdout=exec_result.stdout if exec_result else "",
-                stderr=exec_result.stderr if exec_result else "",
-            )
-
-        # For cmd_question steps: if AST checks passed and execution succeeded,
-        # skip the slower Claude review and pass locally
-        if step.cls == "cmd_question" and ast_checks:
-            if exec_result is None or exec_result.exit_code != 0:
-                # Execution failed or wasn't run — don't pass
-                fb = []
-                if exec_result and exec_result.stderr:
-                    fb.append(FeedbackItem(
-                        line=None, severity="error",
-                        message=f"代码执行失败（退出码 {exec_result.exit_code}）。",
-                        suggestion="请查看输出面板了解错误详情。",
-                        category="bug",
-                    ))
-                elif exec_result is None:
-                    fb.append(FeedbackItem(
-                        line=None, severity="error",
-                        message="代码需要运行但尚未执行。",
-                        suggestion="请确保你的代码能够成功运行。",
-                        category="bug",
-                    ))
-                return EvalResult(passed=False, feedback=fb)
-            return EvalResult(passed=True, encouragement="做得好！")
-
-        # If we got past exact match without passing, do Claude review as fallback
-        if step.correct_answer:
-            return await self.claude_review(
-                code=code,
-                lesson_title=lesson_title,
-                objective=step.output,
-                depth=depth,
-                stdout=exec_result.stdout if exec_result else "",
-                stderr=exec_result.stderr if exec_result else "",
-                solution_hint=step.correct_answer,
-            )
-
-        # No validation rules — pass if syntax is OK
-        return EvalResult(passed=True, encouragement="Code looks good!")
+        """Run local validation before any AI provider may decide the result."""
+        result, needs_ai, kwargs = await self.evaluate_local(
+            code, step, depth, exec_result, lesson_title
+        )
+        if needs_ai:
+            return await self.claude_review(**kwargs)
+        return result or EvalResult(passed=False)
 
     async def evaluate_local(
         self,
@@ -407,6 +350,29 @@ Rules:
         syntax = self.check_syntax(code)
         if not syntax.passed:
             return syntax, False, {}
+
+        # Required execution is a prerequisite, even for an exact reference
+        # answer. Dry-run parses syntax only and cannot certify Spark behavior.
+        if step.requires_execution:
+            reason = ""
+            if exec_result is None:
+                reason = "尚未运行课程测试，请重新提交。"
+            elif exec_result.mode.value == "dry_run":
+                reason = "当前为仅语法检查模式，尚未验证结果。请配置本地 Spark 或可用的 Spark 执行环境后重新提交。"
+            elif not exec_result.success:
+                reason = "代码运行或课程测试失败，请根据反馈修正后重新提交。"
+            elif step.cls == "script" and not exec_result.validation_passed:
+                reason = "程序已退出，但课程测试未完整执行，不能判定通过。"
+            if reason:
+                return EvalResult(passed=False, feedback=[FeedbackItem(
+                    line=None, severity="error", message=reason,
+                    suggestion=(exec_result.stderr[-2000:] if exec_result and exec_result.stderr else None),
+                    category="bug",
+                )]), False, {}
+            if step.cls == "script":
+                return EvalResult(
+                    passed=True, encouragement="课程测试已在 Spark 执行环境中全部通过。",
+                ), False, {}
 
         # Exact match check
         if step.correct_answer:
@@ -491,11 +457,12 @@ Rules:
         """Build chat messages. Returns [{"role": "system", ...}, {"role": "user", ...}]."""
         from sparktutor.engine.spark_knowledge import get_system_prompt
 
+        code_excerpt = "学生当前代码：\n```python\n" + code_context + "\n```" if code_context else "（暂无代码）"
         user_msg = f"""学生正在学习：「{lesson_title}」
 当前练习内容：{step_context}
 学生水平：{depth}
 
-{f'学生当前代码：\n```python\n{code_context}\n```' if code_context else '（暂无代码）'}
+{code_excerpt}
 {extra_context}
 
 学生问题：{question}

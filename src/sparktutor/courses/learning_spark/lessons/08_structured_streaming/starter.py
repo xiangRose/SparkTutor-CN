@@ -9,7 +9,7 @@ Structured Streaming - 起始代码
 5. 返回单词计数 DataFrame
 
 本练习以批处理模式模拟流式单词计数
-（兼容 dry-run — 无需实际流）。
+（需要本地 Spark，无需外部流数据源；dry-run 仅检查语法）。
 
 在真实流式场景中，你可以将 spark.createDataFrame
 替换为 spark.readStream.format("socket") 或 .format("kafka")。
@@ -95,7 +95,6 @@ if __name__ == "__main__":
         .master("local[*]")
         .getOrCreate())
 
-    # 测试 1：基础单词计数
     wc = streaming_word_count(spark)
     assert wc is not None, "streaming_word_count 返回了 None"
     top_word = wc.collect()[0]
@@ -103,12 +102,20 @@ if __name__ == "__main__":
     print("单词计数：")
     wc.show(truncate=False)
 
-    # 测试 2：窗口计数
     ww = streaming_windowed_count(spark)
     assert ww is not None, "streaming_windowed_count 返回了 None"
     assert "window" in ww.columns, "缺少 window 列"
     print("\n窗口单词计数：")
     ww.show(truncate=False)
+
+    counts = {row.word: row["count"] for row in wc.collect()}
+    assert counts == {"hello": 4, "world": 4, "spark": 5, "streaming": 3, "is": 1, "great": 1, "of": 1, "data": 2}
+    assert [row["count"] for row in wc.collect()] == sorted(counts.values(), reverse=True)
+    from datetime import timedelta
+    windows = {(row.window.start.minute, row.word): row["count"] for row in ww.collect()}
+    assert windows == {(0, "hello"): 3, (0, "spark"): 3, (0, "world"): 1, (0, "streaming"): 1,
+                       (10, "streaming"): 1, (10, "world"): 1, (10, "spark"): 1, (10, "data"): 1}
+    assert all(row.window.end - row.window.start == timedelta(minutes=10) for row in ww.collect())
 
     print("所有测试通过！")
     spark.stop()

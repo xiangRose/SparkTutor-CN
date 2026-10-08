@@ -139,6 +139,14 @@ class TestDetectMode:
         result = await handler.dispatch({"method": "detectMode", "params": {}})
         assert result["mode"] == "dry_run"
 
+    @pytest.mark.asyncio
+    async def test_switch_mode_clears_cached_detection(self, handler):
+        from sparktutor.engine.executor import ExecMode
+        handler.executor._detected_mode = ExecMode.LOCAL
+        result = await handler.dispatch({"method": "setExecutionMode", "params": {"mode": "dry_run"}})
+        assert result["mode"] == "dry_run"
+        assert (await handler.executor.execute("x = 1")).mode == ExecMode.DRY_RUN
+
 
 class TestRun:
     @pytest.mark.asyncio
@@ -183,3 +191,50 @@ class TestSubmit:
         })
         assert "passed" in result
         assert "feedback" in result
+
+    @pytest.mark.asyncio
+    async def test_external_review_requires_current_submission_id(self, handler):
+        await handler.dispatch({"method": "loadLesson", "params": {"courseId": "test_course", "lessonIdx": 0}})
+        handler._runner.state.current_index = 2
+        old = await handler.dispatch({"method": "buildReviewPrompt", "params": {"code": "x = int('42')"}})
+        new = await handler.dispatch({"method": "buildReviewPrompt", "params": {"code": "x = 6 * 7"}})
+        assert old["reviewId"] != new["reviewId"]
+        with pytest.raises(ValueError):
+            await handler.dispatch({"method": "parseReviewResponse", "params": {"rawText": '{"passed": true}', "reviewId": old["reviewId"]}})
+        assert handler._runner.state.last_result is None
+        result = await handler.dispatch({"method": "parseReviewResponse", "params": {"rawText": '{"passed": true}', "reviewId": new["reviewId"]}})
+        assert result["passed"] is True
+        assert handler.progress.get("test_course", "01_test_lesson").last_code == "x = 6 * 7"
+
+    @pytest.mark.asyncio
+    async def test_old_review_cannot_complete_another_lesson(self, handler):
+        params = {"courseId": "test_course", "lessonIdx": 0}
+        await handler.dispatch({"method": "loadLesson", "params": params})
+        handler._runner.state.current_index = 2
+        review = await handler.dispatch({"method": "buildReviewPrompt", "params": {"code": "x = 6 * 7"}})
+        await handler.dispatch({"method": "loadLesson", "params": params})
+        with pytest.raises(ValueError):
+            await handler.dispatch({"method": "parseReviewResponse", "params": {"rawText": '{"passed": true}', "reviewId": review["reviewId"]}})
+
+    @pytest.mark.asyncio
+    async def test_external_failure_is_saved_and_counted(self, handler):
+        await handler.dispatch({"method": "loadLesson", "params": {"courseId": "test_course", "lessonIdx": 0}})
+        handler._runner.state.current_index = 2
+        review = await handler.dispatch({"method": "buildReviewPrompt", "params": {"code": "x = 6 * 7"}})
+        result = await handler.dispatch({"method": "completeReviewFailure", "params": {"reviewId": review["reviewId"], "message": "连接失败"}})
+        assert result["passed"] is False
+        assert handler._runner.pending_review_id is None
+        assert handler._runner.profile.total_attempts == 1
+        assert handler.progress.get("test_course", "01_test_lesson").last_code == "x = 6 * 7"
+        assert any(e.event_type == "code_submit" and not e.data["passed"] for e in handler.events.list_events())
+
+    @pytest.mark.asyncio
+    async def test_malformed_ai_response_finishes_as_failure(self, handler):
+        await handler.dispatch({"method": "loadLesson", "params": {"courseId": "test_course", "lessonIdx": 0}})
+        handler._runner.state.current_index = 2
+        review = await handler.dispatch({"method": "buildReviewPrompt", "params": {"code": "x = 6 * 7"}})
+        result = await handler.dispatch({"method": "parseReviewResponse", "params": {"reviewId": review["reviewId"], "rawText": '{"passed": }'}})
+        assert result["passed"] is False
+        assert result["feedback"]
+        assert handler._runner.pending_review_id is None
+        assert handler._runner.profile.total_attempts == 1

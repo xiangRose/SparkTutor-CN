@@ -1,315 +1,212 @@
-/**
- * Exercise file management.
- *
- * Each course gets ONE main file (exercise.py) that accumulates code across
- * lessons and steps. When the user advances to a code step, any new starter
- * code is appended (with a comment separator) rather than overwriting.
- * Supplementary files (data, configs) live in per-lesson subdirectories.
- *
- * Switching courses closes old tabs (configurable) and opens the new course's
- * exercise file.
- */
-
+/** Exercise workspaces: short answers share a lesson file; scripts stay independent. */
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
+import { exerciseContent, stableHash } from "./lessonHelpers";
 
 export class WorkspaceManager {
-  private readonly baseDir: string;
   private currentFile: vscode.Uri | null = null;
   private currentCourseId: string | null = null;
-
-  /** For mult_question steps: stores the selected choice from the webview. */
   private selectedChoice: string | null = null;
+  private currentStepCls = "";
+  private readonly legacyNotices = new Set<string>();
 
-  /** The current step type, so we know how to read user input. */
-  private currentStepCls: string = "";
+  constructor(private readonly baseDir = path.join(os.homedir(), ".sparktutor", "workspace")) {}
 
-  constructor() {
-    this.baseDir = path.join(os.homedir(), ".sparktutor", "workspace");
+  private courseDir(courseId: string): string {
+    this.validateId(courseId);
+    return path.join(this.baseDir, courseId);
   }
 
-  /**
-   * Get the single exercise file path for a course (one main file per course).
-   */
-  private getLessonFilePath(courseId: string, _lessonId: string): string {
-    const dir = path.join(this.baseDir, courseId);
-    fs.mkdirSync(dir, { recursive: true });
-    return path.join(dir, "exercise.py");
+  private validateId(id: string): void {
+    if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+      throw new Error("课程或练习标识无效。");
+    }
   }
 
-  /**
-   * Get directory for supplementary files (data files, configs) created by a
-   * specific lesson.
-   */
+  private contains(directory: string, file: string): boolean {
+    const relative = path.relative(directory, file);
+    return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  }
+
   getSupplementaryDir(courseId: string, lessonId: string): string {
-    const dir = path.join(this.baseDir, courseId, lessonId);
-    fs.mkdirSync(dir, { recursive: true });
-    return dir;
+    this.validateId(lessonId);
+    const directory = path.join(this.courseDir(courseId), lessonId);
+    fs.mkdirSync(directory, { recursive: true });
+    return directory;
   }
 
-  /**
-   * Switch to a different course workspace.
-   * Saves current file, optionally closes old course tabs, opens new course file.
-   */
   async switchCourse(newCourseId: string): Promise<void> {
-    const oldCourseId = this.currentCourseId;
-    if (oldCourseId === newCourseId) {
-      return;
-    }
-
-    // Save any dirty editors belonging to the old course
-    if (oldCourseId) {
-      await this.saveCourseDirtyEditors(oldCourseId);
-    }
-
-    // Close old course tabs if setting is enabled
-    const autoClose = vscode.workspace
-      .getConfiguration("sparktutor")
-      .get<boolean>("autoCloseTabs", true);
-    if (autoClose && oldCourseId) {
-      await this.closeCourseTabs(oldCourseId);
-    }
-
-    this.currentCourseId = newCourseId;
-
-    // Open the new course's exercise.py if it exists on disk
-    const newFilePath = path.join(this.baseDir, newCourseId, "exercise.py");
-    if (fs.existsSync(newFilePath)) {
-      const content = fs.readFileSync(newFilePath, "utf-8");
-      if (content.trim()) {
-        const uri = vscode.Uri.file(newFilePath);
-        const doc = await vscode.workspace.openTextDocument(uri);
-        await vscode.window.showTextDocument(doc, {
-          viewColumn: vscode.ViewColumn.One,
-          preserveFocus: false,
-          preview: false,
-        });
-        this.currentFile = uri;
+    if (this.currentCourseId === newCourseId) { return; }
+    if (this.currentCourseId) {
+      const oldDirectory = this.courseDir(this.currentCourseId);
+      await this.saveDocuments(oldDirectory);
+      if (vscode.workspace.getConfiguration("sparktutor").get<boolean>("autoCloseTabs", true)) {
+        await this.closeTabs((file) => this.contains(oldDirectory, file));
       }
     }
+    this.currentCourseId = newCourseId;
+    this.currentFile = null;
   }
 
-  /**
-   * Close all editor tabs whose file belongs to a course's workspace directory.
-   */
-  private async closeCourseTabs(courseId: string): Promise<void> {
-    const courseDir = path.join(this.baseDir, courseId);
-    const tabsToClose: vscode.Tab[] = [];
-
+  private async closeTabs(matches: (file: string) => boolean): Promise<void> {
+    const tabs: vscode.Tab[] = [];
     for (const group of vscode.window.tabGroups.all) {
       for (const tab of group.tabs) {
         const input = tab.input;
-        if (input instanceof vscode.TabInputText) {
-          if (input.uri.fsPath.startsWith(courseDir)) {
-            tabsToClose.push(tab);
-          }
-        } else if (input instanceof vscode.TabInputTextDiff) {
-          if (
-            input.original.fsPath.startsWith(courseDir) ||
-            input.modified.fsPath.startsWith(courseDir)
-          ) {
-            tabsToClose.push(tab);
-          }
+        if ((input instanceof vscode.TabInputText && matches(input.uri.fsPath)) ||
+          (input instanceof vscode.TabInputTextDiff &&
+            (matches(input.original.fsPath) || matches(input.modified.fsPath)))) {
+          tabs.push(tab);
         }
       }
     }
-
-    if (tabsToClose.length > 0) {
-      await vscode.window.tabGroups.close(tabsToClose);
+    if (tabs.length && !await vscode.window.tabGroups.close(tabs)) {
+      throw new Error("编辑器未关闭，已取消文件重置或课程切换。");
     }
   }
 
-  /**
-   * Save any unsaved editors belonging to a course before switching away.
-   */
-  private async saveCourseDirtyEditors(courseId: string): Promise<void> {
-    const courseDir = path.join(this.baseDir, courseId);
-    for (const doc of vscode.workspace.textDocuments) {
-      if (doc.isDirty && doc.uri.fsPath.startsWith(courseDir)) {
-        await doc.save();
+  private async saveDocuments(directory: string): Promise<void> {
+    for (const document of vscode.workspace.textDocuments) {
+      if (document.isDirty && this.contains(directory, document.uri.fsPath) && !await document.save()) {
+        throw new Error("练习代码保存失败，请先保存编辑器中的修改。");
       }
     }
   }
 
-  /**
-   * Track what kind of step we're on so getCurrentCode() knows where to look.
-   */
   setStepType(cls: string): void {
     this.currentStepCls = cls;
     this.selectedChoice = null;
   }
 
-  /**
-   * Store a multiple-choice selection from the webview.
-   */
   setSelectedChoice(choice: string): void {
     this.selectedChoice = choice;
   }
 
-  /**
-   * Open the lesson's exercise file in the editor.
-   *
-   * - If restoredCode is provided (resuming a session), use that.
-   * - If the file already has content, keep it (user's accumulated work).
-   * - If the file is empty/missing and starterCode is given, write it.
-   * - If the file has content and new starterCode is given, append it
-   *   with a comment separator (so previous work is preserved).
-   */
+  /** Unverified legacy progress is preserved for the learner, never executed as a new answer. */
+  backupLegacyCode(courseId: string, lessonId: string, code: string): void {
+    if (!code.trim()) { return; }
+    const directory = this.getSupplementaryDir(courseId, lessonId);
+    const stem = `legacy_restored_${stableHash(code)}`;
+    let filePath = path.join(directory, `${stem}.py`);
+    let suffix = 1;
+    // Preserve both inputs even in the unlikely event of a content hash collision.
+    while (fs.existsSync(filePath) && fs.readFileSync(filePath, "utf-8") !== code) {
+      filePath = path.join(directory, `${stem}_${suffix++}.py`);
+    }
+    if (!fs.existsSync(filePath)) { fs.writeFileSync(filePath, code, "utf-8"); }
+    if (!this.legacyNotices.has(filePath)) {
+      this.legacyNotices.add(filePath);
+      vscode.window.showInformationMessage(`旧版进度中的代码已备份到 ${filePath}。请按当前题面完成独立练习。`);
+    }
+  }
+
+  /** File names use an unfiltered step identity so changing depth preserves work. */
   async openExercise(
     courseId: string,
     lessonId: string,
-    stepIdx: number,
+    stepKey: string,
     starterCode: string,
     restoredCode?: string
   ): Promise<vscode.Uri> {
-    const filePath = this.getLessonFilePath(courseId, lessonId);
-
-    if (restoredCode && !(fs.existsSync(filePath) && fs.readFileSync(filePath, "utf-8").trim())) {
-      // Resuming from a previous session AND no file on disk — write the restored code
-      fs.writeFileSync(filePath, restoredCode, "utf-8");
-    } else if (fs.existsSync(filePath)) {
-      const existing = fs.readFileSync(filePath, "utf-8");
-      if (existing.trim() && starterCode.trim()) {
-        // File has content AND new step has starter code → append
-        // But only if the starter code isn't already in the file
-        if (!existing.includes(starterCode.trim())) {
-          const separator = `\n\n# --- Step ${stepIdx + 1} ---\n`;
-          fs.writeFileSync(
-            filePath,
-            existing.trimEnd() + separator + starterCode,
-            "utf-8"
-          );
-        }
-        // else: starter code already present, don't duplicate
-      } else if (!existing.trim() && starterCode.trim()) {
-        // Empty file, write starter
-        fs.writeFileSync(filePath, starterCode, "utf-8");
+    this.validateId(stepKey);
+    const directory = this.getSupplementaryDir(courseId, lessonId);
+    const isolated = this.currentStepCls === "script";
+    const filePath = path.join(directory, isolated ? `script_${stepKey}.py` : "exercise.py");
+    const document = vscode.workspace.textDocuments.find((doc) => doc.uri.fsPath === filePath);
+    const existing = document?.getText() ?? (fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf-8") : "");
+    // Older sessions stored an entire course in one buffer. Never import that
+    // buffer into a standalone script with its own Spark lifecycle and tests.
+    const legacyFile = path.join(this.courseDir(courseId), "exercise.py");
+    const legacyContents = fs.existsSync(legacyFile) ? fs.readFileSync(legacyFile, "utf-8") : "";
+    if (isolated && restoredCode && (/^# --- Step \d+ ---/m.test(restoredCode) || restoredCode === legacyContents)) {
+      const backup = path.join(directory, `legacy_restored_${stepKey}.py`);
+      if (!fs.existsSync(backup)) { fs.writeFileSync(backup, restoredCode, "utf-8"); }
+      restoredCode = undefined;
+      vscode.window.showInformationMessage(`旧版累积代码已保留在 ${backup}；本题使用独立练习文件。`);
+    }
+    const content = exerciseContent(existing, starterCode, restoredCode, stepKey, isolated);
+    if (content !== existing && document) {
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(existing.length)), content);
+      if (!await vscode.workspace.applyEdit(edit)) {
+        throw new Error("无法更新练习文件，请先保存或关闭该文件。");
       }
-      // else: file has content but no new starter → keep as-is
-    } else {
-      // New file
-      fs.writeFileSync(filePath, starterCode || "", "utf-8");
+      await document.save();
+    } else if (!fs.existsSync(filePath) || content !== existing) {
+      fs.writeFileSync(filePath, content, "utf-8");
     }
+    return this.showFile(filePath, courseId);
+  }
 
+  /** Text and quiz steps display lesson notes without injecting a script's test harness. */
+  async openExerciseIfExists(courseId: string, lessonId: string, lessonTitle?: string): Promise<void> {
+    const directory = this.getSupplementaryDir(courseId, lessonId);
+    // Keep the current exercise visible while reading within the same lesson.
+    if (this.currentFile && this.contains(directory, this.currentFile.fsPath)) { return; }
+    const filePath = path.join(directory, "exercise.py");
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath,
+        `# ${lessonTitle || "SparkTutor 练习"}\n# 在此记录本课短题代码；综合练习会打开独立文件。\n`, "utf-8");
+    }
+    await this.showFile(filePath, courseId);
+  }
+
+  private async showFile(filePath: string, courseId: string): Promise<vscode.Uri> {
+    const legacyFile = path.join(this.courseDir(courseId), "exercise.py");
+    if (!this.legacyNotices.has(courseId) && fs.existsSync(legacyFile)) {
+      this.legacyNotices.add(courseId);
+      vscode.window.showInformationMessage(`旧版课程作业保留在 ${legacyFile}。现在按课保存短题，并为综合练习建立独立文件。`);
+    }
     const uri = vscode.Uri.file(filePath);
-
-    // Reuse existing editor tab if already open
-    const existingEditor = vscode.window.visibleTextEditors.find(
-      (e) => e.document.uri.fsPath === filePath
-    );
-    if (!existingEditor) {
-      const doc = await vscode.workspace.openTextDocument(uri);
-      await vscode.window.showTextDocument(doc, {
-        viewColumn: vscode.ViewColumn.One,
-        preserveFocus: false,
-        preview: false,
-      });
-    }
-
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document, {
+      viewColumn: vscode.ViewColumn.One, preserveFocus: false, preview: false,
+    });
     this.currentFile = uri;
     this.currentCourseId = courseId;
     return uri;
   }
 
-  /**
-   * Read the user's current input for the step.
-   * - For mult_question: returns the selected choice from the webview.
-   * - For cmd_question/script: reads from the editor tab (unsaved changes included).
-   * - For text: returns empty (nothing to submit).
-   */
-  /**
-   * Open the exercise file if it already exists on disk (for non-code steps
-   * during resume, so the user's accumulated code stays visible).
-   */
-  async openExerciseIfExists(
-    courseId: string,
-    lessonId: string,
-    lessonTitle?: string,
-    firstStarterCode?: string
-  ): Promise<void> {
-    const filePath = this.getLessonFilePath(courseId, lessonId);
-
-    // If file doesn't exist or is empty, seed it so the editor pane is
-    // always populated (avoids blank screen / Copilot chat taking over).
-    // Prefer the first code step's starter code over a generic header.
-    if (!fs.existsSync(filePath) || !fs.readFileSync(filePath, "utf-8").trim()) {
-      const content = firstStarterCode?.trim()
-        ? firstStarterCode
-        : lessonTitle
-          ? `# ${lessonTitle}\n# Write your code below as you work through the lesson.\n`
-          : `# SparkTutor Exercise\n# Write your code below as you work through the lesson.\n`;
-      fs.writeFileSync(filePath, content, "utf-8");
-    }
-
-    const uri = vscode.Uri.file(filePath);
-    const existingEditor = vscode.window.visibleTextEditors.find(
-      (e) => e.document.uri.fsPath === filePath
-    );
-    if (!existingEditor) {
-      const doc = await vscode.workspace.openTextDocument(uri);
-      await vscode.window.showTextDocument(doc, {
-        viewColumn: vscode.ViewColumn.One,
-        preserveFocus: false,
-        preview: false,
-      });
-    }
-    this.currentFile = uri;
-    this.currentCourseId = courseId;
-  }
-
   getCurrentCode(): string {
-    if (this.currentStepCls === "mult_question") {
-      return this.selectedChoice || "";
-    }
+    if (this.currentStepCls === "mult_question") { return this.selectedChoice || ""; }
+    if (!this.currentFile || this.currentStepCls === "text") { return ""; }
+    // Include unsaved buffers even when the tab is hidden behind another editor.
+    const document = vscode.workspace.textDocuments.find((doc) => doc.uri.fsPath === this.currentFile?.fsPath);
+    if (document) { return document.getText(); }
+    try { return fs.readFileSync(this.currentFile.fsPath, "utf-8"); }
+    catch { return ""; }
+  }
 
-    if (!this.currentFile) {
-      return "";
-    }
+  getCurrentUri(): vscode.Uri | null { return this.currentFile; }
 
-    // Prefer reading from the open editor (may have unsaved changes)
-    const editor = vscode.window.visibleTextEditors.find(
-      (e) => e.document.uri.fsPath === this.currentFile?.fsPath
-    );
-    if (editor) {
-      return editor.document.getText();
-    }
-
-    // Fallback: read from disk
-    try {
-      return fs.readFileSync(this.currentFile.fsPath, "utf-8");
-    } catch {
-      return "";
+  async saveCurrentExercise(): Promise<void> {
+    const document = vscode.workspace.textDocuments.find((doc) => doc.uri.fsPath === this.currentFile?.fsPath);
+    if (document?.isDirty && !await document.save()) {
+      throw new Error("练习代码保存失败，请先保存当前文件再切换步骤。");
     }
   }
 
-  getCurrentUri(): vscode.Uri | null {
-    return this.currentFile;
-  }
-
-  /**
-   * Delete the exercise file for a course (used by reset).
-   * Clears the course-level exercise.py file.
-   */
-  deleteExerciseFile(courseId: string, _lessonId: string): void {
-    const filePath = path.join(this.baseDir, courseId, "exercise.py");
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+  /** Only this lesson's managed exercises are reset. Legacy course files stay untouched. */
+  async deleteExerciseFile(courseId: string, lessonId: string): Promise<void> {
+    const directory = this.getSupplementaryDir(courseId, lessonId);
+    const files = fs.readdirSync(directory)
+      .filter((name) => name === "exercise.py" || /^script_[a-zA-Z0-9_-]+\.py$/.test(name))
+      .map((name) => path.join(directory, name));
+    await this.saveDocuments(directory);
+    await this.closeTabs((file) => files.includes(file));
+    for (const file of files) {
+      // No recursive deletion: supplementary data, solutions and other lessons survive.
+      if (this.contains(directory, path.resolve(file)) && fs.lstatSync(file).isFile()) {
+        fs.unlinkSync(file);
+      }
     }
+    if (this.currentFile && files.includes(this.currentFile.fsPath)) { this.currentFile = null; }
   }
 
-  /**
-   * Write a solution file for diff comparison.
-   */
-  writeSolutionFile(
-    courseId: string,
-    lessonId: string,
-    stepIdx: number,
-    solutionCode: string
-  ): vscode.Uri {
-    const dir = this.getSupplementaryDir(courseId, lessonId);
-    const filePath = path.join(dir, `step_${stepIdx}_solution.py`);
+  writeSolutionFile(courseId: string, lessonId: string, stepIdx: number, solutionCode: string): vscode.Uri {
+    const filePath = path.join(this.getSupplementaryDir(courseId, lessonId), `step_${stepIdx}_solution.py`);
     fs.writeFileSync(filePath, solutionCode, "utf-8");
     return vscode.Uri.file(filePath);
   }

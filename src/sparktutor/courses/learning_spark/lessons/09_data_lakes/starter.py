@@ -9,7 +9,7 @@
 4. 验证版本之间的 schema 一致性
 5. 返回包含两个版本和 schema 信息的字典
 
-兼容 dry-run — 无需 Delta/Iceberg JAR。
+需要本地 Spark，无需 Delta/Iceberg JAR；dry-run 只能检查语法。
 在生产环境中，你可以使用 Delta 或 Iceberg 获得真正的 ACID 支持。
 """
 
@@ -94,6 +94,12 @@ if __name__ == "__main__":
         print("版本 1（含新员工）：")
         result["version_1"].show()
         print(f"Schema 是否一致：{result['schemas_match']}")
+        assert [tuple(row) for row in result["version_0"].orderBy("id").collect()] == INITIAL_DATA
+        assert [tuple(row) for row in result["version_1"].orderBy("id").collect()] == INITIAL_DATA + NEW_EMPLOYEES
+        assert spark.read.parquet(os.path.join(base, "v0")).count() == 3
+        assert spark.read.parquet(os.path.join(base, "v1")).count() == 5
+        assert result["version_0"].schema == result["version_1"].schema
+
         print("所有测试通过！")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

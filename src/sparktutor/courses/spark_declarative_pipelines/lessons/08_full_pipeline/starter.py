@@ -36,7 +36,7 @@ class Pipeline:
     def _topo_sort(self, graph):
         in_degree = {n: 0 for n in graph}
         for node, deps in graph.items():
-            for dep in deps:
+            for dep in set(deps):
                 if dep in in_degree:
                     in_degree[node] += 1
         queue = deque(n for n, d in in_degree.items() if d == 0)
@@ -59,7 +59,7 @@ class Pipeline:
         for name in order:
             df = self._flows[name](self.spark)
             df.createOrReplaceTempView(name)
-            print(f"已物化：{name}（{df.count()} 行）")
+            print(f"已注册临时视图：{name}（{df.count()} 行）")
 
 
 # ---- 你的流水线层 ----
@@ -96,9 +96,8 @@ def build_pipeline(spark, csv_path):
 if __name__ == "__main__":
     import tempfile, os
 
-    spark = SparkSession.builder.appName("FullPipelineTest").master("local[*]").getOrCreate()
+    spark = SparkSession.builder.appName("FullPipelineTest").master("local[*]").config("spark.sql.ansi.enabled", "true").getOrCreate()
 
-    # 创建测试 CSV 文件
     tmp = tempfile.mkdtemp()
     csv_path = os.path.join(tmp, "orders.csv")
     with open(csv_path, "w") as fh:
@@ -107,27 +106,35 @@ if __name__ == "__main__":
         fh.write("2,gadget,24.99,1,2026-01-15 09:15:00\n")
         fh.write("3,widget,9.99,5,2026-01-15 16:00:00\n")
         fh.write("4,gizmo,4.99,10,2026-01-15 11:00:00\n")
-        fh.write("5,widget,N/A,1,2026-01-15 20:00:00\n")  # 坏价格
-        fh.write("1,widget,9.99,2,2026-01-15 14:30:00\n")  # 重复行
+        fh.write("5,widget,N/A,1,2026-01-15 20:00:00\n")
+        fh.write("1,widget,9.99,2,2026-01-15 14:30:00\n")
 
     pipe = build_pipeline(spark, csv_path)
     pipe.run()
 
-    # 验证 bronze
     bronze = spark.table("bronze_orders")
     assert bronze.count() == 5, f"Bronze：预期 5 行，实际得到 {bronze.count()}"
     assert "_ingested_at" in bronze.columns, "Bronze：缺少 _ingested_at"
 
-    # 验证 silver
     silver = spark.table("silver_orders")
     assert silver.count() == 4, f"Silver：预期 4 行（过滤掉 1 个 null），实际得到 {silver.count()}"
     assert "total" in silver.columns, "Silver：缺少 'total'"
     assert "order_hour" in silver.columns, "Silver：缺少 'order_hour'"
 
-    # 验证 gold
     gold = spark.table("gold_product_summary")
     assert gold.count() == 3, f"Gold：预期 3 个产品，实际得到 {gold.count()}"
     assert "revenue_rank" in gold.columns, "Gold：缺少 'revenue_rank'"
+
+    from pyspark.sql.types import DoubleType, IntegerType, StringType
+    assert "_source_file" in bronze.columns
+    assert all(bronze.schema[c].dataType == StringType() for c in ["order_id", "product", "price", "quantity", "order_ts"])
+    assert silver.schema["price"].dataType == DoubleType() and silver.schema["quantity"].dataType == IntegerType()
+    assert {r.order_id: r.order_hour for r in silver.collect()} == {"1": 14, "2": 9, "3": 16, "4": 11}
+    expected = {"widget": (2, 69.93, 34.965, 1), "gizmo": (1, 49.90, 49.90, 2), "gadget": (1, 24.99, 24.99, 3)}
+    for row in gold.collect():
+        count, revenue, avg, rank = expected[row.product]
+        assert row.order_count == count and row.revenue_rank == rank
+        assert abs(row.total_revenue - revenue) < 1e-8 and abs(row.avg_order_value - avg) < 1e-8
 
     print("\n所有测试通过！完整流水线端到端运行正常。")
     gold.show(truncate=False)

@@ -81,11 +81,11 @@
     把它们全部算出来。
 
     **文档：**
-    [f.sum](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.sum.html) |
-    [f.avg](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.avg.html) |
-    [f.count](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.count.html) |
-    [f.countDistinct](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.countDistinct.html) |
-    [Column.alias](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Column.alias.html)
+    [f.sum](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.sum.html) |
+    [f.avg](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.avg.html) |
+    [f.count](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.count.html) |
+    [f.countDistinct](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.countDistinct.html) |
+    [Column.alias](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.Column.alias.html)
 
 - Class: mult_question
   Depth: all
@@ -140,7 +140,7 @@
   Hint: "groupBy order_hour，agg 用 count、sum、countDistinct，然后 orderBy。"
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## 窗口函数：不坍缩行的聚合
 
@@ -167,10 +167,10 @@
     当前行在计算中包含哪些行。
 
     **文档：**
-    [Window](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html) —— `partitionBy()`、`orderBy()`、`rowsBetween()`、`rangeBetween()` |
-    [f.rank](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.rank.html) |
-    [f.dense_rank](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.dense_rank.html) |
-    [f.row_number](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.row_number.html)
+    [Window](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html) —— `partitionBy()`、`orderBy()`、`rowsBetween()`、`rangeBetween()` |
+    [f.rank](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.rank.html) |
+    [f.dense_rank](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.dense_rank.html) |
+    [f.row_number](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.row_number.html)
 
 - Class: cmd_question
   Depth: intermediate
@@ -188,7 +188,7 @@
   Hint: "用 partitionBy、orderBy 和 rowsBetween 定义 Window。用 f.sum().over(window)。"
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## 用窗口函数做排名
 
@@ -271,6 +271,7 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：构建 Gold 聚合
 
@@ -286,6 +287,15 @@
 
     测试框架会创建包含多个产品的 silver 数据，并验证你的
     聚合和排名是否正确。
+    **输入、输出与通过条件**
+
+    输入：`gold_product_summary(spark)` 读取四行 silver_orders，含 product 和数值 total 等列。
+    返回 product、order_count、total_revenue、avg_order_value、revenue_rank 五列。
+    排名使用 rank()，按 total_revenue 降序（并列收入排名相同，后续名次跳号）。
+    通过条件：widget 为 2 单/69.93/34.965/第 1 名，gizmo 为 1 单/49.90/49.90/第 2 名，
+    gadget 为 1 单/24.99/24.99/第 3 名；数值比较允许小幅浮点误差。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
   Hint: "groupBy product，agg 计算 count 和 sum，然后用 Window 配合 f.rank().over(w)。"

@@ -1,13 +1,13 @@
 course:
   id: learning_spark
   title: "Learning Spark：从基础到生产实践"
-  description: "从零开始掌握 Apache Spark —— DataFrame、SQL、流处理、性能优化与机器学习"
+  description: "面向具备 Python 基础的学习者，学习 Apache Spark 4.1.1 —— DataFrame、SQL、流处理、性能优化与机器学习"
   version: "1.0.0"
   requires_lakehouse: false
   prerequisites:
-    - "Python 3.10+"
-    - "Java 17+（大多数 PySpark 安装已自带）"
-    - "pip install pyspark"
+    - "Python 3.10+，熟悉函数、列表、字典、导入与异常；SQL 基础有帮助"
+    - "Java 17 或 21（需单独安装 JDK 并配置 JAVA_HOME）"
+    - "pip install pyspark==4.1.1"
   lessons:
     - 01_getting_started
     - 02_dataframes_schemas

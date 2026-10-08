@@ -33,7 +33,6 @@ def gold_product_summary(spark):
 if __name__ == "__main__":
     spark = SparkSession.builder.appName("GoldTest").master("local[*]").getOrCreate()
 
-    # 创建 silver 测试数据
     data = [
         ("1", "widget", 9.99, 2, 19.98, 14),
         ("2", "gadget", 24.99, 1, 24.99, 9),
@@ -53,6 +52,13 @@ if __name__ == "__main__":
 
     top = df.filter(f.col("revenue_rank") == 1).first()
     assert top["product"] == "widget", f"预期 widget 排名第一，实际得到 {top['product']}"
+
+    expected = {"widget": (2, 69.93, 34.965, 1), "gizmo": (1, 49.90, 49.90, 2), "gadget": (1, 24.99, 24.99, 3)}
+    assert set(df.columns) == {"product", "order_count", "total_revenue", "avg_order_value", "revenue_rank"}
+    for row in df.collect():
+        count, revenue, avg, rank = expected[row.product]
+        assert row.order_count == count and row.revenue_rank == rank
+        assert abs(row.total_revenue - revenue) < 1e-8 and abs(row.avg_order_value - avg) < 1e-8
 
     print("所有测试通过！")
     df.show(truncate=False)

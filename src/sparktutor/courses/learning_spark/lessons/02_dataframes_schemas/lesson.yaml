@@ -89,10 +89,10 @@
     在你调用 action 之前什么都不会执行。
 
     **文档：**
-    [select](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.select.html) |
-    [filter](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.filter.html) |
-    [withColumn](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.withColumn.html) |
-    [drop](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.drop.html)
+    [select](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.select.html) |
+    [filter](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.filter.html) |
+    [withColumn](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.withColumn.html) |
+    [drop](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.drop.html)
 
 - Class: mult_question
   Depth: all
@@ -156,9 +156,9 @@
     以及用于结构体嵌套结构体的嵌套 `StructType`。
 
     **文档：**
-    [StructType](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.types.StructType.html) |
-    [ArrayType](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.types.ArrayType.html) |
-    [MapType](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.types.MapType.html)
+    [StructType](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.types.StructType.html) |
+    [ArrayType](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.types.ArrayType.html) |
+    [MapType](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.types.MapType.html)
     —— 用 `StructField(name, type, nullable)` 定义 schema。
 
 - Class: cmd_question
@@ -177,7 +177,7 @@
   Hint: "用 StructType 传入一个 StructField(name, type, nullable) 列表。False = 不可为空，True = 可空。"
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## Schema 推断 vs. 显式 Schema
 
@@ -199,7 +199,7 @@
     推断是免费的。这是 Parquet 成为 Spark 首选格式的原因之一。
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## 从 Python 数据创建 DataFrame
 
@@ -271,6 +271,7 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：构建博客 DataFrame
 
@@ -285,6 +286,14 @@
 
     这个练习练习了 schema 定义、DataFrame 创建和添加计算列 ——
     这些技能在后续每一课中都会用到。
+    **输入、输出与通过条件**
+
+    输入：`build_blogs_df(spark)` 使用 starter 中提供的六行 DATA。
+    返回八列：Id、First、Last、Url、Published、Hits、Campaigns、Big_Hitter。
+    通过条件：保留六行原数据；Id/Hits 为 int，Campaigns 为字符串数组，
+    Big_Hitter 为 boolean，且 Id 为 4、5、6 的行取 True，其余为 False。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
   Hint: "Campaigns 是 ArrayType(StringType())。用 spark.createDataFrame(DATA, schema)，然后用 withColumn 添加布尔列。"

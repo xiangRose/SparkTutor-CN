@@ -15,7 +15,7 @@ export class StatusBarManager {
       vscode.StatusBarAlignment.Left,
       100
     );
-    this.modeItem.name = "SparkTutor Mode";
+    this.modeItem.name = "SparkTutor 执行模式";
     this.modeItem.command = "sparktutor.changeMode";
     this.modeItem.tooltip = "点击切换执行模式";
 
@@ -23,13 +23,13 @@ export class StatusBarManager {
       vscode.StatusBarAlignment.Left,
       99
     );
-    this.stepItem.name = "SparkTutor Step";
+    this.stepItem.name = "SparkTutor 学习步骤";
 
     this.depthItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left,
       98
     );
-    this.depthItem.name = "SparkTutor Depth";
+    this.depthItem.name = "SparkTutor 难度";
     this.depthItem.command = "sparktutor.changeDepth";
     this.depthItem.tooltip = "点击切换难度级别";
 
@@ -37,8 +37,8 @@ export class StatusBarManager {
       vscode.StatusBarAlignment.Left,
       97
     );
-    this.aiProviderItem.name = "SparkTutor AI Provider";
-    this.aiProviderItem.tooltip = "AI provider for code review and chat";
+    this.aiProviderItem.name = "SparkTutor AI 提供方";
+    this.aiProviderItem.tooltip = "用于代码评审和对话的 AI 提供方";
   }
 
   setMode(mode: string): void {
@@ -50,11 +50,11 @@ export class StatusBarManager {
       unknown: "$(question)",
     };
     const labels: Record<string, string> = {
-      lakehouse: "Lakehouse",
-      local: "Local",
-      dry_run: "Dry-run",
+      lakehouse: "湖仓",
+      local: "本地 Spark",
+      dry_run: "仅语法检查",
       databricks: "Databricks",
-      unknown: "Unknown",
+      unknown: "未知模式",
     };
     this.modeItem.text = `${icons[mode] || "$(question)"} ${labels[mode] || mode}`;
     this.modeItem.show();
@@ -79,8 +79,8 @@ export class StatusBarManager {
     const labels: Record<string, string> = {
       anthropic: "$(sparkle) AI: Claude",
       copilot: "$(copilot) AI: Copilot",
-      "openai-compatible": "$(cloud) AI: OpenAI-compat",
-      none: "$(circle-slash) AI: Local",
+      "openai-compatible": "$(cloud) AI：兼容接口",
+      none: "$(circle-slash) AI：未配置",
     };
     this.aiProviderItem.text = labels[provider] || `AI: ${provider}`;
     this.aiProviderItem.show();

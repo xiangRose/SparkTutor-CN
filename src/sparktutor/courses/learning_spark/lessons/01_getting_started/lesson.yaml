@@ -29,7 +29,7 @@
 
     Spark 的核心创新是**内存计算**。早期的 MapReduce 模型在每一步
     都将中间结果写入磁盘。Spark 在操作之间将数据保留在内存中，
-    这使得迭代式工作负载（如机器学习训练）速度提升 10-100 倍。
+    这能减少迭代式工作负载的重复计算和磁盘 I/O；实际收益取决于数据、缓存和集群配置。
 
     Spark 提供 Python、Scala、Java 和 R 的 API。本课程全程使用
     PySpark —— 即 Python API。在底层，PySpark 与同一个基于 JVM 的
@@ -63,7 +63,7 @@
     - **Driver Program（驱动程序）** —— 运行你的 `main()` 函数，
       创建 SparkSession，并协调整个集群的执行。
     - **Cluster Manager（集群管理器）** —— 分配资源。可选方案包括
-      Standalone、YARN、Mesos 和 Kubernetes。
+      Standalone、YARN 和 Kubernetes。
     - **Worker Nodes（工作节点）** —— 集群中托管 Executor 的机器。
     - **Executors（执行器）** —— Worker 上运行任务并缓存数据的
       JVM 进程。
@@ -79,7 +79,7 @@
     **task** —— 每个数据分区一个 —— 它们在各个 executor 上并行运行。
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## SparkSession：统一的入口
 
@@ -105,7 +105,7 @@
     `getOrCreate()` 会创建新会话或返回已存在的会话，因此多次调用
     是安全的。
 
-    **文档：** [SparkSession](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.SparkSession.html)
+    **文档：** [SparkSession](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.SparkSession.html)
     —— 建造者模式、`appName()`、`master()`、`config()`、`getOrCreate()`。
 
 - Class: mult_question
@@ -182,7 +182,7 @@
     这会得到一个 **DataFrame** —— 一张具有命名类型化列的分布式表。
     可以把它想象成一张能横跨数千台机器的电子表格。
 
-    **文档：** [DataFrameReader.csv](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.csv.html)
+    **文档：** [DataFrameReader.csv](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.csv.html)
     —— `header`、`inferSchema`、`schema`、`sep`、`nullValue` 等全部参数。
 
 - Class: text
@@ -214,10 +214,10 @@
     ```
 
     **文档：**
-    [f.col](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.col.html) |
-    [f.sum](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.sum.html) |
-    [DataFrame.groupBy](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.groupBy.html) |
-    [Column.alias](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.Column.alias.html)
+    [f.col](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.col.html) |
+    [f.sum](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.sum.html) |
+    [DataFrame.groupBy](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.groupBy.html) |
+    [Column.alias](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.Column.alias.html)
 
 - Class: cmd_question
   Depth: intermediate
@@ -234,7 +234,7 @@
   Hint: "groupBy 传两列，agg 用 f.sum() 和 alias()，然后 orderBy 用 desc()。"
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## 读取数据：选项与格式
 
@@ -258,13 +258,14 @@
 
     当你对 CSV 或 JSON 设置 `inferSchema=true` 时，Spark 会对数据
     做**两遍**扫描：一遍采样行并推断类型，另一遍实际加载数据。
-    对于大文件，这会使读取时间翻倍。
+    对于大文件，额外的推断扫描会增加读取开销，具体耗时需要测量。
 
-    在生产环境中，始终用 `StructType` 显式定义 schema。你将在下一节
+    稳定的数据接口优先用 `StructType` 显式定义 schema。你将在下一节
     课程中学到如何做。目前，`inferSchema` 适合探索和小数据集。
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：M&M 糖果计数分析
 
@@ -281,6 +282,14 @@
 
     这道练习综合运用了本课的所有技能：SparkSession、读取数据、
     groupBy、agg、orderBy 和 filter。
+    **输入、输出与通过条件**
+
+    输入：`mnm_analysis(spark, file_path)` 接收已有 SparkSession 和 CSV 路径，
+    文件有表头 State、Color、Count。输出列必须是 State、Color、Total。
+    通过条件：仅返回 CA 的两组结果，按 Total 降序为 Yellow=2030、Brown=1500；
+    不要只筛选原始行，应先正确求和。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
   Hint: "用 spark.read.csv() 和选项读取。groupBy 两列，agg 用 f.sum()，orderBy desc，然后 filter State == 'CA'。"

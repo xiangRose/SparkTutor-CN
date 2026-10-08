@@ -29,6 +29,7 @@ class ValidationRule:
 @dataclass
 class Step:
     cls: str  # "meta", "text", "mult_question", "cmd_question", "script"
+    id: str = ""  # Original YAML position, stable across difficulty filtering.
     depth: str = "all"  # "all", "beginner", "intermediate", "advanced"
     output: str = ""
     answer_choices: Optional[str] = None  # semicolon-separated for mult_question
@@ -105,7 +106,7 @@ def load_lesson(lesson_dir: Path) -> Lesson:
     estimated = 15
     steps: list[Step] = []
 
-    for raw in raw_steps:
+    for index, raw in enumerate(raw_steps):
         cls = raw.get("Class", "text")
 
         if cls == "meta":
@@ -113,6 +114,7 @@ def load_lesson(lesson_dir: Path) -> Lesson:
             estimated = raw.get("EstimatedMinutes", 15)
             steps.append(Step(
                 cls="meta",
+                id=str(index),
                 lesson_title=title,
                 estimated_minutes=estimated,
             ))
@@ -120,6 +122,7 @@ def load_lesson(lesson_dir: Path) -> Lesson:
 
         step = Step(
             cls=cls,
+            id=str(index),
             depth=raw.get("Depth", "all"),
             output=raw.get("Output", ""),
             answer_choices=raw.get("AnswerChoices"),

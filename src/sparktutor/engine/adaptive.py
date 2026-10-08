@@ -27,19 +27,23 @@ class LearnerProfile:
     """Tracks learner signals for adaptive difficulty (post-MVP)."""
     depth: Depth = Depth.BEGINNER
     total_attempts: int = 0
+    tasks_attempted: int = 0
     correct_first_try: int = 0
     hint_usage: int = 0
     skill_signals: list[str] = field(default_factory=list)
 
     @property
     def accuracy(self) -> float:
-        if self.total_attempts == 0:
+        if self.tasks_attempted == 0:
             return 0.0
-        return self.correct_first_try / self.total_attempts
+        return self.correct_first_try / self.tasks_attempted
 
-    def record_attempt(self, passed: bool, used_hint: bool, signals: list[str] | None = None):
+    def record_attempt(self, passed: bool, used_hint: bool, signals: list[str] | None = None,
+                       first_attempt: bool = True):
         self.total_attempts += 1
-        if passed:
+        if first_attempt:
+            self.tasks_attempted += 1
+        if passed and first_attempt and not used_hint:
             self.correct_first_try += 1
         if used_hint:
             self.hint_usage += 1

@@ -3,7 +3,7 @@ Silver 层 - 起始代码
 
 实现 `silver_orders` 函数：
 1. 从 'bronze_orders' 临时视图读取
-2. 将 `price` 转为 double，`quantity` 转为 int
+2. 使用 try_cast 将 `price` 转为 double，`quantity` 转为 int
 3. 添加 `total` 列（price * quantity）
 4. 过滤掉 price 为 null 的行（脏数据）
 5. 添加 `order_hour` 列：从 `order_ts` 中提取小时
@@ -21,7 +21,7 @@ def silver_orders(spark):
 
     bronze = spark.table("bronze_orders")
 
-    # TODO: 将 price 转为 double，quantity 转为 int
+    # TODO: 使用 try_cast 将 price 转为 double，quantity 转为 int
     typed = bronze  # 替换
 
     # TODO: 添加 'total' 列 = price * quantity
@@ -39,13 +39,12 @@ def silver_orders(spark):
 
 # ---- 测试代码（请勿修改此行以下内容）----
 if __name__ == "__main__":
-    spark = SparkSession.builder.appName("SilverTest").master("local[*]").getOrCreate()
+    spark = SparkSession.builder.appName("SilverTest").master("local[*]").config("spark.sql.ansi.enabled", "true").getOrCreate()
 
-    # 创建 bronze 测试数据
     data = [
         ("1", "widget", "9.99", "2", "2026-01-15 14:30:00"),
         ("2", "gadget", "24.99", "1", "2026-01-15 09:15:00"),
-        ("3", "doohickey", "N/A", "3", "2026-01-15 22:00:00"),  # 坏价格
+        ("3", "doohickey", "N/A", "3", "2026-01-15 22:00:00"),
     ]
     bronze = spark.createDataFrame(data, ["order_id", "product", "price", "quantity", "order_ts"])
     bronze = bronze.withColumn("_ingested_at", f.current_timestamp())
@@ -59,6 +58,15 @@ if __name__ == "__main__":
     row = df.filter(f.col("order_id") == "1").first()
     assert abs(row["total"] - 19.98) < 0.01, f"预期 total 约 19.98，实际得到 {row['total']}"
     assert row["order_hour"] == 14, f"预期 order_hour 为 14，实际得到 {row['order_hour']}"
+
+    from pyspark.sql.types import DoubleType, IntegerType
+    assert df.schema["price"].dataType == DoubleType()
+    assert df.schema["quantity"].dataType == IntegerType()
+    assert df.schema["total"].dataType == DoubleType()
+    assert df.schema["order_hour"].dataType == IntegerType()
+    assert {r.order_id for r in df.collect()} == {"1", "2"}
+    second = df.filter(f.col("order_id") == "2").first()
+    assert abs(second.total - 24.99) < 1e-8 and second.order_hour == 9
 
     print("所有测试通过！")
     df.show(truncate=False)

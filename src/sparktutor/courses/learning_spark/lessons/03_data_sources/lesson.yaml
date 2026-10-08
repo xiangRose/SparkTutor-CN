@@ -39,11 +39,11 @@
     简写方法：`spark.read.csv()`、`spark.read.json()`、`spark.read.parquet()`。
 
     **文档：**
-    [DataFrameReader.csv](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.csv.html) |
-    [.json](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.json.html) |
-    [.parquet](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.parquet.html) |
-    [DataFrameWriter.mode](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.mode.html) |
-    [.parquet](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.parquet.html)
+    [DataFrameReader.csv](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.csv.html) |
+    [.json](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.json.html) |
+    [.parquet](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.parquet.html) |
+    [DataFrameWriter.mode](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.mode.html) |
+    [.parquet](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.parquet.html)
 
 - Class: text
   Depth: beginner
@@ -174,7 +174,8 @@
     | `append` | 在已有数据旁追加新数据 |
     | `ignore` | 如果数据已存在则静默跳过 |
 
-    开发时用 `mode("overwrite")`，增量生产管道用 `mode("append")`。
+    全量重建可用 `overwrite`，增量追加可用 `append`；
+    根据数据保留和重试去重策略选择，写入模式不由开发/生产环境单独决定。
 
 - Class: cmd_question
   Depth: all
@@ -277,6 +278,7 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：多格式数据管道
 
@@ -290,6 +292,14 @@
     6. 返回查询结果 DataFrame
 
     这个练习综合了本课的所有内容：读取、写入、格式转换、SQL 视图和查询。
+    **输入、输出与通过条件**
+
+    输入：`data_pipeline(spark, output_path)` 使用给定 FLIGHT_DATA/SCHEMA，
+    output_path 是可写的临时 Parquet 目录。返回 destination、total_delay 两列。
+    通过条件：文件确实可读，flights 临时视图有九行，结果按总延误降序为
+    ORD=120、JFK=105、DEN=35。相同目录再次执行应覆盖而不是重复追加。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
   Hint: "用 spark.createDataFrame 配合 SCHEMA，df.write.mode('overwrite').parquet()，spark.read.parquet()，createOrReplaceTempView 和 spark.sql()。"

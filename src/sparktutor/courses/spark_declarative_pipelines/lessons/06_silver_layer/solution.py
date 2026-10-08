@@ -14,8 +14,8 @@ def silver_orders(spark):
 
     # 将字符串列转为正确的类型
     typed = (bronze
-        .withColumn("price", f.col("price").cast("double"))
-        .withColumn("quantity", f.col("quantity").cast("int"))
+        .withColumn("price", f.col("price").try_cast("double"))
+        .withColumn("quantity", f.col("quantity").try_cast("int"))
     )
 
     # 计算总额
@@ -32,7 +32,7 @@ def silver_orders(spark):
 
 # ---- 测试代码 ----
 if __name__ == "__main__":
-    spark = SparkSession.builder.appName("SilverTest").master("local[*]").getOrCreate()
+    spark = SparkSession.builder.appName("SilverTest").master("local[*]").config("spark.sql.ansi.enabled", "true").getOrCreate()
 
     data = [
         ("1", "widget", "9.99", "2", "2026-01-15 14:30:00"),
@@ -51,6 +51,15 @@ if __name__ == "__main__":
     row = df.filter(f.col("order_id") == "1").first()
     assert abs(row["total"] - 19.98) < 0.01, f"预期 total 约 19.98，实际得到 {row['total']}"
     assert row["order_hour"] == 14, f"预期 order_hour 为 14，实际得到 {row['order_hour']}"
+
+    from pyspark.sql.types import DoubleType, IntegerType
+    assert df.schema["price"].dataType == DoubleType()
+    assert df.schema["quantity"].dataType == IntegerType()
+    assert df.schema["total"].dataType == DoubleType()
+    assert df.schema["order_hour"].dataType == IntegerType()
+    assert {r.order_id for r in df.collect()} == {"1", "2"}
+    second = df.filter(f.col("order_id") == "2").first()
+    assert abs(second.total - 24.99) < 1e-8 and second.order_hour == 9
 
     print("所有测试通过！")
     df.show(truncate=False)

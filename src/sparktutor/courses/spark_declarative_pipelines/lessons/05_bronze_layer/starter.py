@@ -45,19 +45,27 @@ if __name__ == "__main__":
 
     spark = SparkSession.builder.appName("BronzeTest").master("local[*]").getOrCreate()
 
-    # 创建测试 CSV 文件
     tmp = tempfile.mkdtemp()
     csv_path = os.path.join(tmp, "orders.csv")
     with open(csv_path, "w") as fh:
         fh.write("order_id,product,price,quantity\n")
         fh.write("1,widget,9.99,2\n")
         fh.write("2,gadget,24.99,1\n")
-        fh.write("1,widget,9.99,2\n")  # 重复行
+        fh.write("1,widget,9.99,2\n")
 
     df = bronze_orders(spark, csv_path)
     assert df.count() == 2, f"去重后预期 2 行，实际得到 {df.count()}"
     assert "_ingested_at" in df.columns, "缺少 _ingested_at 列"
     assert "_source_file" in df.columns, "缺少 _source_file 列"
     assert df.schema["price"].dataType == StringType(), "price 应为 StringType"
+    from pyspark.sql.types import TimestampType
+    for column in ["order_id", "product", "price", "quantity", "_source_file"]:
+        assert df.schema[column].dataType == StringType()
+    assert df.schema["_ingested_at"].dataType == TimestampType()
+    rows = df.orderBy("order_id").collect()
+    assert [(r.order_id, r.product, r.price, r.quantity) for r in rows] == [("1", "widget", "9.99", "2"), ("2", "gadget", "24.99", "1")]
+    assert all(r._ingested_at is not None and r._source_file for r in rows)
+
     print("所有测试通过！")
+    df.show(truncate=False)
     spark.stop()

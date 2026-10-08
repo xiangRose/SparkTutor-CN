@@ -11,7 +11,7 @@
     但真实世界的管道有**多个相互依赖的步骤**：bronze 就绪之前
     你无法构建 silver 层，而 gold 又依赖 silver。
 
-    本课你将构建一个轻量级的 **Pipeline 类**，它能：
+    本课你将构建一个教学用的轻量级 **Pipeline 类**（不是官方 SDP），它能：
     1. 用装饰器注册转换函数
     2. 自动检测函数之间的依赖
     3. 使用拓扑排序按正确顺序运行它们
@@ -20,7 +20,7 @@
     bronze、silver 和 gold 层。
 
 - Class: text
-  Depth: beginner
+  Depth: all
   Output: |
     Python **装饰器**是一个包装另一个函数以增加行为的函数。
     你可能见过 `@property` 或 `@staticmethod`。
@@ -38,7 +38,7 @@
     "声明式"的部分。
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## 装饰器模式
 
@@ -90,7 +90,7 @@
   Hint: "装饰器将 func 存入 self._flows[func.__name__] 并返回 func。"
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## 依赖检测
 
@@ -109,6 +109,8 @@
     正则表达式就会找到 `"bronze_orders"` 作为依赖。这是一个简单
     但有效的启发式方法 —— 它之所以有效，是因为我们约定用
     `spark.table()` 从管道步骤中读取数据。
+    本练习只支持形如 spark.table("table_name") 的固定字符串调用；
+    正则表达式无法可靠处理注释、动态表名或复杂代码。生产框架应使用显式依赖或语法分析。
 
 - Class: mult_question
   Depth: intermediate
@@ -118,7 +120,7 @@
   Hint: "管道使用 inspect.getsource 和正则表达式来查找表引用。"
 
 - Class: text
-  Depth: advanced
+  Depth: all
   Output: |
     ## 拓扑排序
 
@@ -137,8 +139,9 @@
     def _topo_sort(self, graph):
         in_degree = {n: 0 for n in graph}
         for node, deps in graph.items():
-            for dep in deps:
-                in_degree[node] += 1
+            for dep in set(deps):
+                if dep in in_degree:
+                    in_degree[node] += 1
 
         queue = deque(n for n, d in in_degree.items() if d == 0)
         order = []
@@ -193,7 +196,7 @@
         for name in order:
             df = self._flows[name](self.spark)
             df.createOrReplaceTempView(name)
-            print(f"Materialized: {name} ({df.count()} rows)")
+            print(f"Registered temporary view: {name} ({df.count()} rows)")
     ```
 
     每一步的结果都注册为一个**临时视图**，这样下游步骤就能用
@@ -201,6 +204,7 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：构建管道框架
 
@@ -215,6 +219,17 @@
 
     测试框架会注册三个函数（bronze → silver → gold），
     并验证它们按正确顺序执行。
+    **输入、输出与通过条件**
+
+    输入：`Pipeline(spark)` 接收已有会话；补全类中的四个方法。
+    materialized_view() 返回注册函数的装饰器；_detect_deps(func) 返回固定字符串表引用列表；
+    _topo_sort(graph) 接收“节点名 → 依赖列表”并返回执行顺序，循环依赖必须抛出 ValueError。
+    重复引用算同一条依赖边；未注册的外部表不参与排序，使用者负责事先提供该表。
+    run() 按顺序调用函数并按函数名注册临时视图，不要求返回值。
+    通过条件：逆序注册的 gold、silver、bronze 仍按 bronze → silver → gold 执行，
+    gold 汇总正确，循环检测有效；本题测试的是教学框架，不是官方 SDP。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
   Hint: "实现全部四个方法。参考课程正文中的示例代码。"

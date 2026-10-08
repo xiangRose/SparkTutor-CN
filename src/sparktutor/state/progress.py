@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,7 @@ class LessonProgress:
     depth: str
     last_code: str
     updated_at: str
+    current_step_id: str = ""
 
 
 class ProgressStore:
@@ -42,9 +44,18 @@ class ProgressStore:
                     PRIMARY KEY (course_id, lesson_id)
                 )
             """)
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(progress)")}
+            if "current_step_id" not in columns:
+                conn.execute("ALTER TABLE progress ADD COLUMN current_step_id TEXT DEFAULT ''")
 
-    def _conn(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_path)
+    @contextmanager
+    def _conn(self):
+        connection = sqlite3.connect(self.db_path)
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     def get(self, course_id: str, lesson_id: str) -> Optional[LessonProgress]:
         with self._conn() as conn:
@@ -63,6 +74,7 @@ class ProgressStore:
             depth=row[5],
             last_code=row[6],
             updated_at=row[7],
+            current_step_id=row[8],
         )
 
     def save(
@@ -74,14 +86,15 @@ class ProgressStore:
         completed: bool = False,
         depth: str = "beginner",
         last_code: str = "",
+        current_step_id: str = "",
     ) -> None:
         now = datetime.now().isoformat()
         with self._conn() as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO progress
-                   (course_id, lesson_id, current_step, total_steps, completed, depth, last_code, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (course_id, lesson_id, current_step, total_steps, int(completed), depth, last_code, now),
+                   (course_id, lesson_id, current_step, total_steps, completed, depth, last_code, updated_at, current_step_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (course_id, lesson_id, current_step, total_steps, int(completed), depth, last_code, now, current_step_id),
             )
 
     def get_course_progress(self, course_id: str) -> list[LessonProgress]:
@@ -94,7 +107,7 @@ class ProgressStore:
             LessonProgress(
                 course_id=r[0], lesson_id=r[1], current_step=r[2],
                 total_steps=r[3], completed=bool(r[4]), depth=r[5],
-                last_code=r[6], updated_at=r[7],
+                last_code=r[6], updated_at=r[7], current_step_id=r[8],
             )
             for r in rows
         ]

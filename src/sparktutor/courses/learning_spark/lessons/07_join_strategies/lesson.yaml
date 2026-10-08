@@ -47,7 +47,7 @@
     `left_semi` 和 `left_anti` 在不过实际引入右侧列的情况下
     进行过滤，非常强大。
 
-    **文档：** [DataFrame.join](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html)
+    **文档：** [DataFrame.join](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html)
     —— `on`（列名或表达式）、`how`（`inner`、`left`、`full`、`left_semi`、`left_anti`、`cross`）。
 
 - Class: text
@@ -84,7 +84,7 @@
 
     用 `explain()` 检查执行计划 —— 查找 `BroadcastHashJoin`。
 
-    **文档：** [f.broadcast](https://spark.apache.org/docs/3.5.0/api/python/reference/pyspark.sql/api/pyspark.sql.functions.broadcast.html)
+    **文档：** [f.broadcast](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.broadcast.html)
     —— 在 join 调用中用 `f.broadcast(df)` 包装小 DataFrame。
 
 - Class: mult_question
@@ -123,7 +123,7 @@
     `SortMergeJoin`。
 
 - Class: text
-  Depth: intermediate
+  Depth: all
   Output: |
     ## 强制使用特定的 Join 策略
 
@@ -224,6 +224,7 @@
 
 - Class: script
   Depth: all
+  RequiresExecution: true
   Output: |
     ## 练习：Join 策略对比
 
@@ -231,16 +232,26 @@
 
     1. 创建一个 users DataFrame（小）和一个 events DataFrame（较大）
     2. 执行 broadcast hash join（使用 f.broadcast hint）
-    3. 执行 sort merge join（通过禁用 broadcast 阈值）
+    3. 执行 sort merge join（在两侧使用 merge 提示）
     4. 捕获两者的 explain 计划
-    5. 将 broadcast 阈值重置为默认值
+    5. 保留原有会话配置，不修改全局 broadcast 阈值
     6. 返回两个结果和计划
 
     本练习让你获得阅读物理计划和理解 join 策略之间差异的
     动手经验。
+    **输入、输出与通过条件**
+
+    输入：`join_comparison(spark)` 使用给定生成器创建 1000 个用户、5000 笔订单。
+    两种方案都在 user_id 上做 inner join；返回 broadcast_result、smj_result 两份 DataFrame，
+    以及 broadcast_plan、smj_plan 两个计划字符串。
+    使用 broadcast 提示完成第一份，用 merge 提示完成第二份，避免只关闭静态阈值却被 AQE 改写。
+    通过条件：两份结果均有 5000 行且内容相同，保留 user_id/name/city/order_id/amount；
+    计划分别包含 BroadcastHashJoin 与 SortMergeJoin。不修改会话的全局广播阈值。
+
+    请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
-  Hint: "BHJ 用 f.broadcast(users_df)，SMJ 将阈值设为 -1，用 explain() 捕获计划，然后将阈值重置为 10485760。"
+  Hint: "BHJ 用 f.broadcast(users_df)，SMJ 在两侧用 hint('merge')，获取两份计划字符串并比较结果。"
 
 - Class: text
   Depth: all

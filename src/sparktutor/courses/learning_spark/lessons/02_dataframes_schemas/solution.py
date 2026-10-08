@@ -55,6 +55,14 @@ if __name__ == "__main__":
 
     big_hitters = df.filter(f.col("Big_Hitter") == True).count()
     assert big_hitters == 3, f"预期 3 个高访问量博客，实际得到 {big_hitters}"
+    from pyspark.sql.types import BooleanType
+    assert df.schema["Id"].dataType == IntegerType()
+    assert df.schema["Hits"].dataType == IntegerType()
+    assert df.schema["Campaigns"].dataType == ArrayType(StringType())
+    assert df.schema["Big_Hitter"].dataType == BooleanType()
+    assert [tuple(r[c] for c in ["Id", "First", "Last", "Url", "Published", "Hits", "Campaigns"]) for r in df.orderBy("Id").collect()] == [tuple(row) for row in DATA]
+    assert {r.Id: r.Big_Hitter for r in df.collect()} == {1: False, 2: False, 3: False, 4: True, 5: True, 6: True}
+
     print("所有测试通过！")
     df.show(truncate=False)
     spark.stop()

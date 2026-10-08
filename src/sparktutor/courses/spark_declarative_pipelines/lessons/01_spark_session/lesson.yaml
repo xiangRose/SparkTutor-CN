@@ -5,7 +5,15 @@
 - Class: text
   Depth: all
   Output: |
-    ## 欢迎来到 Spark 声明式管道
+    ## 欢迎来到 Spark 教学管道
+
+    本课程基于 Spark 4.1.1，使用自制的简化 Pipeline 类讲解分层与依赖编排。
+    它不是官方 Spark Declarative Pipelines（SDP）的 API 教程。
+    官方 SDP 使用 `pyspark.pipelines` 和 `spark-pipelines`，详见
+    [官方 SDP 指南](https://spark.apache.org/docs/4.1.1/declarative-pipelines-programming-guide.html)。
+    我们的 `materialized_view()` 只注册 Python 函数，运行时生成临时视图；
+    临时视图保存查询定义，不等于持久化的物化视图，也不会自动缓存结果。
+    综合练习可在本地 Spark 完成，Iceberg/Kafka 仅作为扩展概念。
 
     在本课程中，你将使用 Apache Spark 4.1 构建一条完整的 **bronze-silver-gold
     数据管道**。学完后，你将拥有一个生产级框架：摄入原始数据、清洗数据，
@@ -51,7 +59,7 @@
     `getOrCreate()` 要么创建一个全新的会话，要么返回已存在的会话。
     这意味着你可以安全地多次调用它，而不会创建重复的会话。
 
-    **文档：** [SparkSession](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.SparkSession.html)
+    **文档：** [SparkSession](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.SparkSession.html)
     —— `builder.appName()`、`builder.config()`、`builder.master()`、`getOrCreate()`。
 
 - Class: text

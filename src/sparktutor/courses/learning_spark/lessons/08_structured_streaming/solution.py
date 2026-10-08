@@ -93,5 +93,14 @@ if __name__ == "__main__":
     print("\n窗口单词计数：")
     ww.show(truncate=False)
 
+    counts = {row.word: row["count"] for row in wc.collect()}
+    assert counts == {"hello": 4, "world": 4, "spark": 5, "streaming": 3, "is": 1, "great": 1, "of": 1, "data": 2}
+    assert [row["count"] for row in wc.collect()] == sorted(counts.values(), reverse=True)
+    from datetime import timedelta
+    windows = {(row.window.start.minute, row.word): row["count"] for row in ww.collect()}
+    assert windows == {(0, "hello"): 3, (0, "spark"): 3, (0, "world"): 1, (0, "streaming"): 1,
+                       (10, "streaming"): 1, (10, "world"): 1, (10, "spark"): 1, (10, "data"): 1}
+    assert all(row.window.end - row.window.start == timedelta(minutes=10) for row in ww.collect())
+
     print("所有测试通过！")
     spark.stop()

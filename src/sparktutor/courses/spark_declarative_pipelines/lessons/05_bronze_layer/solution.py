@@ -49,6 +49,14 @@ if __name__ == "__main__":
     assert "_ingested_at" in df.columns, "缺少 _ingested_at 列"
     assert "_source_file" in df.columns, "缺少 _source_file 列"
     assert df.schema["price"].dataType == StringType(), "price 应为 StringType"
+    from pyspark.sql.types import TimestampType
+    for column in ["order_id", "product", "price", "quantity", "_source_file"]:
+        assert df.schema[column].dataType == StringType()
+    assert df.schema["_ingested_at"].dataType == TimestampType()
+    rows = df.orderBy("order_id").collect()
+    assert [(r.order_id, r.product, r.price, r.quantity) for r in rows] == [("1", "widget", "9.99", "2"), ("2", "gadget", "24.99", "1")]
+    assert all(r._ingested_at is not None and r._source_file for r in rows)
+
     print("所有测试通过！")
     df.show(truncate=False)
     spark.stop()

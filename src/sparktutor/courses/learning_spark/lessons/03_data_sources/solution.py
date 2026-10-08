@@ -48,27 +48,33 @@ def data_pipeline(spark, output_path):
 
 # ---- 测试代码 ----
 if __name__ == "__main__":
-    import tempfile, os, shutil
+    import tempfile, os
 
     spark = (SparkSession.builder
         .appName("DataSourcesTest")
         .master("local[*]")
         .getOrCreate())
 
-    tmp = tempfile.mkdtemp()
-    out_path = os.path.join(tmp, "flights_parquet")
-
     try:
-        df = data_pipeline(spark, out_path)
-        assert df is not None, "函数返回了 None"
-        assert df.count() == 3, f"预期 3 行，实际得到 {df.count()}"
-        cols = [c.lower() for c in df.columns]
-        assert "destination" in cols, f"缺少 destination 列，实际得到 {cols}"
-        assert "total_delay" in cols, f"缺少 total_delay 列，实际得到 {cols}"
-        top = df.collect()[0]
-        assert top.destination == "ORD", f"预期 ORD 为排名第一的目的地，实际得到 {top.destination}"
-        print("所有测试通过！")
-        df.show(truncate=False)
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = os.path.join(tmp, "flights_parquet")
+            df = data_pipeline(spark, out_path)
+            assert df is not None, "函数返回了 None"
+            assert df.count() == 3, f"预期 3 行，实际得到 {df.count()}"
+            cols = [c.lower() for c in df.columns]
+            assert "destination" in cols, f"缺少 destination 列，实际得到 {cols}"
+            assert "total_delay" in cols, f"缺少 total_delay 列，实际得到 {cols}"
+            top = df.collect()[0]
+            assert top.destination == "ORD", f"预期 ORD 为排名第一的目的地，实际得到 {top.destination}"
+            assert [(r.destination, r.total_delay) for r in df.collect()] == [("ORD", 120), ("JFK", 105), ("DEN", 35)]
+            assert spark.read.parquet(out_path).count() == len(FLIGHT_DATA)
+            assert spark.table("flights").count() == len(FLIGHT_DATA)
+
+            # overwrite 会替换文件；旧 df 的惰性计划可能仍引用已删除的旧文件。
+            # 第二次写入后只使用新读取的结果，并在临时目录清理前完成所有 action。
+            again = data_pipeline(spark, out_path)
+            assert [(r.destination, r.total_delay) for r in again.collect()] == [("ORD", 120), ("JFK", 105), ("DEN", 35)]
+            again.show(truncate=False)
+            print("所有测试通过！")
     finally:
-        shutil.rmtree(tmp, ignore_errors=True)
         spark.stop()
