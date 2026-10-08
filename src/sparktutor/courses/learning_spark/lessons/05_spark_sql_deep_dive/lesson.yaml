@@ -49,6 +49,8 @@
     路况（数据统计）来找到最快路径。你不需要知道路线 —— 只需知道目的地。
 
 - Class: mult_question
+  KnowledgeComponents: [spark.catalyst]
+  Context: regional_sales_sql
   Depth: all
   Output: "Spark 在哪个 Catalyst 阶段应用谓词下推和常量折叠等优化？"
   AnswerChoices: "Optimization;Parsing;Analysis;Physical Planning"
@@ -105,6 +107,8 @@
     - `BroadcastHashJoin` / `SortMergeJoin` —— join 策略
 
 - Class: cmd_question
+  KnowledgeComponents: [spark.catalyst]
+  Context: regional_sales_sql
   Depth: all
   Output: |
     显示 DataFrame `df` 的扩展执行计划，过滤为 `age > 30` 的行，
@@ -171,6 +175,8 @@
     —— `returnType` 参数、批量 UDF 签名和性能指导。
 
 - Class: mult_question
+  KnowledgeComponents: [spark.udf]
+  Context: regional_sales_sql
   Depth: intermediate
   Output: "为什么 Python UDF 通常比内置 Spark SQL 函数慢？"
   AnswerChoices: "数据必须在 JVM 和 Python 之间为每一行进行序列化;UDF 使用更多内存;UDF 不能并行运行;内置函数跳过 Catalyst 优化器"
@@ -220,6 +226,8 @@
     ```
 
 - Class: cmd_question
+  KnowledgeComponents: [spark.aqe]
+  Context: regional_sales_sql
   Depth: advanced
   Output: |
     启用 AQE 并用 `spark.conf.set` 将建议分区大小设为 128MB。
@@ -229,6 +237,8 @@
   Hint: "用 spark.conf.set 设置 spark.sql.adaptive.enabled 和 advisoryPartitionSizeInBytes。"
 
 - Class: script
+  KnowledgeComponents: [spark.sql, dataframe.group_by, dataframe.aggregate]
+  Context: regional_sales_sql
   Depth: all
   RequiresExecution: true
   Output: |

@@ -109,6 +109,8 @@
     —— 建造者模式、`appName()`、`master()`、`config()`、`getOrCreate()`。
 
 - Class: mult_question
+  KnowledgeComponents: [spark.architecture]
+  Context: candy_counts
   Depth: all
   Output: "Driver 在 Spark 应用中的作用是什么？"
   AnswerChoices: "协调执行并规划查询;将数据存储在磁盘上;在数据分区上执行单个任务;管理集群资源"
@@ -141,6 +143,8 @@
     重写它 —— 谓词下推、列裁剪、join 重排序 —— 全部透明发生。
 
 - Class: cmd_question
+  KnowledgeComponents: [spark.session]
+  Context: candy_counts
   Depth: all
   Output: |
     创建一个 SparkSession，应用名称设为 `'MnMCount'`，master 设为
@@ -152,6 +156,8 @@
   Hint: "使用 SparkSession.builder，链式调用 .appName() 和 .master()，然后调用 .getOrCreate()。"
 
 - Class: mult_question
+  KnowledgeComponents: [spark.execution]
+  Context: candy_counts
   Depth: all
   Output: "以下哪个会在 Spark 中触发实际计算（是 action，而非 transformation）？"
   AnswerChoices: "show();select();filter();withColumn()"
@@ -220,6 +226,8 @@
     [Column.alias](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.Column.alias.html)
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.group_by, dataframe.aggregate]
+  Context: candy_counts
   Depth: intermediate
   Output: |
     给定一个包含 `State`、`Color` 和 `Count` 列的 DataFrame `df`，
@@ -264,6 +272,8 @@
     课程中学到如何做。目前，`inferSchema` 适合探索和小数据集。
 
 - Class: script
+  KnowledgeComponents: [dataframe.filter, dataframe.group_by, dataframe.aggregate]
+  Context: candy_counts
   Depth: all
   RequiresExecution: true
   Output: |

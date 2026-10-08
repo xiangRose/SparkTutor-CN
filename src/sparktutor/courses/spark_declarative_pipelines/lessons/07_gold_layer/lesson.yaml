@@ -88,6 +88,8 @@
     [Column.alias](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.Column.alias.html)
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.aggregate]
+  Context: sales_analytics
   Depth: all
   Output: "在 groupBy() 之后调用哪个方法来计算聚合？"
   AnswerChoices: "agg();compute();reduce();aggregate()"
@@ -95,6 +97,8 @@
   Hint: "它是一个三个字母的短方法，接受一个或多个聚合表达式。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.group_by, dataframe.aggregate]
+  Context: sales_analytics
   Depth: all
   Output: |
     给定一个包含 `product`、`quantity` 和 `total` 列的
@@ -113,6 +117,8 @@
   Hint: "使用 groupBy('product').agg(f.sum(...).alias(...), f.sum(...).alias(...))"
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.aggregate]
+  Context: sales_analytics
   Depth: all
   Output: "哪个函数计算一列中唯一值的数量？"
   AnswerChoices: "f.countDistinct();f.count();f.uniqueCount();f.distinct()"
@@ -120,6 +126,8 @@
   Hint: "它把 'count' 和 'distinct' 合到了一个函数名里。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.group_by, dataframe.aggregate]
+  Context: sales_analytics
   Depth: intermediate
   Output: |
     从 `silver_df` 计算每小时汇总：按 `order_hour` 分组，
@@ -173,6 +181,8 @@
     [f.row_number](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.row_number.html)
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.window]
+  Context: sales_analytics
   Depth: intermediate
   Output: |
     给 `silver_df` 添加一个 `running_total` 列，它是 `total`
@@ -208,6 +218,8 @@
     就能得到前 10 个产品。
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.window]
+  Context: sales_analytics
   Depth: intermediate
   Output: "f.rank() 和 f.dense_rank() 之间的区别是什么？"
   AnswerChoices: "rank() 在并列后会跳号，而 dense_rank() 不会;它们完全相同;rank() 更快;dense_rank() 只能配合分区使用"
@@ -239,6 +251,8 @@
     再聚合一次。
 
 - Class: mult_question
+  KnowledgeComponents: [spark.shuffle]
+  Context: sales_analytics
   Depth: advanced
   Output: "两阶段（加盐）聚合的目的是什么？"
   AnswerChoices: "通过把热点键分散到多个分区来处理数据倾斜;为了加速 I/O;为了减少内存使用;为了提升 join 性能"
@@ -246,6 +260,8 @@
   Hint: "加随机盐把单个热点键拆成多个子键，用于第一阶段。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.group_by, dataframe.aggregate]
+  Context: sales_analytics
   Depth: advanced
   Output: |
     实现一个两阶段聚合，按 `product` 对 `total` 求和。
@@ -270,6 +286,8 @@
   Hint: "添加一个随机 _salt 列，第一阶段 groupBy(product, _salt)，第二阶段 groupBy(product)。"
 
 - Class: script
+  KnowledgeComponents: [pipeline.gold, dataframe.group_by, dataframe.aggregate, dataframe.window]
+  Context: sales_analytics
   Depth: all
   RequiresExecution: true
   Output: |

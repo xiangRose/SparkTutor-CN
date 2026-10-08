@@ -88,6 +88,8 @@
     —— 在 join 调用中用 `f.broadcast(df)` 包装小 DataFrame。
 
 - Class: mult_question
+  KnowledgeComponents: [spark.broadcast]
+  Context: retail_product_join
   Depth: all
   Output: "Spark 什么时候自动选择 Broadcast Hash Join？"
   AnswerChoices: "当一张表小于 autoBroadcastJoinThreshold（默认 10MB）时;当两张表都很大时;当 join 键有索引时;对 inner join 总是如此"
@@ -95,6 +97,8 @@
   Hint: "哪种策略通过复制小表来避免 shuffle 大表？"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.join, spark.broadcast]
+  Context: retail_product_join
   Depth: all
   Output: |
     将大 DataFrame `orders` 与小 DataFrame `products` 在
@@ -174,6 +178,8 @@
     该优化才会生效。
 
 - Class: mult_question
+  KnowledgeComponents: [spark.bucketing]
+  Context: retail_product_join
   Depth: intermediate
   Output: "Bucket 表对 join 的主要优势是什么？"
   AnswerChoices: "Join 跳过 shuffle，因为数据已按 join 键预分区;数据压缩更高效;查询无需 SparkSession 即可运行;Bucket 表占用更少磁盘空间"
@@ -211,6 +217,8 @@
     过滤掉它们，单独处理，然后 union 结果。
 
 - Class: cmd_question
+  KnowledgeComponents: [spark.broadcast]
+  Context: retail_product_join
   Depth: advanced
   Output: |
     将 `autoBroadcastJoinThreshold` 设置为 -1 以禁用 broadcast join，
@@ -223,6 +231,8 @@
   Hint: "将阈值设为 -1，join，然后调用 explain() 查看计划。"
 
 - Class: script
+  KnowledgeComponents: [dataframe.join, spark.broadcast]
+  Context: retail_product_join
   Depth: all
   RequiresExecution: true
   Output: |

@@ -73,10 +73,12 @@ class LessonRunner:
         self._pending_code: str = ""
         self._hint_used: bool = False
         self.pending_review_id: Optional[str] = None
+        self.practice_mode = False
 
     def load_lesson(self, lesson_dir: Path) -> RunnerState:
         """Load a lesson and filter steps by depth."""
         self.pending_review_id = None
+        self.practice_mode = False
         self._hint_used = False
         self._pending_code = ""
         lesson = load_lesson(lesson_dir)
@@ -101,6 +103,18 @@ class LessonRunner:
                 self._legacy_code = saved.last_code
 
         return self.state
+
+    def open_practice_step(self, step_id: str) -> None:
+        """Open one recommended exercise without rewriting sequential progress."""
+        if self.state is None:
+            raise ValueError("No lesson loaded")
+        matches = [i for i, step in enumerate(self.state.filtered_steps) if step.id == step_id]
+        if not matches:
+            raise ValueError("推荐练习不适用于当前难度，请刷新学习画像。")
+        if self.state.current_index != matches[0]:
+            self._restored_code = ""
+        self.state.current_index = matches[0]
+        self.practice_mode = True
 
     def get_restored_code(self) -> str:
         """Return saved code from previous session (empty if none)."""
@@ -212,7 +226,8 @@ class LessonRunner:
 
         self.require_can_advance()
 
-        self.state.current_index += 1
+        self.state.current_index = (len(self.state.filtered_steps) if self.practice_mode
+                                    else self.state.current_index + 1)
         self.state.attempts = 0
         self.state.step_state = StepState.PRESENTING
         self.state.last_result = None
@@ -228,7 +243,7 @@ class LessonRunner:
 
     def go_back(self, current_code: str = "") -> Optional[Step]:
         """Move to the previous step."""
-        if self.state is None:
+        if self.state is None or self.practice_mode:
             return None
         if self.state.current_index <= 0:
             return None
@@ -246,7 +261,7 @@ class LessonRunner:
         return self.state.current_step
 
     def _save_progress(self, last_code: str) -> None:
-        if self.state is None:
+        if self.state is None or self.practice_mode:
             return
         self.progress.save(
             course_id=self.course_id,

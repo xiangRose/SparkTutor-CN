@@ -6,9 +6,9 @@
 
 ## 学习内容
 
-课程以 **Apache Spark / PySpark 4.1.1** 为验证基线，共 18 课、15 道综合编程练习。需要基础 Python 知识；SQL、装饰器和机器学习基础有助于学习后续章节。
+课程以 **Apache Spark / PySpark 4.1.1** 为验证基线，共 19 课、18 道综合编程练习。需要基础 Python 知识；SQL、装饰器和机器学习基础有助于学习后续章节。
 
-- **Learning Spark（10 课）**：Spark 架构与入门、DataFrame/Schema、数据源与文件格式、复杂类型与高阶函数、SQL/Catalyst、性能优化、Join 策略、Structured Streaming、数据湖与湖仓、MLlib。
+- **Learning Spark（11 课）**：Spark 架构与入门、DataFrame/Schema、数据源与文件格式、复杂类型与高阶函数、SQL/Catalyst、性能优化、Join 策略、Structured Streaming、数据湖与湖仓、MLlib，以及调试与迁移诊断练习。
 - **Spark 4.1 教学管道（8 课）**：SparkSession、数据转换、数据读写、教学用 Pipeline 框架、Bronze 原始层、Silver 清洗层、Gold 聚合层、完整管道。
 
 第二套课程通过自制装饰器和拓扑排序讲解编排原理，使用临时视图连接各层，**不是官方 Spark Declarative Pipelines API 的完整教程，也不等同于生产级调度系统**。官方 SDP 使用 `pyspark.pipelines` 和 `spark-pipelines`，见 [官方指南](https://spark.apache.org/docs/4.1.1/declarative-pipelines-programming-guide.html)。
@@ -70,7 +70,22 @@ Windows PowerShell 中可用 `.venv\Scripts\python.exe -m pip install -e ".[spar
 
 使用用户级设置或环境变量配置密钥，不要写入仓库。运行“SparkTutor：检查 AI 连接”确认可用性。自动模式依次尝试已配置的 Anthropic、兼容接口、Copilot，均不可用时仅使用本地检查。
 
-AI 使用课程、代码及固定的 Spark 知识提示，输出简体中文；没有自动检索官方文档或训练专有模型。难度由学习者选择，目前记录尝试、提示与能力信号，尚未实现自动调整难度的诊断模型。
+AI 使用课程、代码及固定的 Spark 知识提示，输出简体中文；没有自动检索官方文档或训练专有模型。学习诊断通过下面的本地规则计算，无需 AI 密钥。难度仍由学习者选择，不会被诊断结果自动修改。
+
+## 学习画像、诊断与推荐（Issue #5）
+
+点击课程侧栏的诊断图标，或运行“SparkTutor：查看学习诊断”，即可从本地 Tracker 记录得到四维画像、一句中文诊断和一道推荐练习：
+
+- **Knowledge**：每道题最近一次有效评估的通过率，一题只占一个样本；提示辅助的合理学习不扣分。
+- **Debugging**：错误发生后，经过后续有效评估确认修复的过程比例；仅运行成功不能证明已经完成题目。
+- **Hint Dependency**：首次有效评估前的平台提示使用覆盖率，同时展示提示后通过等指标；高低描述求助方式，不直接评价能力。
+- **Transfer**：在已通过来源任务后，进入作者明确标注的新情境任务时的首次评估通过率；重复刷同一题不能增加迁移样本。
+
+每项都显示证据数量；没有合格证据时显示“证据不足”，不会补成 0 分。dry-run、环境故障和未经独立验证的 AI 评审不进入知识/迁移评分，答案查看后的同题结果也不能伪装成新的掌握证据。旧版日志没有评估资格信息的部分会保留，但不会被追溯认定为可靠成绩。
+
+推荐从实际课程中选择，检查难度、前置任务、知识点和已有记录。点击后直接打开指定练习，作为单题练习完成，保留原来的顺序学习进度；做完后刷新诊断查看变化。没有满足条件的候选时会说明原因。
+
+设计参考了本地论文资料中的知识追踪、调试、求助和迁移研究，移除了旧原型的任意加权总分。**这些比例是有文献论证的工程操作定义，并非论文验证过的标准化能力量表，也未宣称训练了 DKT 模型。** 逐篇引用、公式、排除规则和后续效度验证方案见 [学习诊断设计说明](docs/learning-diagnosis-model.md)。
 
 ## 执行模式与保存
 
@@ -103,7 +118,7 @@ pip install -e '.[spark,dev]'
 SPARKTUTOR_TEST_SPARK=1 pytest tests/test_course_execution.py -q
 ```
 
-GitHub Actions 包含 Python 3.10/3.12 测试、扩展类型检查/测试/构建，以及 Linux + Java 17 + PySpark 4.1.1 的 15 道综合练习验证。课程检查还验证中文题面、引用文件、答案语法、执行要求和选择题干扰项。
+GitHub Actions 包含 Python 3.10/3.12 测试、扩展类型检查/测试/构建，以及 Linux + Java 17 + PySpark 4.1.1 的 18 道综合练习验证。课程检查还验证中文题面、引用文件、答案语法、执行要求和选择题干扰项。诊断测试覆盖历史重建、重复/乱序事件、跨课程隔离、缺数据、答案污染、迁移前置条件和推荐导航。
 
 结构：courses/ 存课程；engine/ 管教学、判题、执行；server/ 提供逐行 JSON 通信；state/ 管 SQLite；config/ 管设置；app/ 提供终端界面；sparktutor-vscode/ 为扩展。更新内容见 [CHANGELOG.md](CHANGELOG.md)。
 

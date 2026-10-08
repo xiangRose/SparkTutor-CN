@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import ast
 import unicodedata
 
 
@@ -42,5 +43,10 @@ def choices_match(guess: str, correct: str) -> bool:
 
 
 def code_match(guess: str, correct: str) -> bool:
-    """Check if code guess matches the expected answer (flexible)."""
-    return normalize_code(guess) == normalize_code(correct)
+    """Ignore formatting, but preserve Python structure and literal contents."""
+    try:
+        return ast.dump(ast.parse(guess), include_attributes=False) == ast.dump(
+            ast.parse(correct), include_attributes=False
+        )
+    except (SyntaxError, ValueError):
+        return False

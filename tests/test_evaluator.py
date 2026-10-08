@@ -47,6 +47,20 @@ class TestNormalizer:
     def test_code_no_match(self):
         assert not code_match("x = 42", "x = 43")
 
+    def test_code_match_preserves_literal_whitespace(self):
+        assert not code_match("x = 'a  b'", "x = 'a b'")
+        assert not code_match('x = "He said \\\"yes\\\""', 'x = "He said \'yes\'"')
+
+    def test_exact_answer_keeps_indentation_semantics(self):
+        lesson = load_lesson(Path(__file__).resolve().parents[1] / "src/sparktutor/courses/"
+                             "spark_declarative_pipelines/lessons/04_pipeline_framework")
+        correct = next(step.correct_answer for step in lesson.steps if step.id == "5")
+        wrong = correct.replace("        return decorator", "            return decorator")
+        assert wrong != correct
+        result = Evaluator().check_code_exact(wrong, correct)
+        assert not result.passed
+        assert not result.assessment_eligible
+
     def test_normalize_code(self):
         assert normalize_code("  x  =  42  ") == "x = 42"
 

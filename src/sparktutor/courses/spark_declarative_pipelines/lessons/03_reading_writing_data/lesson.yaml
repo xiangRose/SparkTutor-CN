@@ -68,6 +68,8 @@
     [.parquet](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.parquet.html)
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.schema]
+  Context: orders_files
   Depth: all
   Output: "读取 CSV 时 inferSchema=True 做什么？"
   AnswerChoices: "扫描数据自动猜测列类型;强制使用用户提供的 schema;跳过包含脏数据的行;推断文件编码"
@@ -75,6 +77,8 @@
   Hint: "Spark 需要额外扫一遍数据来确定类型。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.io, dataframe.schema]
+  Context: orders_files
   Depth: all
   Output: |
     读取 `'/data/orders.csv'` 处的 CSV 文件，带表头并推断 schema，
@@ -120,6 +124,8 @@
     —— `StructField(name, dataType, nullable)` 及所有类型类。
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.schema]
+  Context: orders_files
   Depth: intermediate
   Output: |
     为一个 `users` CSV 定义 schema，包含列：`user_id`（StringType）、
@@ -159,6 +165,8 @@
     但重试时需要批次标识、去重或事务机制防止重复；覆盖模式本身不保证完整的幂等性。
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.io]
+  Context: orders_files
   Depth: all
   Output: "如果不指定写入模式，默认模式是什么？"
   AnswerChoices: "error;overwrite;append;ignore"
@@ -166,6 +174,8 @@
   Hint: "Spark 默认很谨慎 —— 除非你告诉它，否则不会覆盖已有数据。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.io]
+  Context: orders_files
   Depth: all
   Output: |
     将 DataFrame `orders` 以 overwrite 模式写入 Parquet 格式，
@@ -195,6 +205,8 @@
     对于管道运行之间的持久化存储，Parquet 或 Iceberg 表是标准选择。
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.io, dataframe.filter]
+  Context: orders_files
   Depth: intermediate
   Output: |
     读取 `'/data/events.parquet'` 处的 Parquet 文件，过滤出
@@ -233,6 +245,8 @@
     - **时间旅行** —— 可查询任意历史版本用于调试
 
 - Class: mult_question
+  KnowledgeComponents: [lakehouse.time_travel]
+  Context: orders_files
   Depth: advanced
   Output: "Iceberg 的哪个功能让你能以表在过去某个时间点的状态进行查询？"
   AnswerChoices: "通过快照 ID 时间旅行;Schema 演进;分区裁剪;合并（Compaction）"
@@ -240,6 +254,8 @@
   Hint: "Iceberg 存储不可变的快照。你可以读取任意历史快照。"
 
 - Class: cmd_question
+  KnowledgeComponents: [lakehouse.catalog]
+  Context: orders_files
   Depth: advanced
   Output: |
     将 DataFrame `orders` 用 `createOrReplace` 写入一个名为

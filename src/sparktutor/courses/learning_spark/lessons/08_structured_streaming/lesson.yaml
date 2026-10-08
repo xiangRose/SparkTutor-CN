@@ -123,6 +123,8 @@
     无状态转换支持全部三种模式。
 
 - Class: mult_question
+  KnowledgeComponents: [spark.streaming]
+  Context: socket_word_counts
   Depth: all
   Output: "哪种输出模式在每次触发器后将整个结果表写入 sink？"
   AnswerChoices: "complete;append;update;overwrite"
@@ -194,6 +196,8 @@
     因此每个事件出现在多个窗口中。
 
 - Class: mult_question
+  KnowledgeComponents: [spark.watermark]
+  Context: socket_word_counts
   Depth: intermediate
   Output: "水位线在 Structured Streaming 中的作用是什么？"
   AnswerChoices: "定义数据最多可以迟到多久后被丢弃，从而让 Spark 清理旧状态;限制流的输出速率;控制输出分区数量;加密传输中的数据"
@@ -227,6 +231,8 @@
     和 `startTime` 参数。
 
 - Class: cmd_question
+  KnowledgeComponents: [spark.streaming]
+  Context: socket_word_counts
   Depth: all
   Output: |
     从 localhost:9999 的 socket 源创建流式词频统计。
@@ -295,6 +301,8 @@
     2. 不要在不同查询之间共享 checkpoint 位置
 
 - Class: script
+  KnowledgeComponents: [dataframe.filter, dataframe.group_by, dataframe.aggregate]
+  Context: socket_word_counts
   Depth: all
   RequiresExecution: true
   Output: |

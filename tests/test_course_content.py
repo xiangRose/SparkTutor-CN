@@ -27,8 +27,8 @@ def test_lesson_questions_and_executable_contracts(path):
         if step["Class"] == "script":
             assert step["RequiresExecution"] is True
             assert "输入、输出与通过条件" in step["Output"]
-            for key in ("StarterFile", "SolutionFile"):
-                source = path.with_name(step[key]).read_text(encoding="utf-8")
+            for key, legacy_key in (("StarterCode", "StarterFile"), ("SolutionCode", "SolutionFile")):
+                source = path.with_name(step.get(key) or step[legacy_key]).read_text(encoding="utf-8")
                 module = ast.parse(source)
                 guards = [node for node in module.body if isinstance(node, ast.If)
                           and ast.unparse(node.test) == "__name__ == '__main__'"]

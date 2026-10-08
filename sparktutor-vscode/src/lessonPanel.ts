@@ -18,6 +18,7 @@ export class LessonPanel {
   public onHint?: () => void;
   public onChat?: (question: string) => void;
   public onChoiceSelect?: (choice: string) => void;
+  public onDiagnosis?: () => void;
 
   constructor(extensionUri: vscode.Uri) {
     this.extensionUri = extensionUri;
@@ -69,6 +70,9 @@ export class LessonPanel {
         case "choiceSelect":
           this.onChoiceSelect?.(msg.choice);
           break;
+        case "diagnosis":
+          this.onDiagnosis?.();
+          break;
       }
     });
   }
@@ -78,10 +82,11 @@ export class LessonPanel {
     currentIndex: number,
     totalSteps: number,
     lessonTitle: string,
-    depth: string = "beginner"
+    depth: string = "beginner",
+    practiceMode = false
   ): void {
     this.show();
-    this.setHtml(step, currentIndex, totalSteps, lessonTitle, depth);
+    this.setHtml(step, currentIndex, totalSteps, lessonTitle, depth, practiceMode);
   }
 
   showFeedback(result: EvalResult): void {
@@ -113,9 +118,10 @@ export class LessonPanel {
     });
   }
 
-  showFinished(): void {
+  showFinished(practiceMode = false): void {
     this.panel?.webview.postMessage({
       type: "finished",
+      practiceMode,
     });
   }
 
@@ -124,7 +130,8 @@ export class LessonPanel {
     currentIndex: number,
     totalSteps: number,
     lessonTitle: string,
-    depth: string = "beginner"
+    depth: string = "beginner",
+    practiceMode = false
   ): void {
     if (!this.panel) {
       return;
@@ -198,6 +205,8 @@ export class LessonPanel {
     </div>
   </div>
 
+  ${practiceMode ? `<div class="instruction-banner info">推荐单题练习：完成本题后刷新学习画像，原课节的学习进度会保留。</div>` : ""}
+
   <div class="step-content">
     <div class="step-output">${markdownToHtml(step.output)}</div>
     ${choicesHtml}
@@ -215,9 +224,9 @@ export class LessonPanel {
   ${actionButtonsHtml}
 
   <div class="nav-buttons">
-    <button class="btn btn-secondary" onclick="send('back')">&larr; 上一步</button>
+    ${practiceMode ? "" : `<button class="btn btn-secondary" onclick="send('back')">&larr; 上一步</button>`}
     <button class="btn btn-secondary" onclick="send('hint')">提示</button>
-    <button class="btn btn-secondary" onclick="send('next')">下一步 &rarr;</button>
+    <button class="btn btn-secondary" onclick="send('next')">${practiceMode ? "完成练习" : "下一步 &rarr;"}</button>
   </div>
 
   <div id="hint-section" class="hint-section hidden"></div>

@@ -64,6 +64,8 @@
     —— `subset` 参数用于按指定列去重。
 
 - Class: mult_question
+  KnowledgeComponents: [pipeline.bronze]
+  Context: raw_orders
   Depth: all
   Output: "bronze 层的主要用途是什么？"
   AnswerChoices: "接入并带元数据地保留原始数据;为仪表盘聚合数据;清洗并规范化数据类型;训练机器学习模型"
@@ -71,6 +73,8 @@
   Hint: "Bronze 关注的是原始数据的接入与保留，而不是转换。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.io, dataframe.schema]
+  Context: raw_orders
   Depth: all
   Output: |
     编写一个函数 `bronze_events`，从 `'/data/raw/events.json'`
@@ -108,6 +112,8 @@
     来决定如何处理这些情况。
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.schema]
+  Context: raw_orders
   Depth: intermediate
   Output: "为什么 bronze 层把列读成字符串而不是它们的实际类型？"
   AnswerChoices: "避免因解析错误丢数据 —— 类型转换放在 silver 层完成;为了节省内存;因为 Spark 无法从 CSV 推断类型;为了让查询更快"
@@ -140,6 +146,8 @@
     ```
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.with_column]
+  Context: raw_orders
   Depth: intermediate
   Output: |
     给定一个包含 `event_id`、`user_id`、`action` 和
@@ -186,6 +194,8 @@
     很容易地包装流式数据源。
 
 - Class: mult_question
+  KnowledgeComponents: [spark.streaming]
+  Context: raw_orders
   Depth: advanced
   Output: "哪种方式可以让 Spark 自动检测新文件，而无需手动追踪水位线？"
   AnswerChoices: "spark.readStream 配合文件源;spark.read 配合 glob 通配模式;列出文件的 cron 定时任务;手动比较时间戳"
@@ -193,6 +203,8 @@
   Hint: "Structured Streaming 的文件源会维护已处理文件的内部状态。"
 
 - Class: script
+  KnowledgeComponents: [pipeline.bronze, dataframe.schema, dataframe.io]
+  Context: raw_orders
   Depth: all
   RequiresExecution: true
   Output: |

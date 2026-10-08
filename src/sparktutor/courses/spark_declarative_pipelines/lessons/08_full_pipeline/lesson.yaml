@@ -76,6 +76,8 @@
     运行它。
 
 - Class: mult_question
+  KnowledgeComponents: [pipeline.dependencies]
+  Context: end_to_end_orders
   Depth: all
   Output: "在 medallion 架构中，正确的执行顺序是什么？"
   AnswerChoices: "先 Bronze，再 Silver，最后 Gold;先 Gold，再 Silver，最后 Bronze;所有层并行;先 Silver，再 Bronze 和 Gold 并行"
@@ -102,6 +104,8 @@
     都有明确的负责人和契约。
 
 - Class: mult_question
+  KnowledgeComponents: [pipeline.dependencies]
+  Context: end_to_end_orders
   Depth: all
   Output: "如果 gold 层产出了意外结果，你应该先检查什么？"
   AnswerChoices: "检查 silver 临时视图，确认清洗后的数据是否正确;磁盘上的原始 CSV 文件;Spark driver 日志;gold 层的写入模式"
@@ -146,6 +150,8 @@
     把它持久化到监控系统。
 
 - Class: mult_question
+  KnowledgeComponents: [pipeline.dependencies]
+  Context: end_to_end_orders
   Depth: intermediate
   Output: "如果 silver 层失败了，gold 层还应该运行吗？"
   AnswerChoices: "不应该 —— gold 依赖 silver，所以应该跳过它或停止整个管道;应该 —— 每一层都是独立的;应该 —— gold 可以用旧数据;取决于文件格式"
@@ -153,6 +159,8 @@
   Hint: "Gold 从 silver 读取。如果 silver 失败了，gold 就没有有效数据可消费。"
 
 - Class: cmd_question
+  KnowledgeComponents: [pipeline.framework]
+  Context: end_to_end_orders
   Depth: intermediate
   Output: |
     为一个 Pipeline 类编写一个 `run_with_logging` 方法，
@@ -203,6 +211,8 @@
     仍需要单独设计，临时视图和普通 Parquet 覆盖不提供完整事务保证。
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.io]
+  Context: end_to_end_orders
   Depth: advanced
   Output: "对同一批数据重试写入且没有去重措施时，mode('append') 有什么风险？"
   AnswerChoices: "因为重跑管道会产生重复行;因为 append 比 overwrite 慢;因为 append 不支持 Parquet;因为 append 会锁定表"
@@ -235,6 +245,8 @@
     `results` 字典是一个天然的起点。
 
 - Class: mult_question
+  KnowledgeComponents: [pipeline.framework]
+  Context: end_to_end_orders
   Depth: advanced
   Output: "哪种部署方式把 Spark 和应用代码打包在一起，用于云原生编排？"
   AnswerChoices: "用 Kubernetes 容器化;用 spark-submit 提交到 standalone 集群;在 driver 节点上跑 cron 定时任务;SSH 登录每个 executor"
@@ -242,6 +254,8 @@
   Hint: "Kubernetes 编排容器。Spark on K8s 从 Docker 镜像启动 executor pod。"
 
 - Class: script
+  KnowledgeComponents: [pipeline.framework, pipeline.bronze, pipeline.silver, pipeline.gold]
+  Context: end_to_end_orders
   Depth: all
   RequiresExecution: true
   Output: |

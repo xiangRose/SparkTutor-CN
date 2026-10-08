@@ -79,6 +79,10 @@ class LearningEventStore:
                 )
                 """
             )
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(learning_events)")}
+            for column in ("session_id", "task_type"):
+                if column not in columns:
+                    conn.execute(f"ALTER TABLE learning_events ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
             conn.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_learning_events_context
@@ -89,6 +93,7 @@ class LearningEventStore:
     @contextmanager
     def _conn(self):
         connection = sqlite3.connect(self.db_path)
+        connection.row_factory = sqlite3.Row
         try:
             with connection:
                 yield connection
@@ -151,7 +156,7 @@ class LearningEventStore:
         *,
         course_id: str = "",
         lesson_id: str = "",
-        limit: int = 2000,
+        limit: Optional[int] = 2000,
     ) -> list[LearningEvent]:
         clauses: list[str] = []
         values: list[Any] = []
@@ -162,29 +167,38 @@ class LearningEventStore:
             clauses.append("lesson_id = ?")
             values.append(lesson_id)
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
-        values.append(max(1, min(int(limit), 10000)))
+        if limit is not None:
+            values.append(max(1, min(int(limit), 10000)))
         with self._conn() as conn:
             rows = conn.execute(
                 "SELECT * FROM learning_events"
                 + where
-                + " ORDER BY timestamp ASC LIMIT ?",
+                + " ORDER BY timestamp ASC, rowid ASC"
+                + (" LIMIT ?" if limit is not None else ""),
                 values,
             ).fetchall()
         return [
             LearningEvent(
-                event_id=row[0],
-                event_type=row[1],
-                timestamp=row[2],
-                course_id=row[3],
-                lesson_id=row[4],
-                task_id=row[5],
-                session_id=row[6],
-                task_type=row[7],
-                attempt_number=row[8],
-                data=json.loads(row[9]),
+                event_id=row["event_id"],
+                event_type=row["event_type"],
+                timestamp=row["timestamp"],
+                course_id=row["course_id"],
+                lesson_id=row["lesson_id"],
+                task_id=row["task_id"],
+                session_id=row["session_id"],
+                task_type=row["task_type"],
+                attempt_number=row["attempt_number"],
+                data=self._event_data(row),
             )
             for row in rows
         ]
+
+    @staticmethod
+    def _event_data(row) -> dict:
+        data = json.loads(row["data"])
+        if "knowledge_components" in row.keys() and "knowledgeComponents" not in data:
+            data["knowledgeComponents"] = json.loads(row["knowledge_components"] or "[]")
+        return data
 
     def clear(self, *, course_id: str = "", lesson_id: str = "") -> None:
         clauses: list[str] = []

@@ -66,8 +66,22 @@
       {
         "command": "sparktutor.checkAiConnection",
         "title": "SparkTutor：检查 AI 连接"
+      },
+      {
+        "command": "sparktutor.showLearningDiagnosis",
+        "title": "SparkTutor：查看学习诊断",
+        "icon": "$(graph)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "sparktutor.showLearningDiagnosis",
+          "when": "view == sparktutorCourses",
+          "group": "navigation"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "sparktutor.run",

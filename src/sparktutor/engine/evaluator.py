@@ -10,6 +10,7 @@ from typing import Optional
 
 from sparktutor.config.settings import Settings
 from sparktutor.engine.normalizer import choices_match, code_match
+from sparktutor.engine.assessment_evidence import execution_failure_kind
 
 
 @dataclass
@@ -27,6 +28,9 @@ class EvalResult:
     feedback: list[FeedbackItem] = field(default_factory=list)
     encouragement: str = ""
     skill_signals: list[str] = field(default_factory=list)
+    assessment_source: str = "unverified"
+    assessment_eligible: bool = False
+    failure_kind: str = ""
 
 
 class Evaluator:
@@ -52,6 +56,7 @@ class Evaluator:
         except SyntaxError as e:
             return EvalResult(
                 passed=False,
+                assessment_source="syntax", assessment_eligible=True, failure_kind="learner",
                 feedback=[FeedbackItem(
                     line=e.lineno,
                     severity="error",
@@ -63,19 +68,20 @@ class Evaluator:
     def check_mult_choice(self, guess: str, correct: str) -> EvalResult:
         """Evaluate a multiple-choice answer."""
         if choices_match(guess, correct):
-            return EvalResult(passed=True, encouragement="回答正确！")
+            return EvalResult(passed=True, encouragement="回答正确！", assessment_source="choice", assessment_eligible=True)
         return EvalResult(
             passed=False,
+            assessment_source="choice", assessment_eligible=True, failure_kind="learner",
             feedback=[FeedbackItem(
                 line=None, severity="warning",
-                message=f"不太对。正确答案是：{correct}",
+                message="不太对。请结合题面和提示检查理由后再试。",
             )],
         )
 
     def check_code_exact(self, guess: str, correct: str) -> EvalResult:
         """Exact code match (with normalization)."""
         if code_match(guess, correct):
-            return EvalResult(passed=True, encouragement="做得好！")
+            return EvalResult(passed=True, encouragement="做得好！", assessment_source="exact", assessment_eligible=True)
         return EvalResult(passed=False)
 
     def check_ast_contains(self, code: str, checks: list[dict]) -> EvalResult:
@@ -85,6 +91,7 @@ class Evaluator:
         except SyntaxError as e:
             return EvalResult(
                 passed=False,
+                assessment_source="syntax", assessment_eligible=True, failure_kind="learner",
                 feedback=[FeedbackItem(line=e.lineno, severity="error", message=f"SyntaxError: {e.msg}")],
             )
 
@@ -155,7 +162,8 @@ class Evaluator:
                         suggestion=f"确保你的代码中包含名为 '{value}' 的 {key}",
                     ))
 
-        return EvalResult(passed=all_passed, feedback=feedback)
+        return EvalResult(passed=all_passed, feedback=feedback, assessment_source="structural",
+                          assessment_eligible=bool(checks), failure_kind="" if all_passed else "learner")
 
     # --- Layer 2: Claude API review (1-3s) ---
 
@@ -244,6 +252,7 @@ Rules:
                 )])
             return EvalResult(
                 passed=data.get("passed") is True,
+                assessment_source="ai_review",
                 feedback=[
                     FeedbackItem(
                         line=f.get("line"),
@@ -364,7 +373,10 @@ Rules:
             elif step.cls == "script" and not exec_result.validation_passed:
                 reason = "程序已退出，但课程测试未完整执行，不能判定通过。"
             if reason:
-                return EvalResult(passed=False, feedback=[FeedbackItem(
+                failure_kind = execution_failure_kind(exec_result)
+                return EvalResult(passed=False, assessment_source="course_tests",
+                                  assessment_eligible=failure_kind == "learner",
+                                  failure_kind=failure_kind or "unverified", feedback=[FeedbackItem(
                     line=None, severity="error", message=reason,
                     suggestion=(exec_result.stderr[-2000:] if exec_result and exec_result.stderr else None),
                     category="bug",
@@ -372,13 +384,14 @@ Rules:
             if step.cls == "script":
                 return EvalResult(
                     passed=True, encouragement="课程测试已在 Spark 执行环境中全部通过。",
+                    assessment_source="course_tests", assessment_eligible=True,
                 ), False, {}
 
         # Exact match check
         if step.correct_answer:
             exact = self.check_code_exact(code, step.correct_answer)
             if exact.passed:
-                return EvalResult(passed=True, encouragement="回答正确！"), False, {}
+                return exact, False, {}
 
         # AST structural checks
         ast_checks = [v.params for v in step.validation if v.type == "ast_contains"]
@@ -424,8 +437,11 @@ Rules:
                         suggestion="请确保你的代码能够成功运行。",
                         category="bug",
                     ))
-                return EvalResult(passed=False, feedback=fb), False, {}
-            return EvalResult(passed=True, encouragement="做得好！"), False, {}
+                kind = execution_failure_kind(exec_result)
+                return EvalResult(passed=False, feedback=fb, assessment_source="structural",
+                                  assessment_eligible=kind == "learner", failure_kind=kind), False, {}
+            return EvalResult(passed=True, encouragement="做得好！", assessment_source="structural",
+                              assessment_eligible=exec_result.mode.value != "dry_run"), False, {}
 
         # If we got past exact match without passing, do Claude review as fallback
         if step.correct_answer:

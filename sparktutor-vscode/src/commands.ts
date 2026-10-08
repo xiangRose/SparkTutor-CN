@@ -7,6 +7,7 @@ import { AiRouter } from "./aiRouter";
 import { Bridge } from "./bridge";
 import { CourseTreeProvider } from "./courseTree";
 import { DiagnosticsManager } from "./diagnostics";
+import { DiagnosisPanel } from "./diagnosisPanel";
 import { LessonPanel } from "./lessonPanel";
 import { SparkOutputChannel } from "./outputChannel";
 import { StatusBarManager } from "./statusBar";
@@ -18,6 +19,8 @@ import {
   ExecResult,
   GoBackResult,
   LoadLessonResult,
+  DiagnosisResult,
+  OpenRecommendedExerciseResult,
   StepData,
 } from "./types";
 
@@ -30,6 +33,7 @@ let currentIndex = 0;
 let totalSteps = 0;
 let currentStep: StepData | undefined;
 let currentDepth: string | undefined;
+let currentPracticeMode = false;
 
 /** Session state saved to globalState for resume-on-reload. */
 interface SavedSession {
@@ -43,6 +47,7 @@ interface SavedSession {
 let extensionContext: vscode.ExtensionContext;
 
 function saveSession(): void {
+  if (currentPracticeMode) { return; }
   if (currentCourseId && currentLessonIdx !== undefined && currentLessonId && currentDepth) {
     const session: SavedSession = {
       courseId: currentCourseId,
@@ -75,6 +80,24 @@ export function registerCommands(
   aiRouter: AiRouter
 ): void {
   extensionContext = context;
+  const diagnosisPanel = new DiagnosisPanel(
+    context.extensionUri,
+    () => bridge.call<DiagnosisResult>("getDiagnosis", {}),
+    async (exercise) => {
+      await workspace.saveCurrentExercise();
+      const result = await bridge.call<OpenRecommendedExerciseResult>("openRecommendedExercise", {
+        courseId: exercise.courseId, lessonId: exercise.lessonId, stepId: exercise.stepId,
+      });
+      await workspace.switchCourse(result.courseId);
+      if (result.legacyCode) {
+        workspace.backupLegacyCode(result.courseId, result.lessonId, result.legacyCode);
+      }
+      await displayLoadedLesson(result, result.courseId, result.lessonIdx, result.depth,
+        lessonPanel, workspace, diagnostics, outputChannel, statusBar);
+      treeProvider.refresh();
+    }
+  );
+  context.subscriptions.push(diagnosisPanel);
   // Wire up webview button callbacks
   lessonPanel.onSubmit = () =>
     vscode.commands.executeCommand("sparktutor.submit");
@@ -92,6 +115,7 @@ export function registerCommands(
   lessonPanel.onChoiceSelect = (choice: string) => {
     workspace.setSelectedChoice(choice);
   };
+  lessonPanel.onDiagnosis = () => vscode.commands.executeCommand("sparktutor.showLearningDiagnosis");
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -154,6 +178,10 @@ export function registerCommands(
 
     vscode.commands.registerCommand("sparktutor.hint", async () => {
       await showHint(bridge, lessonPanel);
+    }),
+
+    vscode.commands.registerCommand("sparktutor.showLearningDiagnosis", async () => {
+      await diagnosisPanel.show();
     }),
 
     vscode.commands.registerCommand("sparktutor.showSolution", async () => {
@@ -444,65 +472,83 @@ async function openLesson(
       }
     }
 
-    // Prepend prerequisites banner to the first lesson's first step
-    if (result.coursePrerequisites?.length) {
-      const prereqMd = "## 前置要求\n\n" +
-        result.coursePrerequisites.map(p => `- ${p}`).join("\n") +
-        "\n\n---\n\n";
-      result.step.output = prereqMd + result.step.output;
-    }
-
-    currentCourseId = courseId;
-    currentLessonId = result.lessonId;
-    currentLessonTitle = result.lessonTitle;
-    currentLessonIdx = lessonIdx;
-    currentIndex = result.currentIndex;
-    totalSteps = result.totalSteps;
-    currentStep = result.step;
-    currentDepth = effectiveDepth;
-
-    // Set context for keybinding "when" clauses
-    vscode.commands.executeCommand("setContext", "sparktutor.active", true);
-
-    // Track step type so workspace knows where to read input from
-    workspace.setStepType(result.step.cls);
-
-    // Update status bar
-    statusBar.setStep(currentIndex, totalSteps);
-    statusBar.setDepth(effectiveDepth);
-
-    // Open exercise file FIRST (in Column One)
-    if (result.step.cls === "script" || result.step.cls === "cmd_question") {
-      // Code steps: create/append starter code
-      await workspace.openExercise(
-        courseId,
-        result.lessonId,
-        stepIdentity(result.step),
-        result.starterCode || "",
-        result.restoredCode || undefined
-      );
-    } else {
-      // Non-code steps: open exercise file (pre-populated with first starter code if missing)
-      await workspace.openExerciseIfExists(courseId, result.lessonId, result.lessonTitle);
-    }
-
-    // THEN show the lesson panel (in Column Two) so it doesn't get displaced
-    lessonPanel.updateStep(
-      result.step,
-      result.currentIndex,
-      result.totalSteps,
-      result.lessonTitle,
-      effectiveDepth
-    );
-
-    diagnostics.clear();
-    outputChannel.clear();
-    saveSession();
+    await displayLoadedLesson(result, courseId, lessonIdx, effectiveDepth,
+      lessonPanel, workspace, diagnostics, outputChannel, statusBar);
   } catch (err) {
     vscode.window.showErrorMessage(
       `加载课程失败：${err instanceof Error ? err.message : err}`
     );
   }
+}
+
+/** Apply a backend-selected lesson/step without issuing a second loadLesson request. */
+async function displayLoadedLesson(
+  result: LoadLessonResult,
+  courseId: string,
+  lessonIdx: number,
+  effectiveDepth: string,
+  lessonPanel: LessonPanel,
+  workspace: WorkspaceManager,
+  diagnostics: DiagnosticsManager,
+  outputChannel: SparkOutputChannel,
+  statusBar: StatusBarManager
+): Promise<void> {
+  // Prepend prerequisites banner to the first lesson's first step
+  if (result.coursePrerequisites?.length) {
+    const prereqMd = "## 前置要求\n\n" +
+      result.coursePrerequisites.map(p => `- ${p}`).join("\n") +
+      "\n\n---\n\n";
+    result.step.output = prereqMd + result.step.output;
+  }
+
+  currentCourseId = courseId;
+  currentLessonId = result.lessonId;
+  currentLessonTitle = result.lessonTitle;
+  currentLessonIdx = lessonIdx;
+  currentIndex = result.currentIndex;
+  totalSteps = result.totalSteps;
+  currentStep = result.step;
+  currentDepth = effectiveDepth;
+  currentPracticeMode = Boolean(result.practiceMode);
+
+  // Set context for keybinding "when" clauses
+  vscode.commands.executeCommand("setContext", "sparktutor.active", true);
+
+  // Track step type so workspace knows where to read input from
+  workspace.setStepType(result.step.cls);
+
+  // Update status bar
+  statusBar.setStep(currentIndex, totalSteps);
+  statusBar.setDepth(effectiveDepth);
+
+  // Open exercise file FIRST (in Column One)
+  if (result.step.cls === "script" || result.step.cls === "cmd_question") {
+    // Code steps: create/append starter code
+    await workspace.openExercise(
+      courseId,
+      result.lessonId,
+      stepIdentity(result.step),
+      result.starterCode || "",
+      result.restoredCode || undefined
+    );
+  } else {
+    // Non-code steps: open exercise file (pre-populated with first starter code if missing)
+    await workspace.openExerciseIfExists(courseId, result.lessonId, result.lessonTitle);
+  }
+
+  // THEN show the lesson panel (in Column Two) so it doesn't get displaced
+  lessonPanel.updateStep(
+    result.step,
+    result.currentIndex,
+    result.totalSteps,
+    result.lessonTitle,
+    effectiveDepth,
+    currentPracticeMode
+  );
+
+  diagnostics.clear();
+  outputChannel.clear();
+  saveSession();
 }
 
 async function runCode(
@@ -646,7 +692,7 @@ async function loadStepUI(
 
   // THEN show lesson panel (Column Two) so it stays visible
   lessonPanel.updateStep(
-    step, stepIndex, stepTotal, currentLessonTitle || "", currentDepth || "beginner"
+    step, stepIndex, stepTotal, currentLessonTitle || "", currentDepth || "beginner", currentPracticeMode
   );
 }
 
@@ -666,10 +712,11 @@ async function nextStep(
     const result = await bridge.call<AdvanceResult>("advance", { code });
 
     if (result.finished) {
-      lessonPanel.showFinished();
+      const practiceMode = result.practiceMode ?? currentPracticeMode;
+      lessonPanel.showFinished(practiceMode);
       treeProvider.refresh();
       vscode.window.showInformationMessage(
-        "恭喜！你已完成本课程！"
+        practiceMode ? "推荐练习已完成，可刷新学习画像查看变化。" : "恭喜！你已完成本课程！"
       );
       return;
     }

@@ -17,6 +17,9 @@ from sparktutor.courses.registry import CourseRegistry
 from sparktutor.engine.adaptive import Depth, LearnerProfile
 from sparktutor.engine.evaluator import Evaluator
 from sparktutor.engine.executor import Executor
+from sparktutor.engine.assessment_evidence import execution_failure_kind
+from sparktutor.engine.diagnosis import build_diagnosis
+from sparktutor.engine.exercise_catalog import build_exercise_catalog
 from sparktutor.engine.lesson_runner import LessonRunner
 from sparktutor.state.progress import ProgressStore
 from sparktutor.state.learning_events import LearningEventStore
@@ -100,6 +103,15 @@ class ServerHandler:
         state = self._runner.state
         task_id = self._task_id()
         payload = dict(data or {})
+        step = state.current_step
+        if step:
+            payload.update({
+                "eventVersion": 2,
+                "stepId": step.id,
+                "knowledgeComponents": list(step.knowledge_components),
+                "context": step.context,
+                "transfer": dict(step.transfer),
+            })
         started = self._task_started_at.get(task_id)
         if started is not None and event_type in {"code_run", "code_submit", "task_complete"}:
             payload.setdefault("durationMs", round((time.monotonic() - started) * 1000))
@@ -145,6 +157,8 @@ class ServerHandler:
             "parseReviewResponse": self._parse_review_response,
             "completeReviewFailure": self._complete_review_failure,
             "getLearningEvents": self._get_learning_events,
+            "getDiagnosis": self._get_diagnosis,
+            "openRecommendedExercise": self._open_recommended_exercise,
             "ping": self._ping,
         }
 
@@ -179,7 +193,7 @@ class ServerHandler:
         summary = self.progress.get_course_summary(course_id, course.lessons)
         return summary
 
-    async def _load_lesson(self, params: dict) -> dict:
+    async def _load_lesson(self, params: dict, *, target_step_id: Optional[str] = None) -> dict:
         course_id = params["courseId"]
         lesson_idx = params["lessonIdx"]
         depth = params.get("depth", self._profile.depth.value)
@@ -203,7 +217,10 @@ class ServerHandler:
             profile=self._profile,
         )
         state = self._runner.load_lesson(lesson_dir)
+        if target_step_id is not None:
+            self._runner.open_practice_step(target_step_id)
         self._task_started_at.clear()
+        self._hinted_tasks.clear()
         self._task_started_at[self._task_id()] = time.monotonic()
         self._record_event(
             "lesson_loaded",
@@ -232,6 +249,7 @@ class ServerHandler:
             "legacyCode": self._runner.get_legacy_code(),
             "starterCode": starter_code,
             "firstStarterCode": self._runner.get_first_starter_code(),
+            "practiceMode": self._runner.practice_mode,
         }
         if lesson_idx == 0 and course.prerequisites:
             result["coursePrerequisites"] = course.prerequisites
@@ -269,6 +287,9 @@ class ServerHandler:
                 "exitCode": result.exit_code,
                 "mode": result.mode.value,
                 "errorType": self._error_type(result.stderr),
+                "assessmentSource": "execution",
+                "assessmentEligible": execution_failure_kind(result) == "learner",
+                "failureKind": execution_failure_kind(result),
             },
         )
         if result.exit_code != 0:
@@ -290,20 +311,7 @@ class ServerHandler:
 
         code = params["code"]
         result = await self._runner.submit(code)
-        hint_used = self._task_id() in self._hinted_tasks
-        self._hinted_tasks.discard(self._task_id())
-        self._record_event(
-            "code_submit",
-            {
-                "passed": result.passed,
-            "hintUsed": hint_used,
-                "errorTypes": [
-                    self._error_type(item.message)
-                    for item in result.feedback
-                    if item.severity == "error"
-                ],
-            },
-        )
+        self._record_submission(result)
         if not result.passed:
             self._record_event(
                 "error",
@@ -346,7 +354,7 @@ class ServerHandler:
             self._task_started_at[self._task_id()] = time.monotonic()
             self._record_event("task_start", {"currentStep": self._runner.state.current_index})
         if self._runner.state and self._runner.state.is_finished:
-            return {"finished": True}
+            return {"finished": True, "practiceMode": self._runner.practice_mode}
 
         starter_code = self._runner.get_starter_code()
         return {
@@ -465,21 +473,7 @@ class ServerHandler:
         response: dict = {"needsAiReview": needs_ai}
 
         if result is not None:
-            hint_used = self._task_id() in self._hinted_tasks
-            self._hinted_tasks.discard(self._task_id())
-            self._record_event(
-                "code_submit",
-                {
-                    "passed": result.passed,
-                    "hintUsed": hint_used,
-                    "aiReview": False,
-                    "errorTypes": [
-                        self._error_type(item.message)
-                        for item in result.feedback
-                        if item.severity == "error"
-                    ],
-                },
-            )
+            self._record_submission(result)
             if not result.passed:
                 self._record_event(
                     "error",
@@ -540,6 +534,7 @@ class ServerHandler:
             depth=self._profile.depth.value,
             extra_context=extra_context,
         )
+        self._record_event("chat_request", {"providerHandled": False})
         return {"messages": messages}
 
     async def _parse_review_response(self, params: dict) -> dict:
@@ -553,21 +548,7 @@ class ServerHandler:
         # Complete the state tracking that submit_local() left pending
         if self._runner and self._runner.state:
             self._runner.complete_review(result)
-            hint_used = self._task_id() in self._hinted_tasks
-            self._hinted_tasks.discard(self._task_id())
-            self._record_event(
-                "code_submit",
-                {
-                    "passed": result.passed,
-                    "hintUsed": hint_used,
-                    "aiReview": True,
-                    "errorTypes": [
-                        self._error_type(item.message)
-                        for item in result.feedback
-                        if item.severity == "error"
-                    ],
-                },
-            )
+            self._record_submission(result, ai_review=True)
             if not result.passed:
                 self._record_event(
                     "error",
@@ -599,6 +580,45 @@ class ServerHandler:
             limit=params.get("limit", 2000),
         )
         return {"events": [event.as_dict() for event in events]}
+
+    def _record_submission(self, result, *, ai_review: bool = False) -> None:
+        hint_used = self._task_id() in self._hinted_tasks
+        self._hinted_tasks.discard(self._task_id())
+        execution = self._runner.state.last_exec if self._runner and self._runner.state else None
+        self._record_event("code_submit", {
+            "passed": result.passed,
+            "hintUsed": hint_used,
+            "aiReview": ai_review or result.assessment_source == "ai_review",
+            "assessmentSource": result.assessment_source,
+            "assessmentEligible": result.assessment_eligible,
+            "failureKind": result.failure_kind,
+            "mode": execution.mode.value if execution else "local_check",
+            "validationPassed": execution.validation_passed if execution else False,
+            "errorTypes": [self._error_type(item.message) for item in result.feedback
+                           if item.severity == "error"],
+        })
+
+    async def _get_diagnosis(self, params: dict) -> dict:
+        course_id = params.get("courseId", "")
+        if course_id and self.registry.get_course(course_id) is None:
+            raise ValueError("未找到指定课程。")
+        return build_diagnosis(
+            self.events.list_events(limit=None), build_exercise_catalog(self.registry),
+            course_id=course_id, depth=self._profile.depth.value,
+        )
+
+    async def _open_recommended_exercise(self, params: dict) -> dict:
+        """Revalidate the recommendation; never trust a stale index from the UI."""
+        report = await self._get_diagnosis({"courseId": params.get("scopeCourseId", "")})
+        exercise = report.get("recommendedExercise")
+        if exercise is None or any(params.get(key) != exercise.get(key)
+                                   for key in ("courseId", "lessonId", "stepId")):
+            raise ValueError("推荐已变化或练习不可用，请刷新学习画像后再试。")
+        result = await self._load_lesson({
+            "courseId": exercise["courseId"], "lessonIdx": exercise["lessonIndex"],
+        }, target_step_id=exercise["stepId"])
+        return {**result, "courseId": exercise["courseId"],
+                "lessonIdx": exercise["lessonIndex"], "depth": self._profile.depth.value}
 
     async def _detect_mode(self, params: dict) -> dict:
         mode = await self.executor.detect_mode()

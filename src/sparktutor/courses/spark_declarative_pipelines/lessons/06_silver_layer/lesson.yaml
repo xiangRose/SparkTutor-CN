@@ -63,6 +63,8 @@
     [f.from_json](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.from_json.html) —— 解析 JSON 字符串的 `schema` 参数
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.cast]
+  Context: clean_orders
   Depth: all
   Output: "Spark 4.1.1 默认 ANSI 模式下，用 try_cast 将字符串 'N/A' 转成 double 会发生什么？"
   AnswerChoices: "它变成 null;它抛出异常;它变成 0.0;它保持为字符串 'N/A'"
@@ -70,6 +72,8 @@
   Hint: "try_cast 对解析失败返回 null；默认 ANSI 模式下普通 cast 会在执行时抛异常。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.cast]
+  Context: clean_orders
   Depth: all
   Output: |
     给定一个包含字符串列 `price` 和 `quantity` 的 bronze
@@ -108,6 +112,8 @@
     [DataFrame.join](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html) —— `on`、`how` 参数
 
 - Class: mult_question
+  KnowledgeComponents: [spark.broadcast]
+  Context: clean_orders
   Depth: intermediate
   Output: "什么时候应该使用 broadcast join？"
   AnswerChoices: "当一侧小到能放进 executor 内存时;当两张表都很大时;当你想去除重复时;当按多列关联时"
@@ -115,6 +121,8 @@
   Hint: "广播会把整张小表发送到每个 executor，消除了 shuffle。"
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.join]
+  Context: clean_orders
   Depth: intermediate
   Output: |
     把 `orders_df` 与一个小的参考 DataFrame `products_df`
@@ -150,6 +158,8 @@
     用点号访问各个字段（`parsed.action`）。
 
 - Class: cmd_question
+  KnowledgeComponents: [dataframe.cast]
+  Context: clean_orders
   Depth: intermediate
   Output: |
     给定一个 DataFrame `events_df`，其中有一个字符串列
@@ -198,6 +208,8 @@
     ```
 
 - Class: mult_question
+  KnowledgeComponents: [dataframe.join]
+  Context: clean_orders
   Depth: advanced
   Output: "在 SCD Type 2 关联中，除了键匹配之外还需要什么额外条件？"
   AnswerChoices: "事实日期必须落在维度的 valid_from 和 valid_to 范围内;维度表必须被广播;两张表都必须按日期分区;事实表必须排序"
@@ -205,6 +217,8 @@
   Hint: "SCD-2 行有生效时间窗口。你把事实匹配到当时生效的维度版本。"
 
 - Class: script
+  KnowledgeComponents: [pipeline.silver, dataframe.cast, dataframe.filter, dataframe.join]
+  Context: clean_orders
   Depth: all
   RequiresExecution: true
   Output: |
