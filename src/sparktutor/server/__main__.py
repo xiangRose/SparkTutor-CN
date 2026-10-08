@@ -45,7 +45,7 @@ async def main() -> None:
     # portable, read stdin on a background thread instead and feed lines into
     # an asyncio queue. Request handling remains serialized in the event loop,
     # exactly as the previous while-loop did.
-    lines: asyncio.Queue[str] = asyncio.Queue()
+    lines: asyncio.Queue[str | Exception | None] = asyncio.Queue()
 
     def read_stdin() -> None:
         try:
@@ -54,8 +54,11 @@ async def main() -> None:
                 if not line_str:
                     continue
                 loop.call_soon_threadsafe(lines.put_nowait, line_str)
-        finally:
-            # Sentinel: signal the event loop to stop when stdin closes.
+        except Exception as error:
+            # An input failure is not evidence of an orderly session ending.
+            loop.call_soon_threadsafe(lines.put_nowait, error)
+        else:
+            # Sentinel: the input stream reached EOF normally.
             loop.call_soon_threadsafe(lines.put_nowait, None)
 
     threading.Thread(
@@ -65,7 +68,11 @@ async def main() -> None:
     while True:
         line_str = await lines.get()
         if line_str is None:
+            handler.end_session("server_shutdown")
             break  # stdin closed
+        if isinstance(line_str, Exception):
+            print("sparktutor-server: input stream failed before normal EOF", file=sys.stderr)
+            break
 
         try:
             msg = json.loads(line_str)

@@ -19,6 +19,7 @@ EVENT_TYPES = {
     "task_open",
     "task_start",
     "task_complete",
+    "code_edit",
     "code_run",
     "code_submit",
     "error",
@@ -157,7 +158,11 @@ class LearningEventStore:
         course_id: str = "",
         lesson_id: str = "",
         limit: Optional[int] = 2000,
+        order: str = "oldest",
     ) -> list[LearningEvent]:
+        """Return events chronologically, optionally selecting the latest page."""
+        if not isinstance(order, str) or order not in {"oldest", "latest"}:
+            raise ValueError("Event order must be oldest or latest")
         clauses: list[str] = []
         values: list[Any] = []
         if course_id:
@@ -173,10 +178,13 @@ class LearningEventStore:
             rows = conn.execute(
                 "SELECT * FROM learning_events"
                 + where
-                + " ORDER BY timestamp ASC, rowid ASC"
+                + (" ORDER BY timestamp DESC, rowid DESC" if order == "latest"
+                   else " ORDER BY timestamp ASC, rowid ASC")
                 + (" LIMIT ?" if limit is not None else ""),
                 values,
             ).fetchall()
+        if order == "latest":
+            rows.reverse()
         return [
             LearningEvent(
                 event_id=row["event_id"],
@@ -192,6 +200,19 @@ class LearningEventStore:
             )
             for row in rows
         ]
+
+    def count_events(self, *, course_id: str = "", lesson_id: str = "") -> int:
+        clauses: list[str] = []
+        values: list[str] = []
+        if course_id:
+            clauses.append("course_id = ?")
+            values.append(course_id)
+        if lesson_id:
+            clauses.append("lesson_id = ?")
+            values.append(lesson_id)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._conn() as conn:
+            return conn.execute("SELECT COUNT(*) FROM learning_events" + where, values).fetchone()[0]
 
     @staticmethod
     def _event_data(row) -> dict:
