@@ -21,6 +21,7 @@ from sparktutor.engine.assessment_evidence import execution_failure_kind
 from sparktutor.engine.diagnosis import build_diagnosis
 from sparktutor.engine.exercise_catalog import build_exercise_catalog
 from sparktutor.engine.lesson_runner import LessonRunner
+from sparktutor.engine.learning_dashboard import build_learning_dashboard, get_course_progress
 from sparktutor.state.progress import ProgressStore
 from sparktutor.state.learning_events import LearningEvent, LearningEventStore
 
@@ -150,6 +151,7 @@ class ServerHandler:
         handler_map = {
             "listCourses": self._list_courses,
             "getCourseProgress": self._get_course_progress,
+            "getLearningDashboard": self._get_learning_dashboard,
             "loadLesson": self._load_lesson,
             "getStep": self._get_step,
             "run": self._run,
@@ -197,12 +199,13 @@ class ServerHandler:
         }
 
     async def _get_course_progress(self, params: dict) -> dict:
-        course_id = params["courseId"]
-        course = self.registry.get_course(course_id)
-        if course is None:
-            raise ValueError(f"Unknown course: {course_id}")
-        summary = self.progress.get_course_summary(course_id, course.lessons)
-        return summary
+        return get_course_progress(self.registry, self.progress, params["courseId"],
+                                   depth=self._profile.depth.value)
+
+    async def _get_learning_dashboard(self, params: dict) -> dict:
+        return build_learning_dashboard(self.registry, self.progress, self.events,
+                                        course_id=params.get("courseId", ""),
+                                        depth=self._profile.depth.value)
 
     async def _load_lesson(self, params: dict, *, target_step_id: Optional[str] = None) -> dict:
         course_id = params["courseId"]

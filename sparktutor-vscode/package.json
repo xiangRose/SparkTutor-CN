@@ -68,6 +68,11 @@
         "title": "SparkTutor：检查 AI 连接"
       },
       {
+        "command": "sparktutor.openLearningDashboard",
+        "title": "SparkTutor：打开学习工作台",
+        "icon": "$(home)"
+      },
+      {
         "command": "sparktutor.showLearningDiagnosis",
         "title": "SparkTutor：查看学习诊断",
         "icon": "$(graph)"
@@ -80,6 +85,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "sparktutor.openLearningDashboard",
+          "when": "view == sparktutorCourses",
+          "group": "navigation@0"
+        },
         {
           "command": "sparktutor.showLearningDiagnosis",
           "when": "view == sparktutorCourses",

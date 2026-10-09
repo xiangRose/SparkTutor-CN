@@ -32,7 +32,7 @@ class LessonNode extends vscode.TreeItem {
     public readonly lessonId: string,
     public readonly lessonIdx: number,
     label: string,
-    public readonly status: "completed" | "in-progress" | "not-started"
+    public readonly status: "completed" | "in-progress" | "not-started" | "unavailable"
   ) {
     super(label, vscode.TreeItemCollapsibleState.None);
     this.contextValue = "lesson";
@@ -50,15 +50,19 @@ class LessonNode extends vscode.TreeItem {
           new vscode.ThemeColor("charts.orange")
         );
         break;
+      case "unavailable":
+        this.iconPath = new vscode.ThemeIcon("warning");
+        this.description = "暂不可用";
+        break;
       default:
         this.iconPath = new vscode.ThemeIcon("circle-outline");
     }
 
-    this.command = {
+    if (status !== "unavailable") { this.command = {
       command: "sparktutor.openLesson",
       title: "打开课程",
       arguments: [courseId, lessonIdx],
-    };
+    }; }
   }
 }
 
@@ -101,9 +105,10 @@ export class CourseTreeProvider
             this.progressMap.set(course.id, progress);
             nodes.push(new CourseNode(course, progress));
           } catch {
-            nodes.push(
-              new CourseNode(course, { started: false })
-            );
+            this.progressMap.delete(course.id);
+            const node = new CourseNode(course, { started: false });
+            node.description = "进度读取失败，请刷新重试";
+            nodes.push(node);
           }
         }
         return nodes;
@@ -125,24 +130,18 @@ export class CourseTreeProvider
 
     if (element instanceof CourseNode) {
       const course = element.course;
-      const progress = this.progressMap.get(course.id) || {
-        started: false,
-      };
+      const progress = element.progress;
 
       return course.lessons.map((lessonId, idx) => {
-        let status: "completed" | "in-progress" | "not-started" = "not-started";
-        if (progress.started) {
-          const completedCount = progress.lessonsCompleted || 0;
-          const currentIdx = progress.currentLessonIdx || 0;
-          if (idx < completedCount) {
-            status = "completed";
-          } else if (idx === currentIdx) {
-            status = "in-progress";
-          }
-        }
+        const detail = progress.lessons?.find((lesson) => lesson.id === lessonId);
+        let status: "completed" | "in-progress" | "not-started" | "unavailable" = "not-started";
+        if (detail?.available === false || detail?.status === "unavailable") { status = "unavailable"; }
+        else if (detail?.status === "completed") { status = "completed"; }
+        else if (detail?.status === "in_progress" || (!detail && progress.started &&
+          (progress.currentLessonId === lessonId || progress.currentLessonIdx === idx))) { status = "in-progress"; }
 
         // Format lesson name: "01_spark_session" → "1. Spark Session"
-        const label = formatLessonName(lessonId, idx);
+        const label = detail?.title ? `${idx + 1}. ${detail.title}` : formatLessonName(lessonId, idx);
         return new LessonNode(course.id, lessonId, idx, label, status);
       });
     }
