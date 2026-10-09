@@ -148,7 +148,13 @@ def _independent(events: list[LearningEvent], end: LearningEvent) -> bool:
     return not _hinted(events, end) and not _before(events, end, "solution_view")
 
 
-def _dimension(key: str, score: float | None, count: int, summary: str, metrics: dict) -> dict:
+def _evidence(event: LearningEvent, outcome: str, **fields) -> dict:
+    return {"courseId": event.course_id, "lessonId": event.lesson_id,
+            "taskId": event.task_id, "outcome": outcome, **fields}
+
+
+def _dimension(key: str, score: float | None, count: int, summary: str, metrics: dict,
+               evidence: list[dict]) -> dict:
     return {
         "key": key, "name": _NAMES[key], "score": score,
         "direction": "descriptive" if key == "hint_dependency" else "higher_is_better",
@@ -156,6 +162,7 @@ def _dimension(key: str, score: float | None, count: int, summary: str, metrics:
         "evidenceLevel": "none" if count == 0 else "limited" if count < 5 else "available",
         "confidence": "none" if count == 0 else "limited" if count < 5 else "sufficient",
         "summary": summary, "metrics": metrics,
+        "evidence": {"items": evidence[:100], "totalCount": len(evidence), "limit": 100},
     }
 
 
@@ -177,15 +184,21 @@ def _knowledge(tasks: dict, submissions: dict) -> tuple[dict, dict]:
     }
     summary = (f"{count} 个任务的最近一次有效评估中有 {passed} 个通过；合理使用提示不会扣分。"
                if count else "尚无未受答案查看影响的有效知识评估。")
-    return _dimension("knowledge", score, count, summary, metrics), metrics
+    evidence = [_evidence(events[-1], "passed" if events[-1].data["passed"] else "failed",
+                          passed=events[-1].data["passed"], assisted=not _independent(tasks[key], events[-1]))
+                for key, events in submissions.items()]
+    return _dimension("knowledge", score, count, summary, metrics, evidence), metrics
 
 
 def _debugging(tasks: dict) -> dict:
     episodes = repairs = independent = assisted = excluded = 0
     error_types = Counter()
+    evidence = []
     for events in tasks.values():
         active = False
         failure_started = None
+        failure_event = None
+        episode_index = 0
         help_used = False
         answer_times = [_order(event) for event in events if _help(event, "solution_view")]
         answer_time = min(answer_times) if answer_times else None
@@ -203,6 +216,7 @@ def _debugging(tasks: dict) -> dict:
                 if not active:
                     active = True
                     failure_started = _order(event)
+                    failure_event = event
                     help_used = _hinted(events, event)
                 raw_types = event.data.get("errorTypes") or [event.data.get("errorType")]
                 if isinstance(raw_types, str):
@@ -217,8 +231,14 @@ def _debugging(tasks: dict) -> dict:
                 )
                 assisted += int(help_used)
                 independent += int(not help_used)
+                episode_index += 1
+                evidence.append(_evidence(event, "repaired", passed=True, assisted=help_used,
+                                          episodeIndex=episode_index))
                 active = False
         episodes += int(active)
+        if active:
+            evidence.append(_evidence(failure_event, "unresolved", passed=False, assisted=help_used,
+                                      episodeIndex=episode_index + 1))
     return _dimension(
         "debugging", _pct(repairs, episodes), episodes,
         (f"{episodes} 个可观察失败过程有 {repairs} 个经后续评估确认修复，其中 {assisted} 个使用了提示。"
@@ -226,16 +246,19 @@ def _debugging(tasks: dict) -> dict:
         {"failureEpisodes": episodes, "confirmedRepairs": repairs,
          "independentRepairs": independent, "assistedRepairs": assisted,
          "unresolvedEpisodes": episodes - repairs, "excludedAnswerEpisodes": excluded,
-         "errorTypes": dict(error_types)},
+         "errorTypes": dict(error_types)}, evidence,
     )
 
 
 def _hint_dependency(tasks: dict, assessed: dict) -> dict:
     hinted = later_hinted = requests = productive = answers = 0
+    evidence = []
     for key, submissions in assessed.items():
         events = tasks[key]
         first = submissions[0]
         hinted += int(_hinted(events, first))
+        first_hinted = _hinted(events, first)
+        evidence.append(_evidence(first, "hinted" if first_hinted else "not_hinted", hinted=first_hinted))
         answers += int(_before(events, first, "solution_view"))
         hints = [event for event in events if _help(event, "hint_request")]
         later_hinted += int(any(_order(event) > _order(first) for event in hints))
@@ -252,7 +275,7 @@ def _hint_dependency(tasks: dict, assessed: dict) -> dict:
         {"evaluatedTasks": count, "hintedBeforeFirstAssessment": hinted,
          "laterHintedTasks": later_hinted, "hintRequests": requests,
          "productiveHints": productive, "hintProductivity": _pct(productive, requests),
-         "answerViewedBeforeFirstAssessment": answers},
+         "answerViewedBeforeFirstAssessment": answers}, evidence,
     )
 
 
@@ -287,6 +310,7 @@ def _transfer(tasks: dict, assessed: dict, knowledge: dict, specs: list[dict], s
     by_ref = {_ref(spec): spec for spec in specs}
     by_key = {(spec["courseId"], spec["lessonId"], spec["taskId"]): spec for spec in specs}
     count = passed = independent = independent_passed = excluded = 0
+    evidence = []
     for key, submits in assessed.items():
         if scope and key[0] != scope:
             continue
@@ -304,6 +328,8 @@ def _transfer(tasks: dict, assessed: dict, knowledge: dict, specs: list[dict], s
         is_independent = _independent(tasks[key], first)
         independent += int(is_independent)
         independent_passed += int(is_independent and first.data["passed"])
+        evidence.append(_evidence(first, "passed" if first.data["passed"] else "failed",
+                                  passed=first.data["passed"], assisted=not is_independent))
     return _dimension(
         "transfer", _pct(passed, count), count,
         (f"{count} 个具备已通过来源和新情境的任务中，有 {passed} 个首次评估通过。"
@@ -311,7 +337,7 @@ def _transfer(tasks: dict, assessed: dict, knowledge: dict, specs: list[dict], s
         {"eligibleTransferTasks": count, "firstPassedTasks": passed,
          "independentTasks": independent, "independentPassedTasks": independent_passed,
          "independentPassRate": _pct(independent_passed, independent),
-         "excludedTransferTasks": excluded},
+         "excludedTransferTasks": excluded}, evidence,
     )
 
 
@@ -433,6 +459,12 @@ def build_diagnosis(events: Iterable[LearningEvent], exercise_catalog: Iterable[
     dimensions = [knowledge_dimension, _debugging(scoped_tasks),
                   _hint_dependency(scoped_tasks, scoped_assessed),
                   _transfer(tasks, assessed, knowledge, specs, course_id)]
+    by_key = {(spec["courseId"], spec["lessonId"], spec["taskId"]): spec for spec in specs}
+    for dimension in dimensions:
+        for item in dimension["evidence"]["items"]:
+            spec = by_key.get((item["courseId"], item["lessonId"], item["taskId"]), {})
+            item["stepId"] = spec.get("stepId", "")
+            item["title"] = spec.get("title") or item["taskId"]
     recommendation, no_recommendation = _recommend(specs, assessed, knowledge, dimensions, course_id, depth)
     diagnosis = _diagnostic_sentence(dimensions, recommendation)
     components = defaultdict(lambda: {"evaluatedTasks": 0, "latestPassedTasks": 0})

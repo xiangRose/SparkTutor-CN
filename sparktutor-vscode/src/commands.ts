@@ -8,6 +8,7 @@ import { Bridge } from "./bridge";
 import { CourseTreeProvider } from "./courseTree";
 import { DiagnosticsManager } from "./diagnostics";
 import { DiagnosisPanel } from "./diagnosisPanel";
+import { DashboardPanel } from "./dashboardPanel";
 import { LessonPanel } from "./lessonPanel";
 import { SparkOutputChannel } from "./outputChannel";
 import { StatusBarManager } from "./statusBar";
@@ -15,6 +16,10 @@ import { WorkspaceManager } from "./workspaceManager";
 import { stepIdentity } from "./lessonHelpers";
 import { LearningEventTracker } from "./learningEventTracker";
 import { LearningEventsView } from "./learningEventsView";
+import { LearningHistoryPanel } from "./learningHistoryPanel";
+import { LearningHistoryResult, LearningReviewResult, LearningTrendResult, TaskHistoryResult } from "./learningHistoryTypes";
+import { DemoPanel } from "./demoPanel";
+import { DemoReport } from "./demoTypes";
 import {
   AdvanceResult,
   EvalResult,
@@ -23,6 +28,8 @@ import {
   LoadLessonResult,
   DiagnosisResult,
   OpenRecommendedExerciseResult,
+  LearningDashboardResult,
+  RecommendedExercise,
   StepData,
 } from "./types";
 
@@ -92,13 +99,23 @@ export function registerCommands(
   };
   const eventsView = new LearningEventsView(bridge);
   context.subscriptions.push(eventsView);
-  const diagnosisPanel = new DiagnosisPanel(
-    context.extensionUri,
-    () => bridge.call<DiagnosisResult>("getDiagnosis", {}),
-    async (exercise) => navigate(async () => {
+  const demo = new DemoPanel(context.extensionUri,
+    (selection) => bridge.call<DemoReport>("runDemoScenario", { ...selection }, 600000));
+  const demoProgress = (params: Record<string, unknown>) => demo.updateProgress(params);
+  bridge.onNotification?.("demoProgress", demoProgress);
+  context.subscriptions.push(demo, { dispose: () => { bridge.off?.("notification:demoProgress", demoProgress); } });
+  const learningHistory = new LearningHistoryPanel(context.extensionUri, {
+    history: (query) => afterEdits(() => bridge.call<LearningHistoryResult>("getLearningHistory", { ...query })),
+    task: (query) => afterEdits(() => bridge.call<TaskHistoryResult>("getTaskHistory", { ...query })),
+    review: (query) => afterEdits(() => bridge.call<LearningReviewResult>("getLearningReview", { ...query })),
+    trend: (query) => afterEdits(() => bridge.call<LearningTrendResult>("getLearningTrend", { ...query })),
+  });
+  context.subscriptions.push(learningHistory);
+  const openRecommendedExercise = async (exercise: RecommendedExercise, scopeCourseId?: string) => navigate(async () => {
       await workspace.saveCurrentExercise();
       const result = await bridge.call<OpenRecommendedExerciseResult>("openRecommendedExercise", {
         courseId: exercise.courseId, lessonId: exercise.lessonId, stepId: exercise.stepId,
+        ...(scopeCourseId ? { scopeCourseId } : {}),
       });
       await workspace.switchCourse(result.courseId);
       if (result.legacyCode) {
@@ -107,9 +124,21 @@ export function registerCommands(
       await displayLoadedLesson(result, result.courseId, result.lessonIdx, result.depth,
         lessonPanel, workspace, diagnostics, outputChannel, statusBar);
       treeProvider.refresh();
-    })
-  );
+    });
+  const diagnosisPanel = new DiagnosisPanel(context.extensionUri,
+    () => bridge.call<DiagnosisResult>("getDiagnosis", {}), openRecommendedExercise);
   context.subscriptions.push(diagnosisPanel);
+  const dashboard = new DashboardPanel(context.extensionUri,
+    async (courseId) => {
+      await tracker?.flush();
+      return bridge.call<LearningDashboardResult>("getLearningDashboard", courseId ? { courseId } : {});
+    },
+    async (target) => navigate(async () => {
+      await openLesson(bridge, lessonPanel, workspace, diagnostics, outputChannel, statusBar,
+        target.courseId, target.lessonIdx, target.depth, true, true);
+      treeProvider.refresh();
+    }), openRecommendedExercise, () => afterEdits(() => eventsView.show()), () => learningHistory.show(), async () => demo.show());
+  context.subscriptions.push(dashboard);
   // Wire up webview button callbacks
   lessonPanel.onSubmit = () =>
     vscode.commands.executeCommand("sparktutor.submit");
@@ -196,8 +225,20 @@ export function registerCommands(
       await afterEdits(() => eventsView.show());
     }),
 
+    vscode.commands.registerCommand("sparktutor.showLearningHistory", async () => {
+      await learningHistory.show();
+    }),
+
+    vscode.commands.registerCommand("sparktutor.openDiagnosisDemo", async () => {
+      demo.show();
+    }),
+
     vscode.commands.registerCommand("sparktutor.showLearningDiagnosis", async () => {
       await diagnosisPanel.show();
+    }),
+
+    vscode.commands.registerCommand("sparktutor.openLearningDashboard", async () => {
+      await dashboard.show();
     }),
 
     vscode.commands.registerCommand("sparktutor.showSolution", async () => afterEdits(async () => {
@@ -440,7 +481,8 @@ async function openLesson(
   courseId: string,
   lessonIdx: number,
   depth?: string,
-  skipResumePrompt?: boolean
+  skipResumePrompt?: boolean,
+  propagateError = false
 ): Promise<void> {
   try {
     await workspace.saveCurrentExercise();
@@ -491,6 +533,7 @@ async function openLesson(
     await displayLoadedLesson(result, courseId, lessonIdx, effectiveDepth,
       lessonPanel, workspace, diagnostics, outputChannel, statusBar);
   } catch (err) {
+    if (propagateError) { throw err; }
     vscode.window.showErrorMessage(
       `加载课程失败：${err instanceof Error ? err.message : err}`
     );
