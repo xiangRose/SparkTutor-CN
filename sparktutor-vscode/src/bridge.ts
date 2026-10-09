@@ -23,6 +23,7 @@ export class Bridge extends EventEmitter {
     }
   >();
   private restartAttempted = false;
+  private disposed = false;
   private pythonPath: string;
   private extensionDir: string;
 
@@ -137,7 +138,7 @@ export class Bridge extends EventEmitter {
           return;
         }
 
-        if (!this.restartAttempted) {
+        if (!this.disposed && !this.restartAttempted) {
           this.restartAttempted = true;
           this.spawn().catch(() => {
             vscode.window.showErrorMessage(
@@ -200,7 +201,7 @@ export class Bridge extends EventEmitter {
 
   /** Check if the server process is alive and responsive. */
   isAlive(): boolean {
-    return !!(this.proc && !this.proc.killed && this.proc.stdin?.writable);
+    return !this.disposed && !!(this.proc && !this.proc.killed && this.proc.stdin?.writable);
   }
 
   async call<T = unknown>(
@@ -254,6 +255,8 @@ export class Bridge extends EventEmitter {
   }
 
   dispose(): void {
+    if (this.disposed) { return; }
+    this.disposed = true;
     this.rejectAll(new Error("Bridge disposed"));
     this.rl?.close();
     this.proc?.kill();

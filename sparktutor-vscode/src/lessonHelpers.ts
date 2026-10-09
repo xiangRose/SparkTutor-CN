@@ -48,11 +48,11 @@ export function exerciseContent(
   }
   const marker = `# --- SparkTutor 练习 ${stepKey} ---`;
   const base = existing.trim() ? existing : restored || "";
-  if (!starter.trim() || base.includes(marker)) {
+  if (base.includes(marker)) {
     return base;
   }
   // Restored work may predate markers; preserve it without adding its starter twice.
-  if (base.includes(starter.trim())) {
+  if (starter.trim() && base.includes(starter.trim())) {
     return `${base.trimEnd()}\n\n${marker}\n`;
   }
   return `${base.trimEnd()}${base.trim() ? "\n\n" : ""}${marker}\n${starter}`;

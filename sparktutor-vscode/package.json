@@ -71,6 +71,11 @@
         "command": "sparktutor.showLearningDiagnosis",
         "title": "SparkTutor：查看学习诊断",
         "icon": "$(graph)"
+      },
+      {
+        "command": "sparktutor.showLearningEvents",
+        "title": "SparkTutor：查看学习行为记录",
+        "icon": "$(history)"
       }
     ],
     "menus": {
@@ -79,6 +84,11 @@
           "command": "sparktutor.showLearningDiagnosis",
           "when": "view == sparktutorCourses",
           "group": "navigation"
+        },
+        {
+          "command": "sparktutor.showLearningEvents",
+          "when": "view == sparktutorCourses",
+          "group": "navigation@2"
         }
       ]
     },

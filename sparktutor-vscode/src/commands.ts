@@ -13,6 +13,8 @@ import { SparkOutputChannel } from "./outputChannel";
 import { StatusBarManager } from "./statusBar";
 import { WorkspaceManager } from "./workspaceManager";
 import { stepIdentity } from "./lessonHelpers";
+import { LearningEventTracker } from "./learningEventTracker";
+import { LearningEventsView } from "./learningEventsView";
 import {
   AdvanceResult,
   EvalResult,
@@ -34,6 +36,7 @@ let totalSteps = 0;
 let currentStep: StepData | undefined;
 let currentDepth: string | undefined;
 let currentPracticeMode = false;
+let learningTracker: LearningEventTracker | undefined;
 
 /** Session state saved to globalState for resume-on-reload. */
 interface SavedSession {
@@ -77,13 +80,22 @@ export function registerCommands(
   diagnostics: DiagnosticsManager,
   outputChannel: SparkOutputChannel,
   statusBar: StatusBarManager,
-  aiRouter: AiRouter
+  aiRouter: AiRouter,
+  tracker?: LearningEventTracker
 ): void {
   extensionContext = context;
+  learningTracker = tracker;
+  const navigate = <T>(action: () => Promise<T>): Promise<T> => tracker ? tracker.transition(action) : action();
+  const afterEdits = async <T>(action: () => Promise<T>): Promise<T> => {
+    await tracker?.flush();
+    return action();
+  };
+  const eventsView = new LearningEventsView(bridge);
+  context.subscriptions.push(eventsView);
   const diagnosisPanel = new DiagnosisPanel(
     context.extensionUri,
     () => bridge.call<DiagnosisResult>("getDiagnosis", {}),
-    async (exercise) => {
+    async (exercise) => navigate(async () => {
       await workspace.saveCurrentExercise();
       const result = await bridge.call<OpenRecommendedExerciseResult>("openRecommendedExercise", {
         courseId: exercise.courseId, lessonId: exercise.lessonId, stepId: exercise.stepId,
@@ -95,7 +107,7 @@ export function registerCommands(
       await displayLoadedLesson(result, result.courseId, result.lessonIdx, result.depth,
         lessonPanel, workspace, diagnostics, outputChannel, statusBar);
       treeProvider.refresh();
-    }
+    })
   );
   context.subscriptions.push(diagnosisPanel);
   // Wire up webview button callbacks
@@ -110,7 +122,7 @@ export function registerCommands(
   lessonPanel.onHint = () =>
     vscode.commands.executeCommand("sparktutor.hint");
   lessonPanel.onChat = (question: string) => {
-    handleChat(aiRouter, lessonPanel, workspace, question);
+    void afterEdits(() => handleChat(aiRouter, lessonPanel, workspace, question));
   };
   lessonPanel.onChoiceSelect = (choice: string) => {
     workspace.setSelectedChoice(choice);
@@ -124,7 +136,7 @@ export function registerCommands(
         if (depth) {
           currentDepth = depth; // pre-set so pickDepth isn't triggered
         }
-        await openLesson(
+        await navigate(() => openLesson(
           bridge,
           lessonPanel,
           workspace,
@@ -135,26 +147,26 @@ export function registerCommands(
           lessonIdx,
           depth,
           skipResumePrompt
-        );
+        ));
       }
     ),
 
     vscode.commands.registerCommand("sparktutor.run", async () => {
-      await runCode(bridge, lessonPanel, workspace, outputChannel);
+      await afterEdits(() => runCode(bridge, lessonPanel, workspace, outputChannel));
     }),
 
     vscode.commands.registerCommand("sparktutor.submit", async () => {
-      await submitCode(
+      await afterEdits(() => submitCode(
         aiRouter,
         lessonPanel,
         workspace,
         diagnostics,
         outputChannel
-      );
+      ));
     }),
 
     vscode.commands.registerCommand("sparktutor.next", async () => {
-      await nextStep(
+      await navigate(() => nextStep(
         bridge,
         treeProvider,
         lessonPanel,
@@ -162,29 +174,33 @@ export function registerCommands(
         diagnostics,
         outputChannel,
         statusBar
-      );
+      ));
     }),
 
     vscode.commands.registerCommand("sparktutor.back", async () => {
-      await prevStep(
+      await navigate(() => prevStep(
         bridge,
         lessonPanel,
         workspace,
         diagnostics,
         outputChannel,
         statusBar
-      );
+      ));
     }),
 
     vscode.commands.registerCommand("sparktutor.hint", async () => {
-      await showHint(bridge, lessonPanel);
+      await afterEdits(() => showHint(bridge, lessonPanel));
+    }),
+
+    vscode.commands.registerCommand("sparktutor.showLearningEvents", async () => {
+      await afterEdits(() => eventsView.show());
     }),
 
     vscode.commands.registerCommand("sparktutor.showLearningDiagnosis", async () => {
       await diagnosisPanel.show();
     }),
 
-    vscode.commands.registerCommand("sparktutor.showSolution", async () => {
+    vscode.commands.registerCommand("sparktutor.showSolution", async () => afterEdits(async () => {
       if (
         !currentStep ||
         !currentCourseId ||
@@ -238,23 +254,25 @@ export function registerCommands(
           `加载参考答案失败：${err instanceof Error ? err.message : err}`
         );
       }
-    }),
+    })),
 
     vscode.commands.registerCommand("sparktutor.changeDepth", async () => {
       const pick = await pickDepth();
       if (pick && currentCourseId !== undefined && currentLessonIdx !== undefined) {
+        const courseId = currentCourseId;
+        const lessonIdx = currentLessonIdx;
         currentDepth = pick;
-        await openLesson(
+        await navigate(() => openLesson(
           bridge,
           lessonPanel,
           workspace,
           diagnostics,
           outputChannel,
           statusBar,
-          currentCourseId,
-          currentLessonIdx,
+          courseId,
+          lessonIdx,
           pick
-        );
+        ));
       }
     }),
 
@@ -273,7 +291,7 @@ export function registerCommands(
       }
     }),
 
-    vscode.commands.registerCommand("sparktutor.resetLesson", async () => {
+    vscode.commands.registerCommand("sparktutor.resetLesson", async () => navigate(async () => {
       if (!currentCourseId || !currentLessonId || currentLessonIdx === undefined) {
         vscode.window.showWarningMessage("当前没有打开的课程。");
         return;
@@ -318,7 +336,7 @@ export function registerCommands(
           `重置失败：${err instanceof Error ? err.message : err}`
         );
       }
-    }),
+    })),
 
     vscode.commands.registerCommand(
       "sparktutor.checkAiConnection",
@@ -456,7 +474,7 @@ async function openLesson(
     // If there's saved progress, ask whether to resume or start fresh
     if (result.currentIndex > 0 && !skipResumePrompt) {
       const choice = await vscode.window.showInformationMessage(
-        `「${result.lessonTitle}」—— 从第 ${result.currentIndex + 1}/${result.totalSteps} 步继续？`,
+        `「${result.lessonTitle}」已恢复至第 ${result.currentIndex + 1}/${result.totalSteps} 步；关闭此提示将继续当前进度。`,
         "继续",
         "从头开始"
       );
@@ -467,8 +485,6 @@ async function openLesson(
         });
         await workspace.deleteExerciseFile(courseId, result.lessonId);
         result = await bridge.call<LoadLessonResult>("loadLesson", params);
-      } else if (!choice) {
-        return; // dismissed — do nothing
       }
     }
 
@@ -479,6 +495,18 @@ async function openLesson(
       `加载课程失败：${err instanceof Error ? err.message : err}`
     );
   }
+}
+
+/** Exact URI and unfiltered task id; hashes in filenames are not task identities. */
+function syncEditContext(workspace: WorkspaceManager): void {
+  if (!learningTracker) { return; }
+  const uri = workspace.getCurrentUri();
+  const codeStep = currentStep?.cls === "script" || currentStep?.cls === "cmd_question";
+  learningTracker.bind(codeStep && currentStep?.id !== undefined && currentCourseId && currentLessonId && uri
+    ? { courseId: currentCourseId, lessonId: currentLessonId,
+        taskId: `${currentLessonId}:${currentStep.id}`, documentUri: uri.toString(),
+        ...(currentStep.cls === "cmd_question" ? { blockKey: stepIdentity(currentStep) } : {}) }
+    : null, currentStep?.cls === "cmd_question" ? workspace.getCurrentCode() : "");
 }
 
 /** Apply a backend-selected lesson/step without issuing a second loadLesson request. */
@@ -548,6 +576,7 @@ async function displayLoadedLesson(
 
   diagnostics.clear();
   outputChannel.clear();
+  syncEditContext(workspace);
   saveSession();
 }
 
@@ -690,6 +719,8 @@ async function loadStepUI(
     await workspace.openExerciseIfExists(currentCourseId, currentLessonId, currentLessonTitle);
   }
 
+  syncEditContext(workspace);
+
   // THEN show lesson panel (Column Two) so it stays visible
   lessonPanel.updateStep(
     step, stepIndex, stepTotal, currentLessonTitle || "", currentDepth || "beginner", currentPracticeMode
@@ -712,6 +743,7 @@ async function nextStep(
     const result = await bridge.call<AdvanceResult>("advance", { code });
 
     if (result.finished) {
+      learningTracker?.bind(null);
       const practiceMode = result.practiceMode ?? currentPracticeMode;
       lessonPanel.showFinished(practiceMode);
       treeProvider.refresh();

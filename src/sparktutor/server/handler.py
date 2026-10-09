@@ -22,9 +22,18 @@ from sparktutor.engine.diagnosis import build_diagnosis
 from sparktutor.engine.exercise_catalog import build_exercise_catalog
 from sparktutor.engine.lesson_runner import LessonRunner
 from sparktutor.state.progress import ProgressStore
-from sparktutor.state.learning_events import LearningEventStore
+from sparktutor.state.learning_events import LearningEvent, LearningEventStore
 
 from .protocol import Notification
+
+
+_EDIT_FIELD_LIMITS = {
+    "changeCount": 100_000,
+    "addedChars": 10_000_000,
+    "removedChars": 10_000_000,
+    "documentVersion": 2_147_483_647,
+    "burstDurationMs": 86_400_000,
+}
 
 
 def _step_to_dict(step) -> dict:
@@ -85,6 +94,7 @@ class ServerHandler:
         self._profile = LearnerProfile()
         self._current_course_id: Optional[str] = None
         self._session_id = uuid.uuid4().hex
+        self._session_end_event: Optional[LearningEvent] = None
         self._task_started_at: dict[str, float] = {}
         self._hinted_tasks: set[str] = set()
         self.events.record("session_start", session_id=self._session_id)
@@ -96,7 +106,7 @@ class ServerHandler:
         step_id = step.id if step else "finished"
         return f"{self._runner.state.lesson.id}:{step_id}"
 
-    def _record_event(self, event_type: str, data: Optional[dict] = None) -> None:
+    def _record_event(self, event_type: str, data: Optional[dict] = None) -> Optional[LearningEvent]:
         """Record behavior metadata without storing source code or chat text."""
         if self._runner is None or self._runner.state is None:
             return
@@ -115,7 +125,7 @@ class ServerHandler:
         started = self._task_started_at.get(task_id)
         if started is not None and event_type in {"code_run", "code_submit", "task_complete"}:
             payload.setdefault("durationMs", round((time.monotonic() - started) * 1000))
-        self.events.record(
+        return self.events.record(
             event_type,
             course_id=self._current_course_id or self._runner.course_id,
             lesson_id=state.lesson.id,
@@ -157,6 +167,7 @@ class ServerHandler:
             "parseReviewResponse": self._parse_review_response,
             "completeReviewFailure": self._complete_review_failure,
             "getLearningEvents": self._get_learning_events,
+            "recordLearningEvent": self._record_learning_event,
             "getDiagnosis": self._get_diagnosis,
             "openRecommendedExercise": self._open_recommended_exercise,
             "ping": self._ping,
@@ -574,12 +585,78 @@ class ServerHandler:
         })
 
     async def _get_learning_events(self, params: dict) -> dict:
+        latest = params.get("latest", False)
+        if type(latest) is not bool:
+            raise ValueError("latest must be a boolean")
+        order = params.get("order", "latest" if latest else "oldest")
+        if latest and order != "latest":
+            raise ValueError("latest and order disagree")
+        course_id = params.get("courseId", "")
+        lesson_id = params.get("lessonId", "")
         events = self.events.list_events(
-            course_id=params.get("courseId", ""),
-            lesson_id=params.get("lessonId", ""),
+            course_id=course_id,
+            lesson_id=lesson_id,
             limit=params.get("limit", 2000),
+            order=order,
         )
-        return {"events": [event.as_dict() for event in events]}
+        total = self.events.count_events(course_id=course_id, lesson_id=lesson_id)
+        return {"events": [event.as_dict() for event in events],
+                "hasMore": total > len(events), "totalCount": total, "order": order}
+
+    def end_session(self, reason: str = "server_shutdown") -> dict:
+        """Record an observed orderly end once; never infer one after a crash."""
+        if reason not in {"extension_deactivated", "server_shutdown"}:
+            raise ValueError("Unsupported session end reason")
+        if self._session_end_event is not None:
+            return {"recorded": False, "reason": "already_ended",
+                    "event": self._session_end_event.as_dict()}
+        self._session_end_event = self.events.record(
+            "session_end", course_id=self._current_course_id or "",
+            session_id=self._session_id, data={"reason": reason},
+        )
+        return {"recorded": True, "event": self._session_end_event.as_dict()}
+
+    async def _record_learning_event(self, params: dict) -> dict:
+        """Accept bounded client telemetry, never client-authored assessments."""
+        if not isinstance(params, dict):
+            raise ValueError("Learning event parameters must be an object")
+        event_type = params.get("eventType")
+        if not isinstance(event_type, str) or event_type not in {"code_edit", "session_end"}:
+            raise ValueError("Clients may only record code_edit or session_end")
+        allowed = {"eventType", "data"}
+        if event_type == "code_edit":
+            allowed.update({"courseId", "lessonId", "taskId"})
+        if set(params) - allowed:
+            raise ValueError("Unsupported learning event fields")
+        data = params.get("data")
+        if not isinstance(data, dict):
+            raise ValueError("Learning event data must be an object")
+        if event_type == "session_end":
+            if (set(data) != {"reason"} or not isinstance(data["reason"], str)
+                    or data["reason"] not in {"extension_deactivated", "server_shutdown"}):
+                raise ValueError("Session end requires an allowed reason only")
+            return self.end_session(data["reason"])
+
+        required_counts = {"changeCount", "addedChars", "removedChars"}
+        if not required_counts.issubset(data) or set(data) - set(_EDIT_FIELD_LIMITS):
+            raise ValueError("Code edits require change counts and allow only numeric edit metadata")
+        if any(type(value) is not int or not 0 <= value <= _EDIT_FIELD_LIMITS[name]
+               for name, value in data.items()):
+            raise ValueError("Code edit metadata must contain bounded non-negative integers")
+        if any(not isinstance(params.get(name), str) or not params[name]
+               for name in ("courseId", "lessonId", "taskId")):
+            raise ValueError("Code edits require explicit courseId, lessonId and taskId")
+        if self._session_end_event is not None:
+            return {"recorded": False, "reason": "session_ended"}
+        state = self._runner.state if self._runner else None
+        if state is None or state.current_step is None or state.current_step.cls not in {"cmd_question", "script"}:
+            return {"recorded": False, "reason": "no_code_task"}
+        expected = (self._runner.course_id, state.lesson.id, self._task_id())
+        supplied = tuple(params[name] for name in ("courseId", "lessonId", "taskId"))
+        if supplied != expected:
+            return {"recorded": False, "reason": "stale_task"}
+        event = self._record_event("code_edit", data)
+        return {"recorded": True, "event": event.as_dict()}
 
     def _record_submission(self, result, *, ai_review: bool = False) -> None:
         hint_used = self._task_id() in self._hinted_tasks

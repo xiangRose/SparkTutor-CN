@@ -12,8 +12,10 @@ import { LessonPanel } from "./lessonPanel";
 import { SparkOutputChannel } from "./outputChannel";
 import { StatusBarManager } from "./statusBar";
 import { WorkspaceManager } from "./workspaceManager";
+import { createTrackerShutdown, LearningEventTracker } from "./learningEventTracker";
 
 let bridge: Bridge;
+let shutdownExtension: (() => Promise<void>) | undefined;
 
 export async function activate(
   context: vscode.ExtensionContext
@@ -22,6 +24,7 @@ export async function activate(
 
   // Start the Python JSON-lines server
   bridge = new Bridge(context.extensionPath);
+  shutdownExtension = async () => { bridge.dispose(); };
   bridge.on("log", (text: string) => outputChannel.appendLine(`[server] ${text}`));
 
   try {
@@ -39,6 +42,8 @@ export async function activate(
   const workspace = new WorkspaceManager();
   const statusBar = new StatusBarManager();
   const lessonPanel = new LessonPanel(context.extensionUri);
+  const tracker = new LearningEventTracker(bridge, (message) => outputChannel.appendLine(`[学习记录] ${message}`));
+  const editSubscription = vscode.workspace.onDidChangeTextDocument((event) => tracker.observe(event));
 
   // Register course tree view
   const treeProvider = new CourseTreeProvider(bridge);
@@ -57,7 +62,8 @@ export async function activate(
     diagnostics,
     outputChannel,
     statusBar,
-    aiRouter
+    aiRouter,
+    tracker
   );
 
   // Stream output notifications to the output channel
@@ -89,15 +95,15 @@ export async function activate(
   // provider is skipped for a short while instead of failing every submit.
   aiRouter.runStartupHealthCheck().catch(() => {});
 
-  context.subscriptions.push({
-    dispose: () => {
-      bridge.dispose();
-      diagnostics.dispose();
-      outputChannel.dispose();
-      statusBar.dispose();
-      lessonPanel.dispose();
-    },
+  shutdownExtension = createTrackerShutdown(tracker, () => {
+    editSubscription.dispose();
+    bridge.dispose();
+    diagnostics.dispose();
+    outputChannel.dispose();
+    statusBar.dispose();
+    lessonPanel.dispose();
   });
+  context.subscriptions.push({ dispose: () => { void shutdownExtension?.(); } });
 
   // Show the output channel so the user knows it exists
   outputChannel.show();
@@ -134,6 +140,6 @@ export async function activate(
   }
 }
 
-export function deactivate(): void {
-  bridge?.dispose();
+export function deactivate(): Promise<void> {
+  return shutdownExtension?.() || Promise.resolve();
 }
