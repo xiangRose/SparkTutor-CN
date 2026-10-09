@@ -27,3 +27,6 @@ references/
 # Secrets
 .env
 .env.*
+
+# Generated isolated demonstration reports
+demo-output/

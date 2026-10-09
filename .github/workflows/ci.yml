@@ -54,3 +54,22 @@ jobs:
           java-version: '17'
       - run: pip install -e '.[spark,dev]'
       - run: pytest tests/test_course_execution.py -q
+
+  demo-spark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SPARKTUTOR_TEST_SPARK: '1'
+      SPARK_LOCAL_IP: 127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: pip install -e '.[spark,dev]'
+      - run: pytest tests/test_demo_scenarios.py -q -m spark

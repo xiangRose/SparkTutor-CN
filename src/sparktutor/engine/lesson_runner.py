@@ -263,12 +263,15 @@ class LessonRunner:
     def _save_progress(self, last_code: str) -> None:
         if self.state is None or self.practice_mode:
             return
+        saved = self.progress.get(self.course_id, self.state.lesson.id)
         self.progress.save(
             course_id=self.course_id,
             lesson_id=self.state.lesson.id,
             current_step=self.state.current_index,
             total_steps=len(self.state.filtered_steps),
-            completed=self.state.is_finished,
+            # Reviewing a completed lesson must not erase its completion fact.
+            # An explicit reset deletes this row and starts a fresh record.
+            completed=self.state.is_finished or bool(saved and saved.completed),
             depth=self.profile.depth.value,
             last_code=last_code,
             current_step_id=self.state.current_step.id if self.state.current_step else "finished",
