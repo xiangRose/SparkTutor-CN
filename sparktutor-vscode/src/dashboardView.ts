@@ -117,8 +117,9 @@ export function dashboardContent(result: LearningDashboardResult): string {
       <div class="course-grid">${result.courses.map(courseCard).join("")}</div>
       ${result.courses.length ? "" : `<p class="notice">暂无可用课程。请检查课程安装情况后刷新。</p>`}</section>
     ${diagnosisSection(result)}
-    <footer><div><h2>查看学习行为记录</h2><p>最近的编辑计数、运行、提交与求助事件。编辑计数不参与诊断评分。</p></div>
-      <button data-action="history">打开行为记录</button></footer><p id="dashboard-status" role="status" aria-live="polite"></p>`;
+    <footer><div><h2>回看学习过程</h2><p>按任务查看学习历史与评估前后变化，或快速打开最近的行为记录。编辑计数不参与诊断评分。</p></div>
+      <div class="history-links"><button data-action="learningHistory">历史与复盘</button>
+      <button data-action="history">打开行为记录</button></div></footer><p id="dashboard-status" role="status" aria-live="polite"></p>`;
 }
 
 export function dashboardLoading(courses: DashboardCourse[], selected: string): string {

@@ -78,6 +78,11 @@
         "icon": "$(graph)"
       },
       {
+        "command": "sparktutor.showLearningHistory",
+        "title": "SparkTutor：查看学习历史与复盘",
+        "icon": "$(history)"
+      },
+      {
         "command": "sparktutor.showLearningEvents",
         "title": "SparkTutor：查看学习行为记录",
         "icon": "$(history)"
@@ -94,6 +99,11 @@
           "command": "sparktutor.showLearningDiagnosis",
           "when": "view == sparktutorCourses",
           "group": "navigation"
+        },
+        {
+          "command": "sparktutor.showLearningHistory",
+          "when": "view == sparktutorCourses",
+          "group": "navigation@1"
         },
         {
           "command": "sparktutor.showLearningEvents",
