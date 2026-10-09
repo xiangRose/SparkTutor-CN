@@ -22,6 +22,8 @@ from sparktutor.engine.diagnosis import build_diagnosis
 from sparktutor.engine.exercise_catalog import build_exercise_catalog
 from sparktutor.engine.lesson_runner import LessonRunner
 from sparktutor.engine.learning_dashboard import build_learning_dashboard, get_course_progress
+from sparktutor.engine.learning_history import LearningHistory
+from sparktutor.engine.learning_trend import build_learning_trend
 from sparktutor.state.progress import ProgressStore
 from sparktutor.state.learning_events import LearningEvent, LearningEventStore
 
@@ -152,6 +154,10 @@ class ServerHandler:
             "listCourses": self._list_courses,
             "getCourseProgress": self._get_course_progress,
             "getLearningDashboard": self._get_learning_dashboard,
+            "getLearningHistory": self._get_learning_history,
+            "getTaskHistory": self._get_task_history,
+            "getLearningReview": self._get_learning_review,
+            "getLearningTrend": self._get_learning_trend,
             "loadLesson": self._load_lesson,
             "getStep": self._get_step,
             "run": self._run,
@@ -206,6 +212,35 @@ class ServerHandler:
         return build_learning_dashboard(self.registry, self.progress, self.events,
                                         course_id=params.get("courseId", ""),
                                         depth=self._profile.depth.value)
+
+    def _history_snapshot(self, params: dict) -> LearningHistory:
+        return LearningHistory(self.registry, self.events, snapshot_event_id=params.get("snapshotEventId"))
+
+    async def _get_learning_history(self, params: dict) -> dict:
+        return self._history_snapshot(params).get_history(
+            course_id=params.get("courseId", ""), window=params.get("window", "all"),
+            offset=params.get("offset", 0), limit=params.get("limit", 20),
+            window_end=params.get("windowEnd"),
+        )
+
+    async def _get_learning_trend(self, params: dict) -> dict:
+        return build_learning_trend(
+            self.registry, self.events, course_id=params.get("courseId", ""),
+            window=params.get("window", "all"), snapshot_event_id=params.get("snapshotEventId"),
+            window_end=params.get("windowEnd"), depth=self._profile.depth.value,
+        )
+
+    async def _get_task_history(self, params: dict) -> dict:
+        return self._history_snapshot(params).get_task_history(
+            params.get("courseId"), params.get("lessonId"), params.get("taskId"),
+            offset=params.get("offset", 0), limit=params.get("limit", 50),
+        )
+
+    async def _get_learning_review(self, params: dict) -> dict:
+        return self._history_snapshot(params).get_review(
+            params.get("courseId"), params.get("lessonId"), params.get("taskId"), params.get("eventId"),
+            scope_course_id=params.get("scopeCourseId"), depth=self._profile.depth.value,
+        )
 
     async def _load_lesson(self, params: dict, *, target_step_id: Optional[str] = None) -> dict:
         course_id = params["courseId"]

@@ -23,7 +23,8 @@ export class DashboardPanel {
     private readonly load: (courseId?: string) => Promise<LearningDashboardResult>,
     private readonly openLesson: (target: DashboardLessonTarget) => Promise<void>,
     private readonly openRecommendation: (exercise: RecommendedExercise, scopeCourseId?: string) => Promise<void>,
-    private readonly showHistory: () => Promise<void>
+    private readonly showHistory: () => Promise<void>,
+    private readonly showLearningHistory?: () => Promise<void>
   ) {}
 
   async show(): Promise<void> {
@@ -45,6 +46,8 @@ export class DashboardPanel {
           await this.refresh();
         } else if (message.type === "history") {
           await this.perform(() => this.showHistory(), "学习行为记录已在输出窗口打开。");
+        } else if (message.type === "learningHistory" && this.showLearningHistory) {
+          await this.perform(() => this.showLearningHistory!(), "学习历史与复盘已打开。");
         } else if (message.type === "resume") {
           const resume = this.report?.resume;
           if (!resume) { return; }

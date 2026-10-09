@@ -16,6 +16,8 @@ import { WorkspaceManager } from "./workspaceManager";
 import { stepIdentity } from "./lessonHelpers";
 import { LearningEventTracker } from "./learningEventTracker";
 import { LearningEventsView } from "./learningEventsView";
+import { LearningHistoryPanel } from "./learningHistoryPanel";
+import { LearningHistoryResult, LearningReviewResult, LearningTrendResult, TaskHistoryResult } from "./learningHistoryTypes";
 import {
   AdvanceResult,
   EvalResult,
@@ -95,6 +97,13 @@ export function registerCommands(
   };
   const eventsView = new LearningEventsView(bridge);
   context.subscriptions.push(eventsView);
+  const learningHistory = new LearningHistoryPanel(context.extensionUri, {
+    history: (query) => afterEdits(() => bridge.call<LearningHistoryResult>("getLearningHistory", { ...query })),
+    task: (query) => afterEdits(() => bridge.call<TaskHistoryResult>("getTaskHistory", { ...query })),
+    review: (query) => afterEdits(() => bridge.call<LearningReviewResult>("getLearningReview", { ...query })),
+    trend: (query) => afterEdits(() => bridge.call<LearningTrendResult>("getLearningTrend", { ...query })),
+  });
+  context.subscriptions.push(learningHistory);
   const openRecommendedExercise = async (exercise: RecommendedExercise, scopeCourseId?: string) => navigate(async () => {
       await workspace.saveCurrentExercise();
       const result = await bridge.call<OpenRecommendedExerciseResult>("openRecommendedExercise", {
@@ -121,7 +130,7 @@ export function registerCommands(
       await openLesson(bridge, lessonPanel, workspace, diagnostics, outputChannel, statusBar,
         target.courseId, target.lessonIdx, target.depth, true, true);
       treeProvider.refresh();
-    }), openRecommendedExercise, () => afterEdits(() => eventsView.show()));
+    }), openRecommendedExercise, () => afterEdits(() => eventsView.show()), () => learningHistory.show());
   context.subscriptions.push(dashboard);
   // Wire up webview button callbacks
   lessonPanel.onSubmit = () =>
@@ -207,6 +216,10 @@ export function registerCommands(
 
     vscode.commands.registerCommand("sparktutor.showLearningEvents", async () => {
       await afterEdits(() => eventsView.show());
+    }),
+
+    vscode.commands.registerCommand("sparktutor.showLearningHistory", async () => {
+      await learningHistory.show();
     }),
 
     vscode.commands.registerCommand("sparktutor.showLearningDiagnosis", async () => {

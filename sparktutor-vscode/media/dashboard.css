@@ -76,6 +76,7 @@ details > summary { cursor: pointer; display: list-item; padding: 8px 0; }
 .recommendation { margin-top: 25px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 footer { border-top: 1px solid var(--vscode-panel-border); padding-top: 22px; margin-top: 28px; }
 footer p { color: var(--vscode-descriptionForeground); font-size: .91em; }
+.history-links { display: flex; gap: 8px; flex-wrap: wrap; }
 #dashboard-status { position: sticky; bottom: 12px; background: var(--vscode-editor-background); border-radius: 4px; font-weight: 500; }
 #dashboard-status:not(:empty) { border: 1px solid var(--vscode-panel-border); padding: 12px 15px; }
 .warning { border-left: 3px solid var(--vscode-editorWarning-foreground); }
