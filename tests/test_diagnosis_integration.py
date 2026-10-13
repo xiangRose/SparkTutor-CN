@@ -124,12 +124,19 @@ async def test_course_result_has_conservative_evidence_qualification(handler, mo
 
 
 @pytest.mark.asyncio
-async def test_actual_run_failure_requires_assessment_to_confirm_repair(handler):
+@pytest.mark.parametrize("stdout,stderr,error_type", [
+    ("", "NameError: bad", "NameError"),
+    ("AssertionError: wrong total", "Spark INFO", "AssertionError"),
+])
+async def test_actual_run_failure_requires_assessment_to_confirm_repair(handler, stdout, stderr, error_type):
     await choice(handler)
     await call(handler, "submit", code="4")
     await call(handler, "advance")
-    handler.executor.execute = AsyncMock(return_value=ExecResult(ExecMode.LOCAL, 1, "", "NameError: bad"))
+    handler.executor.execute = AsyncMock(return_value=ExecResult(ExecMode.LOCAL, 1, stdout, stderr))
     await call(handler, "run", code="bad")
+    event = [event for event in handler.events.list_events() if event.event_type == "code_run"][-1]
+    assert event.data["assessmentEligible"] is True
+    assert event.data["errorType"] == error_type
     handler.executor.execute.return_value = ExecResult(ExecMode.LOCAL, 0, "", "")
     await call(handler, "run", code="pass")
     assert scores(await call(handler, "getDiagnosis"))["debugging"] == 0

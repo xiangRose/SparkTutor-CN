@@ -21,6 +21,9 @@ from sparktutor.engine.assessment_evidence import execution_failure_kind
 from sparktutor.engine.diagnosis import build_diagnosis
 from sparktutor.engine.exercise_catalog import build_exercise_catalog
 from sparktutor.engine.lesson_runner import LessonRunner
+from sparktutor.engine.learning_dashboard import build_learning_dashboard, get_course_progress
+from sparktutor.engine.learning_history import LearningHistory
+from sparktutor.engine.learning_trend import build_learning_trend
 from sparktutor.state.progress import ProgressStore
 from sparktutor.state.learning_events import LearningEvent, LearningEventStore
 
@@ -97,6 +100,7 @@ class ServerHandler:
         self._session_end_event: Optional[LearningEvent] = None
         self._task_started_at: dict[str, float] = {}
         self._hinted_tasks: set[str] = set()
+        self._demo_running = False
         self.events.record("session_start", session_id=self._session_id)
 
     def _task_id(self) -> str:
@@ -150,6 +154,12 @@ class ServerHandler:
         handler_map = {
             "listCourses": self._list_courses,
             "getCourseProgress": self._get_course_progress,
+            "getLearningDashboard": self._get_learning_dashboard,
+            "getLearningHistory": self._get_learning_history,
+            "getTaskHistory": self._get_task_history,
+            "getLearningReview": self._get_learning_review,
+            "getLearningTrend": self._get_learning_trend,
+            "runDemoScenario": self._run_demo_scenario,
             "loadLesson": self._load_lesson,
             "getStep": self._get_step,
             "run": self._run,
@@ -197,12 +207,61 @@ class ServerHandler:
         }
 
     async def _get_course_progress(self, params: dict) -> dict:
-        course_id = params["courseId"]
-        course = self.registry.get_course(course_id)
-        if course is None:
-            raise ValueError(f"Unknown course: {course_id}")
-        summary = self.progress.get_course_summary(course_id, course.lessons)
-        return summary
+        return get_course_progress(self.registry, self.progress, params["courseId"],
+                                   depth=self._profile.depth.value)
+
+    async def _get_learning_dashboard(self, params: dict) -> dict:
+        return build_learning_dashboard(self.registry, self.progress, self.events,
+                                        course_id=params.get("courseId", ""),
+                                        depth=self._profile.depth.value)
+
+    def _history_snapshot(self, params: dict) -> LearningHistory:
+        return LearningHistory(self.registry, self.events, snapshot_event_id=params.get("snapshotEventId"))
+
+    async def _run_demo_scenario(self, params: dict) -> dict:
+        from sparktutor.engine.demo_scenarios import run_demo_scenario
+
+        run_id = params.get("runId", uuid.uuid4().hex)
+        if not isinstance(run_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", run_id):
+            raise ValueError("演示 runId 必须是 1–100 位字母、数字、下划线或短横线。")
+        if self._demo_running:
+            raise ValueError("诊断演示正在运行，请等待完成后再试。")
+        self._demo_running = True
+        try:
+            report = await run_demo_scenario(
+                scenario_id=params.get("scenarioId", "transfer_retry"),
+                mode=params.get("mode", "recorded"),
+                on_progress=lambda progress: self._write_notification(Notification("demoProgress", {**progress, "runId": run_id})),
+            )
+            return {**report, "runId": run_id}
+        finally:
+            self._demo_running = False
+
+    async def _get_learning_history(self, params: dict) -> dict:
+        return self._history_snapshot(params).get_history(
+            course_id=params.get("courseId", ""), window=params.get("window", "all"),
+            offset=params.get("offset", 0), limit=params.get("limit", 20),
+            window_end=params.get("windowEnd"),
+        )
+
+    async def _get_learning_trend(self, params: dict) -> dict:
+        return build_learning_trend(
+            self.registry, self.events, course_id=params.get("courseId", ""),
+            window=params.get("window", "all"), snapshot_event_id=params.get("snapshotEventId"),
+            window_end=params.get("windowEnd"), depth=self._profile.depth.value,
+        )
+
+    async def _get_task_history(self, params: dict) -> dict:
+        return self._history_snapshot(params).get_task_history(
+            params.get("courseId"), params.get("lessonId"), params.get("taskId"),
+            offset=params.get("offset", 0), limit=params.get("limit", 50),
+        )
+
+    async def _get_learning_review(self, params: dict) -> dict:
+        return self._history_snapshot(params).get_review(
+            params.get("courseId"), params.get("lessonId"), params.get("taskId"), params.get("eventId"),
+            scope_course_id=params.get("scopeCourseId"), depth=self._profile.depth.value,
+        )
 
     async def _load_lesson(self, params: dict, *, target_step_id: Optional[str] = None) -> dict:
         course_id = params["courseId"]
@@ -297,7 +356,7 @@ class ServerHandler:
             {
                 "exitCode": result.exit_code,
                 "mode": result.mode.value,
-                "errorType": self._error_type(result.stderr),
+                "errorType": self._error_type(result.stdout + "\n" + result.stderr),
                 "assessmentSource": "execution",
                 "assessmentEligible": execution_failure_kind(result) == "learner",
                 "failureKind": execution_failure_kind(result),
@@ -306,7 +365,7 @@ class ServerHandler:
         if result.exit_code != 0:
             self._record_event(
                 "error",
-                {"errorType": self._error_type(result.stderr), "source": "code_run"},
+                {"errorType": self._error_type(result.stdout + "\n" + result.stderr), "source": "code_run"},
             )
         return {
             "exitCode": result.exit_code,

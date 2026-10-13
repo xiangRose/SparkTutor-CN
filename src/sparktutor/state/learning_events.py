@@ -161,8 +161,8 @@ class LearningEventStore:
         order: str = "oldest",
     ) -> list[LearningEvent]:
         """Return events chronologically, optionally selecting the latest page."""
-        if not isinstance(order, str) or order not in {"oldest", "latest"}:
-            raise ValueError("Event order must be oldest or latest")
+        if not isinstance(order, str) or order not in {"oldest", "latest", "insertion"}:
+            raise ValueError("Event order must be oldest, latest or insertion")
         clauses: list[str] = []
         values: list[Any] = []
         if course_id:
@@ -178,7 +178,8 @@ class LearningEventStore:
             rows = conn.execute(
                 "SELECT * FROM learning_events"
                 + where
-                + (" ORDER BY timestamp DESC, rowid DESC" if order == "latest"
+                + (" ORDER BY rowid ASC" if order == "insertion" else
+                   " ORDER BY timestamp DESC, rowid DESC" if order == "latest"
                    else " ORDER BY timestamp ASC, rowid ASC")
                 + (" LIMIT ?" if limit is not None else ""),
                 values,

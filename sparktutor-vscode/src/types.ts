@@ -18,6 +18,7 @@ export interface CourseProgress {
   totalLessons?: number;
   depth?: string;
   updatedAt?: string;
+  lessons?: DashboardLesson[];
 }
 
 export interface StepData {
@@ -112,6 +113,12 @@ export interface DiagnosisDimension {
   evidenceCount: number;
   summary: string;
   metrics?: Record<string, unknown>;
+  evidence?: {
+    items: { courseId: string; lessonId: string; taskId: string; stepId: string; title: string;
+      outcome: string; passed?: boolean; hinted?: boolean; assisted?: boolean; episodeIndex?: number }[];
+    totalCount: number;
+    limit: number;
+  };
 }
 
 export interface RecommendedExercise {
@@ -132,6 +139,59 @@ export interface DiagnosisResult {
   dimensions: DiagnosisDimension[];
   recommendedExercise: RecommendedExercise | null;
   recommendationReason: string;
+  knowledgeComponents?: Record<string, KnowledgeComponentEvidence>;
+}
+
+export interface KnowledgeComponentEvidence {
+  evaluatedTasks: number;
+  latestPassedTasks: number;
+}
+
+export interface DashboardLesson {
+  id: string;
+  title: string;
+  index: number;
+  estimatedMinutes?: number | null;
+  status: "not_started" | "in_progress" | "completed" | "unavailable";
+  available?: boolean;
+  currentStepId?: string | null;
+  currentStep: number;
+  totalSteps: number;
+  depth: string;
+}
+
+export interface DashboardCourse {
+  id: string;
+  title: string;
+  description: string;
+  lessonCount: number;
+  requiresLakehouse: boolean;
+  prerequisites: string[];
+  lessons: DashboardLesson[];
+  progress?: { started: boolean; lessonsCompleted: number; totalLessons: number;
+    inProgressLessons: number; completionPercent: number };
+}
+
+export interface DashboardResume {
+  courseId: string;
+  courseTitle: string;
+  lessonId: string;
+  lessonTitle: string;
+  lessonIdx: number;
+  depth: string;
+  stepId?: string | null;
+  currentStep: number;
+  action: "resume" | "start";
+}
+
+export interface LearningDashboardResult {
+  courses: DashboardCourse[];
+  selectedCourseId: string;
+  catalogScope: "all";
+  resume: DashboardResume | null;
+  diagnosis: DiagnosisResult | null;
+  knowledgeComponents: Record<string, KnowledgeComponentEvidence>;
+  warnings?: { section: string; message: string }[];
 }
 
 export interface OpenRecommendedExerciseResult extends LoadLessonResult {

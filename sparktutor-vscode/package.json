@@ -68,9 +68,24 @@
         "title": "SparkTutor：检查 AI 连接"
       },
       {
+        "command": "sparktutor.openLearningDashboard",
+        "title": "SparkTutor：打开学习工作台",
+        "icon": "$(home)"
+      },
+      {
         "command": "sparktutor.showLearningDiagnosis",
         "title": "SparkTutor：查看学习诊断",
         "icon": "$(graph)"
+      },
+      {
+        "command": "sparktutor.showLearningHistory",
+        "title": "SparkTutor：查看学习历史与复盘",
+        "icon": "$(history)"
+      },
+      {
+        "command": "sparktutor.openDiagnosisDemo",
+        "title": "SparkTutor：打开诊断演示",
+        "icon": "$(beaker)"
       },
       {
         "command": "sparktutor.showLearningEvents",
@@ -81,9 +96,24 @@
     "menus": {
       "view/title": [
         {
+          "command": "sparktutor.openLearningDashboard",
+          "when": "view == sparktutorCourses",
+          "group": "navigation@0"
+        },
+        {
           "command": "sparktutor.showLearningDiagnosis",
           "when": "view == sparktutorCourses",
           "group": "navigation"
+        },
+        {
+          "command": "sparktutor.showLearningHistory",
+          "when": "view == sparktutorCourses",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sparktutor.openDiagnosisDemo",
+          "when": "view == sparktutorCourses",
+          "group": "navigation@3"
         },
         {
           "command": "sparktutor.showLearningEvents",

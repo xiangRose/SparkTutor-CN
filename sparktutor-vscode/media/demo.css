@@ -1,0 +1,31 @@
+.demo-provenance { padding: 18px 21px; border: 2px solid var(--vscode-charts-orange, #d98640); border-radius: 9px; margin: 22px 0; background: var(--vscode-editor-background); }
+.demo-provenance > strong { font-size: 1.18em; }
+.demo-provenance p { font-size: .93em; }
+.demo-controls { display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; }
+.demo-controls > div { display: flex; flex: 1; flex-direction: column; gap: 6px; min-width: 230px; }
+.demo-controls label { color: var(--vscode-descriptionForeground); font-size: .9em; }
+.demo-controls select { max-width: none; width: 100%; }
+.demo-controls button.primary { margin: 0; }
+.demo-scenario-note { padding: 14px 0 18px; color: var(--vscode-descriptionForeground); }
+.demo-report { margin-top: 25px; }
+.demo-task-contexts { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
+.demo-task-contexts article { padding: 17px; border: 1px solid var(--vscode-panel-border); border-radius: 8px; }
+.demo-task-contexts p { color: var(--vscode-descriptionForeground); }
+.demo-stage-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 25px 0; padding-bottom: 18px; border-bottom: 1px solid var(--vscode-panel-border); }
+.demo-stage-tabs button { white-space: normal; text-align: left; }
+.demo-stage-tabs button[aria-current=step] { outline: 2px solid var(--vscode-focusBorder); outline-offset: 1px; }
+.demo-stage .section-heading { margin-top: 15px; }
+.demo-recommendation { background: var(--vscode-editor-background); }
+.demo-events { padding: 14px 18px; border: 1px solid var(--vscode-panel-border); border-radius: 8px; }
+.demo-events ol { padding-left: 22px; }
+.demo-events li { padding: 14px 0; border-top: 1px solid var(--vscode-panel-border); }
+.demo-events .event-heading { flex-wrap: wrap; }
+.demo-events .muted { overflow-wrap: anywhere; }
+.demo-checks { margin: 25px 0; }
+.demo-checks ul { list-style: none; padding: 0; }
+.demo-checks li { display: flex; align-items: baseline; gap: 13px; margin: 9px 0; }
+.check-result { white-space: nowrap; font-size: .87em; min-width: 6em; }
+.check-pass { color: var(--vscode-testing-iconPassed, var(--vscode-foreground)); }
+.check-fail { color: var(--vscode-errorForeground); font-weight: 600; }
+#demo-status:not(:empty) { border: 1px solid var(--vscode-panel-border); padding: 12px; margin-top: 20px; }
+@media (max-width: 620px) { .demo-task-contexts { grid-template-columns: 1fr; } .demo-controls { align-items: stretch; flex-direction: column; } .demo-controls > div { min-width: 0; } }
