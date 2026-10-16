@@ -50,7 +50,7 @@ export async function activate(
   vscode.window.registerTreeDataProvider("sparktutorCourses", treeProvider);
 
   // Create AI router (resolves provider after startup)
-  const aiRouter = new AiRouter(bridge);
+  const aiRouter = new AiRouter(bridge, context.secrets);
 
   // Register all commands
   registerCommands(

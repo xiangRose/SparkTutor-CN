@@ -101,6 +101,9 @@ class ServerHandler:
         self._task_started_at: dict[str, float] = {}
         self._hinted_tasks: set[str] = set()
         self._demo_running = False
+        from sparktutor.engine.learning_coach import LearningCoachManager
+        self._coach = LearningCoachManager()
+        self._coach_visit_id = uuid.uuid4().hex
         self.events.record("session_start", session_id=self._session_id)
 
     def _task_id(self) -> str:
@@ -180,6 +183,13 @@ class ServerHandler:
             "recordLearningEvent": self._record_learning_event,
             "getDiagnosis": self._get_diagnosis,
             "openRecommendedExercise": self._open_recommended_exercise,
+            "getLearningCoach": self._get_learning_coach,
+            "buildCoachPrompt": self._build_coach_prompt,
+            "parseCoachResponse": self._parse_coach_response,
+            "ackCoachMessage": self._ack_coach_message,
+            "runCoachProbe": self._run_coach_probe,
+            "completeCoachFailure": self._complete_coach_failure,
+            "openCoachExercise": self._open_coach_exercise,
             "ping": self._ping,
         }
 
@@ -289,6 +299,7 @@ class ServerHandler:
         state = self._runner.load_lesson(lesson_dir)
         if target_step_id is not None:
             self._runner.open_practice_step(target_step_id)
+        self._coach_visit_id = uuid.uuid4().hex
         self._task_started_at.clear()
         self._hinted_tasks.clear()
         self._task_started_at[self._task_id()] = time.monotonic()
@@ -342,6 +353,7 @@ class ServerHandler:
 
     async def _run(self, params: dict) -> dict:
         code = params["code"]
+        self._coach_visit_id = uuid.uuid4().hex
 
         def on_output(line: str):
             self._write_notification(
@@ -380,6 +392,7 @@ class ServerHandler:
             raise ValueError("No lesson loaded")
 
         code = params["code"]
+        self._coach_visit_id = uuid.uuid4().hex
         result = await self._runner.submit(code)
         self._record_submission(result)
         if not result.passed:
@@ -399,6 +412,7 @@ class ServerHandler:
             raise ValueError("No lesson loaded")
 
         self._runner.require_can_advance()
+        self._coach_visit_id = uuid.uuid4().hex
         previous_task_id = self._task_id()
         previous_started = self._task_started_at.get(previous_task_id)
         previous_state = self._runner.state
@@ -443,6 +457,7 @@ class ServerHandler:
         if step is None:
             return {"atStart": True}
 
+        self._coach_visit_id = uuid.uuid4().hex
         starter_code = self._runner.get_starter_code()
         return {
             "atStart": False,
@@ -531,6 +546,7 @@ class ServerHandler:
         self.progress.reset_lesson(course_id, lesson_id)
         # Clear the runner so the lesson reloads fresh
         self._runner = None
+        self._coach_visit_id = uuid.uuid4().hex
         return {"ok": True}
 
     async def _build_review_prompt(self, params: dict) -> dict:
@@ -539,6 +555,7 @@ class ServerHandler:
             raise ValueError("No lesson loaded")
 
         code = params["code"]
+        self._coach_visit_id = uuid.uuid4().hex
         result, needs_ai, review_kwargs = await self._runner.submit_local(code)
         response: dict = {"needsAiReview": needs_ai}
 
@@ -756,12 +773,50 @@ class ServerHandler:
         return {**result, "courseId": exercise["courseId"],
                 "lessonIdx": exercise["lessonIndex"], "depth": self._profile.depth.value}
 
+    async def _get_learning_coach(self, params: dict) -> dict:
+        return self._coach.get_state(self)
+
+    async def _build_coach_prompt(self, params: dict) -> dict:
+        return await self._coach.build(self, params)
+
+    async def _parse_coach_response(self, params: dict) -> dict:
+        return await self._coach.parse(self, params)
+
+    async def _ack_coach_message(self, params: dict) -> dict:
+        return await self._coach.ack(self, params)
+
+    async def _run_coach_probe(self, params: dict) -> dict:
+        return await self._coach.probe(self, params)
+
+    async def _complete_coach_failure(self, params: dict) -> dict:
+        return await self._coach.fail(self, params)
+
+    async def _open_coach_exercise(self, params: dict) -> dict:
+        """An authored practice entry, independent of score-based recommendation."""
+        required = {"courseId", "lessonId", "stepId"}
+        if (not isinstance(params, dict) or set(params) != required
+                or any(not isinstance(params[key], str) or not params[key] for key in required)):
+            raise ValueError("需要明确的课程、课节和教练练习编号。")
+        options = self._coach.get_state(self)["exerciseOptions"]
+        if not any(all(option.get(key) == params[key] for key in required) for option in options):
+            raise ValueError("该练习尚未开放 AI 调试教练。")
+        course = self.registry.get_course(params["courseId"])
+        if course is None or params["lessonId"] not in course.lessons:
+            raise ValueError("教练练习已不可用，请刷新后重试。")
+        lesson_idx = course.lessons.index(params["lessonId"])
+        result = await self._load_lesson({
+            "courseId": params["courseId"], "lessonIdx": lesson_idx,
+        }, target_step_id=params["stepId"])
+        return {**result, "courseId": params["courseId"],
+                "lessonIdx": lesson_idx, "depth": self._profile.depth.value}
+
     async def _detect_mode(self, params: dict) -> dict:
         mode = await self.executor.detect_mode()
         return {"mode": mode.value}
 
     async def _set_execution_mode(self, params: dict) -> dict:
         self.settings.execution_mode = ExecutionMode(params["mode"])
+        self._coach_visit_id = uuid.uuid4().hex
         self.executor._detected_mode = None
         return await self._detect_mode({})
 

@@ -19,6 +19,7 @@ export class LessonPanel {
   public onChat?: (question: string) => void;
   public onChoiceSelect?: (choice: string) => void;
   public onDiagnosis?: () => void;
+  public onCoach?: () => void;
 
   constructor(extensionUri: vscode.Uri) {
     this.extensionUri = extensionUri;
@@ -72,6 +73,9 @@ export class LessonPanel {
           break;
         case "diagnosis":
           this.onDiagnosis?.();
+          break;
+        case "coach":
+          this.onCoach?.();
           break;
       }
     });
@@ -226,6 +230,7 @@ export class LessonPanel {
   <div class="nav-buttons">
     ${practiceMode ? "" : `<button class="btn btn-secondary" onclick="send('back')">&larr; 上一步</button>`}
     <button class="btn btn-secondary" onclick="send('hint')">提示</button>
+    <button class="btn btn-secondary" onclick="send('coach')">AI 调试教练</button>
     <button class="btn btn-secondary" onclick="send('next')">${practiceMode ? "完成练习" : "下一步 &rarr;"}</button>
   </div>
 

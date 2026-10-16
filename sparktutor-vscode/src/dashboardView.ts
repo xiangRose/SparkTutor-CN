@@ -120,6 +120,8 @@ export function dashboardContent(result: LearningDashboardResult): string {
     <footer><div><h2>回看学习过程</h2><p>按任务查看学习历史与评估前后变化，或快速打开最近的行为记录。编辑计数不参与诊断评分。</p></div>
       <div class="history-links"><button data-action="learningHistory">历史与复盘</button>
       <button data-action="history">打开行为记录</button></div></footer>
+    <section class="notice"><h2>让下一步调试有依据</h2><p>AI 调试教练结合当前代码与可核查的学习证据，逐级提供概念提问、检查方法与局部示例。先配置你选择的模型，再明确请求帮助。</p>
+      <button data-action="coach">打开 AI 调试教练</button></section>
     <section class="demo-entry notice"><h2>看看诊断规则如何工作</h2><p>使用独立演示轨迹核查诊断与迁移推荐，不计入正常学习记录。打开后再选择是否运行。</p>
       <button data-action="demo">打开诊断演示</button></section><p id="dashboard-status" role="status" aria-live="polite"></p>`;
 }

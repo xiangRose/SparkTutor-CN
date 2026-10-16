@@ -17,6 +17,7 @@ import { Bridge } from "./bridge";
 import { CopilotProvider } from "./copilotProvider";
 import { OpenAICompatProvider } from "./openaiProvider";
 import { EvalResult } from "./types";
+import { CoachMessage, CoachPrompt } from "./coachTypes";
 
 export type AiProviderKind = "anthropic" | "copilot" | "openai-compatible" | "none";
 
@@ -46,10 +47,10 @@ export class AiRouter {
   private cachedProvider: AiProviderKind | undefined;
   private healthCache: Map<string, HealthRecord> = new Map();
 
-  constructor(bridge: Bridge) {
+  constructor(bridge: Bridge, secrets?: vscode.SecretStorage) {
     this.bridge = bridge;
     this.copilot = new CopilotProvider();
-    this.openai = new OpenAICompatProvider();
+    this.openai = new OpenAICompatProvider(secrets);
   }
 
   /**
@@ -57,6 +58,7 @@ export class AiRouter {
    * API key presence, and Copilot availability.
    */
   async resolveProvider(): Promise<AiProviderKind> {
+    await this.openai.refreshSecret();
     const config = vscode.workspace.getConfiguration("sparktutor");
     const setting = config.get<string>("aiProvider") || "auto";
 
@@ -284,6 +286,44 @@ export class AiRouter {
       answer:
         "未配置 AI 提供方。请设置 Anthropic API 密钥、配置 OpenAI 兼容接口，或安装 GitHub Copilot 以启用对话。",
     };
+  }
+
+  /** The coach explicitly uses the user's compatible model, never an automatic provider fallback. */
+  async requestCoach(params: { code: string; level: number }, readCurrentCode: () => Promise<string>,
+    current: () => boolean): Promise<CoachMessage> {
+    let requestId: string | undefined;
+    const assertCurrent = () => { if (!current()) { throw new Error("当前代码或练习已变化，请刷新教练后重新请求。"); } };
+    try {
+      assertCurrent();
+      const built = await this.bridge.call<CoachPrompt>("buildCoachPrompt", params, 180000);
+      requestId = built.requestId;
+      assertCurrent();
+      await this.openai.refreshSecret();
+      if (!this.openai.hasExplicitModelConfig() || !this.openai.isConfigured()) {
+        throw new Error("尚未配置教练模型。请点击「配置其他模型」，填写 API 地址和模型名称，并安全保存密钥。不会自动改用 Anthropic，也不会生成替代 AI 回复。");
+      }
+      let rawText: string;
+      try {
+        rawText = await this.openai.sendRequest(built.messages, 1024, 180000);
+      } catch {
+        throw new Error("教练模型请求未完成。请检查自定义 API 地址、模型、密钥和网络后重试；没有生成 AI 辅导结果。");
+      }
+      assertCurrent();
+      const code = await readCurrentCode();
+      assertCurrent();
+      if (code !== params.code) { throw new Error("代码已变化，旧回复已撤下。请刷新教练后重新请求。"); }
+      try {
+        return await this.bridge.call<CoachMessage>("parseCoachResponse", { requestId, rawText, code }, 180000);
+      } catch {
+        throw new Error("模型回复未通过证据与格式校验，或练习已变化。本次未显示提示，请刷新后重试。");
+      }
+    } catch (error) {
+      if (requestId) {
+        // The backend applies cleanup only to this request; stale cleanup cannot end a newer one.
+        await this.bridge.call("completeCoachFailure", { requestId }, 180000).catch(() => {});
+      }
+      throw error;
+    }
   }
 
   /**
