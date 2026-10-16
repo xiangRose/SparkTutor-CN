@@ -198,6 +198,8 @@ class LearningHistory:
                 reason = "缺少可信评估资格或来源，仅保留原行为；旧日志不会被追认为有效成绩。"
         elif _help(event, "hint_request"):
             reason = "提示使用不会扣减知识或调试通过率；提示覆盖只统计首次有效评估前的使用，不能视为能力不足。"
+        elif event.event_type == "coach_probe":
+            reason = "AI 教练的小样例仅由 Python 参考模板核验，不执行学生代码或 Spark，不作为知识、调试修复或迁移成绩。"
         source = data.get("assessmentSource")
         mode = data.get("mode")
         raw_passed = data.get("passed") if type(data.get("passed")) is bool else None

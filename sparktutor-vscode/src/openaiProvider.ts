@@ -23,6 +23,8 @@
 
 import * as vscode from "vscode";
 
+export const OPENAI_SECRET_KEY = "sparktutor.openaiApiKey";
+
 export interface OpenAICompatOptions {
   baseUrl: string;
   apiKey: string;
@@ -41,21 +43,44 @@ class OpenAICompatError extends Error {
 }
 
 export class OpenAICompatProvider {
+  private savedKey = "";
+  constructor(private readonly secrets?: vscode.SecretStorage) {}
+
+  async refreshSecret(): Promise<void> {
+    this.savedKey = this.secrets ? (await this.secrets.get(OPENAI_SECRET_KEY) || "") : "";
+  }
+
+  /** Defaults alone are not consent to send coach code to a model endpoint. */
+  hasExplicitModelConfig(): boolean {
+    const config = vscode.workspace.getConfiguration("sparktutor");
+    return Boolean((this.explicitSetting(config, "openaiBaseUrl") || process.env.SPARKTUTOR_OPENAI_BASE_URL) &&
+      (this.explicitSetting(config, "openaiModel") || process.env.SPARKTUTOR_OPENAI_MODEL));
+  }
+
+  private explicitSetting(config: vscode.WorkspaceConfiguration, key: string): string | undefined {
+    const inspected = config.inspect<string>(key);
+    return inspected?.workspaceFolderLanguageValue ?? inspected?.workspaceFolderValue ??
+      inspected?.workspaceLanguageValue ?? inspected?.workspaceValue ?? inspected?.globalLanguageValue ?? inspected?.globalValue;
+  }
+
   /** Read base URL / API key / model from VS Code settings or env vars. */
   getConfig(): OpenAICompatOptions {
     const config = vscode.workspace.getConfiguration("sparktutor");
     const baseUrl =
-      config.get<string>("openaiBaseUrl") ||
+      this.explicitSetting(config, "openaiBaseUrl") ||
       process.env.SPARKTUTOR_OPENAI_BASE_URL ||
+      config.get<string>("openaiBaseUrl") ||
       "https://api.openai.com/v1";
     const apiKey =
+      this.savedKey ||
       config.get<string>("openaiApiKey") ||
       process.env.SPARKTUTOR_OPENAI_API_KEY ||
       process.env.OPENAI_API_KEY ||
       "";
     const model =
-      config.get<string>("openaiModel") ||
+      this.explicitSetting(config, "openaiModel") ||
       process.env.SPARKTUTOR_OPENAI_MODEL ||
+      config.get<string>("openaiModel") ||
       "gpt-4o-mini";
     const extraHeaders =
       config.get<Record<string, string>>("openaiExtraHeaders") || {};
@@ -77,19 +102,22 @@ export class OpenAICompatProvider {
    */
   async sendRequest(
     messages: { role: string; content: string }[],
-    maxTokens = 1024
+    maxTokens = 1024,
+    timeoutMs?: number
   ): Promise<string> {
+    await this.refreshSecret();
     const cfg = this.getConfig();
     if (!cfg.apiKey && Object.keys(cfg.extraHeaders || {}).length === 0) {
       throw new Error("OpenAI-compatible API key is not configured.");
     }
 
     const candidates = this.buildUrls(cfg.baseUrl);
+    const signal = timeoutMs === undefined ? undefined : AbortSignal.timeout(timeoutMs);
     let lastErr: Error | null = null;
 
     for (const url of candidates) {
       try {
-        return await this.postChat(url, cfg, messages, maxTokens);
+        return await this.postChat(url, cfg, messages, maxTokens, signal);
       } catch (err) {
         lastErr = err instanceof Error ? err : new Error(String(err));
         // Only try the next URL on endpoint-level failures (404/405/network).
@@ -153,11 +181,13 @@ export class OpenAICompatProvider {
     url: string,
     cfg: OpenAICompatOptions,
     messages: { role: string; content: string }[],
-    maxTokens: number
+    maxTokens: number,
+    signal?: AbortSignal
   ): Promise<string> {
     let resp: Response;
     try {
       resp = await fetch(url, {
+        signal,
         method: "POST",
         headers: this.buildHeaders(cfg),
         body: JSON.stringify(this.buildBody(cfg, messages, maxTokens)),
@@ -175,7 +205,7 @@ export class OpenAICompatProvider {
       const detail = await resp.text().catch(() => "");
       // Endpoint doesn't support max_tokens — retry once without it.
       if (resp.status === 400 && /max[_ -]?tokens/i.test(detail)) {
-        return this.postChatWithoutMaxTokens(url, cfg, messages);
+        return this.postChatWithoutMaxTokens(url, cfg, messages, signal);
       }
       throw new OpenAICompatError(
         `OpenAI-compatible API error (${resp.status}): ${detail.slice(0, 500)}`,
@@ -190,11 +220,13 @@ export class OpenAICompatProvider {
   private async postChatWithoutMaxTokens(
     url: string,
     cfg: OpenAICompatOptions,
-    messages: { role: string; content: string }[]
+    messages: { role: string; content: string }[],
+    signal?: AbortSignal
   ): Promise<string> {
     let resp: Response;
     try {
       resp = await fetch(url, {
+        signal,
         method: "POST",
         headers: this.buildHeaders(cfg),
         body: JSON.stringify(this.buildBody(cfg, messages)),

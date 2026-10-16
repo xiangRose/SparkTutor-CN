@@ -26,6 +26,7 @@ EVENT_TYPES = {
     "hint_request",
     "chat_request",
     "solution_view",
+    "coach_probe",
 }
 
 

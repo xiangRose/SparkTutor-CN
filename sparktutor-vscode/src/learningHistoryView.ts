@@ -27,6 +27,7 @@ const EVENT_NAMES: Record<string, string> = {
   task_open: "打开题目", task_start: "开始题目", task_complete: "完成题目", lesson_loaded: "加载课节",
   code_edit: "编辑代码", code_run: "运行代码", code_submit: "提交答案", error: "出现错误",
   hint_request: "请求提示", chat_request: "向导师提问", solution_view: "查看参考答案",
+  coach_probe: "核查教练教学样例（不判题）",
 };
 const DIMENSION_NAMES: Record<string, string> = { knowledge: "知识任务表现", debugging: "失败过程修复率",
   transfer: "新情境首评通过率", hint_dependency: "提示使用率（描述性）" };

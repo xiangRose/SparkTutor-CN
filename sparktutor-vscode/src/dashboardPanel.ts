@@ -25,7 +25,8 @@ export class DashboardPanel {
     private readonly openRecommendation: (exercise: RecommendedExercise, scopeCourseId?: string) => Promise<void>,
     private readonly showHistory: () => Promise<void>,
     private readonly showLearningHistory?: () => Promise<void>,
-    private readonly showDemo?: () => Promise<void>
+    private readonly showDemo?: () => Promise<void>,
+    private readonly showCoach?: () => Promise<void>
   ) {}
 
   async show(): Promise<void> {
@@ -51,6 +52,8 @@ export class DashboardPanel {
           await this.perform(() => this.showLearningHistory!(), "学习历史与复盘已打开。");
         } else if (message.type === "demo" && this.showDemo) {
           await this.perform(() => this.showDemo!(), "独立诊断演示已打开，请选择场景并明确运行。");
+        } else if (message.type === "coach" && this.showCoach) {
+          await this.perform(() => this.showCoach!(), "AI 调试教练已打开，可查看当前任务并选择帮助深度。");
         } else if (message.type === "resume") {
           const resume = this.report?.resume;
           if (!resume) { return; }

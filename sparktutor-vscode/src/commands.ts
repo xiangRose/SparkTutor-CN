@@ -20,6 +20,9 @@ import { LearningHistoryPanel } from "./learningHistoryPanel";
 import { LearningHistoryResult, LearningReviewResult, LearningTrendResult, TaskHistoryResult } from "./learningHistoryTypes";
 import { DemoPanel } from "./demoPanel";
 import { DemoReport } from "./demoTypes";
+import { CoachPanel } from "./coachPanel";
+import { CoachAck, CoachProbe, CoachState } from "./coachTypes";
+import { configureCoachModel } from "./coachModel";
 import {
   AdvanceResult,
   EvalResult,
@@ -92,11 +95,57 @@ export function registerCommands(
 ): void {
   extensionContext = context;
   learningTracker = tracker;
-  const navigate = <T>(action: () => Promise<T>): Promise<T> => tracker ? tracker.transition(action) : action();
+  let coach: CoachPanel | undefined;
+  const navigate = async <T>(action: () => Promise<T>): Promise<T> => {
+    coach?.invalidate("正在切换练习，旧辅导内容已撤下。");
+    try { return await (tracker ? tracker.transition(action) : action()); }
+    finally { await coach?.refreshIfOpen(); }
+  };
   const afterEdits = async <T>(action: () => Promise<T>): Promise<T> => {
     await tracker?.flush();
     return action();
   };
+  const learningAction = async <T>(action: () => Promise<T>): Promise<T> => {
+    coach?.invalidate("正在更新练习记录，请稍候再请求辅导。");
+    try { return await afterEdits(action); }
+    finally { await coach?.refreshIfOpen(); }
+  };
+  const currentCode = async (current: () => boolean): Promise<string> => {
+    await tracker?.flush();
+    if (!current()) { throw new Error("练习或代码已变化，请刷新教练后重新请求。"); }
+    return workspace.getCurrentCode();
+  };
+  coach = new CoachPanel(context.extensionUri, {
+    load: () => afterEdits(() => bridge.call<CoachState>("getLearningCoach", {}, 180000)),
+    request: async (level, current) => {
+      const code = await currentCode(current);
+      return aiRouter.requestCoach({ code, level }, () => currentCode(current), current);
+    },
+    acknowledge: async (message, current) => bridge.call<CoachAck>("ackCoachMessage",
+      { messageId: message.messageId, code: await currentCode(current) }, 180000),
+    probe: async (message, current) => bridge.call<CoachProbe>("runCoachProbe",
+      { messageId: message.messageId, code: await currentCode(current) }, 180000),
+    discard: (requestId) => bridge.call("completeCoachFailure", { requestId }, 180000),
+    openExercise: (task) => navigate(async () => {
+      await workspace.saveCurrentExercise();
+      const result = await bridge.call<OpenRecommendedExerciseResult>("openCoachExercise", {
+        courseId: task.courseId, lessonId: task.lessonId, stepId: task.stepId,
+      }, 180000);
+      await workspace.switchCourse(result.courseId);
+      if (result.legacyCode) { workspace.backupLegacyCode(result.courseId, result.lessonId, result.legacyCode); }
+      await displayLoadedLesson(result, result.courseId, result.lessonIdx, result.depth,
+        lessonPanel, workspace, diagnostics, outputChannel, statusBar);
+      treeProvider.refresh();
+    }),
+    configure: () => configureCoachModel(context.secrets),
+  });
+  context.subscriptions.push(coach);
+  const coachEdits = vscode.workspace?.onDidChangeTextDocument?.((event) => {
+    if (event.contentChanges.length && event.document.uri.toString() === workspace.getCurrentUri()?.toString()) {
+      coach?.invalidate();
+    }
+  });
+  if (coachEdits) { context.subscriptions.push(coachEdits); }
   const eventsView = new LearningEventsView(bridge);
   context.subscriptions.push(eventsView);
   const demo = new DemoPanel(context.extensionUri,
@@ -137,7 +186,7 @@ export function registerCommands(
       await openLesson(bridge, lessonPanel, workspace, diagnostics, outputChannel, statusBar,
         target.courseId, target.lessonIdx, target.depth, true, true);
       treeProvider.refresh();
-    }), openRecommendedExercise, () => afterEdits(() => eventsView.show()), () => learningHistory.show(), async () => demo.show());
+    }), openRecommendedExercise, () => afterEdits(() => eventsView.show()), () => learningHistory.show(), async () => demo.show(), () => coach!.show());
   context.subscriptions.push(dashboard);
   // Wire up webview button callbacks
   lessonPanel.onSubmit = () =>
@@ -151,12 +200,13 @@ export function registerCommands(
   lessonPanel.onHint = () =>
     vscode.commands.executeCommand("sparktutor.hint");
   lessonPanel.onChat = (question: string) => {
-    void afterEdits(() => handleChat(aiRouter, lessonPanel, workspace, question));
+    void learningAction(() => handleChat(aiRouter, lessonPanel, workspace, question));
   };
   lessonPanel.onChoiceSelect = (choice: string) => {
     workspace.setSelectedChoice(choice);
   };
   lessonPanel.onDiagnosis = () => vscode.commands.executeCommand("sparktutor.showLearningDiagnosis");
+  lessonPanel.onCoach = () => vscode.commands.executeCommand("sparktutor.openLearningCoach");
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -181,11 +231,11 @@ export function registerCommands(
     ),
 
     vscode.commands.registerCommand("sparktutor.run", async () => {
-      await afterEdits(() => runCode(bridge, lessonPanel, workspace, outputChannel));
+      await learningAction(() => runCode(bridge, lessonPanel, workspace, outputChannel));
     }),
 
     vscode.commands.registerCommand("sparktutor.submit", async () => {
-      await afterEdits(() => submitCode(
+      await learningAction(() => submitCode(
         aiRouter,
         lessonPanel,
         workspace,
@@ -218,7 +268,7 @@ export function registerCommands(
     }),
 
     vscode.commands.registerCommand("sparktutor.hint", async () => {
-      await afterEdits(() => showHint(bridge, lessonPanel));
+      await learningAction(() => showHint(bridge, lessonPanel));
     }),
 
     vscode.commands.registerCommand("sparktutor.showLearningEvents", async () => {
@@ -233,6 +283,9 @@ export function registerCommands(
       demo.show();
     }),
 
+    vscode.commands.registerCommand("sparktutor.openLearningCoach", async () => { await coach!.show(); }),
+    vscode.commands.registerCommand("sparktutor.configureCoachModel", async () => { await configureCoachModel(context.secrets); }),
+
     vscode.commands.registerCommand("sparktutor.showLearningDiagnosis", async () => {
       await diagnosisPanel.show();
     }),
@@ -241,7 +294,7 @@ export function registerCommands(
       await dashboard.show();
     }),
 
-    vscode.commands.registerCommand("sparktutor.showSolution", async () => afterEdits(async () => {
+    vscode.commands.registerCommand("sparktutor.showSolution", async () => learningAction(async () => {
       if (
         !currentStep ||
         !currentCourseId ||

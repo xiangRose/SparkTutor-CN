@@ -88,6 +88,15 @@
         "icon": "$(beaker)"
       },
       {
+        "command": "sparktutor.openLearningCoach",
+        "title": "SparkTutor：打开 AI 调试教练",
+        "icon": "$(lightbulb)"
+      },
+      {
+        "command": "sparktutor.configureCoachModel",
+        "title": "SparkTutor：配置 AI 调试教练模型"
+      },
+      {
         "command": "sparktutor.showLearningEvents",
         "title": "SparkTutor：查看学习行为记录",
         "icon": "$(history)"
@@ -95,6 +104,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "sparktutor.openLearningCoach",
+          "when": "view == sparktutorCourses",
+          "group": "navigation@4"
+        },
         {
           "command": "sparktutor.openLearningDashboard",
           "when": "view == sparktutorCourses",
@@ -231,7 +245,7 @@
         "sparktutor.openaiApiKey": {
           "type": "string",
           "default": "",
-          "description": "OpenAI 兼容接口的 API 密钥；留空时读取 SPARKTUTOR_OPENAI_API_KEY 或 OPENAI_API_KEY 环境变量。",
+          "description": "兼容旧配置的 API 密钥字段。建议运行‘SparkTutor：配置 AI 调试教练模型’安全保存密钥，不写入项目设置。优先读取 VS Code SecretStorage，其次此字段，再读取 SPARKTUTOR_OPENAI_API_KEY 或 OPENAI_API_KEY 环境变量。",
           "order": 2
         },
         "sparktutor.openaiModel": {
