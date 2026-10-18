@@ -333,7 +333,7 @@ test('provider defaults do not authorize coach requests, and a hung mocked endpo
     const timer = setTimeout(() => reject(Error('test should have aborted first')), 300);
     signal.addEventListener('abort', () => { clearTimeout(timer); aborted = true; reject(Error('aborted')); }, { once: true });
   });
-  await assert.rejects(provider.sendRequest([], 100, 5), /aborted/);
+  await assert.rejects(provider.sendRequest([], 100, 5), (error) => error.kind === 'transport');
   assert.equal(aborted, true);
 });
 

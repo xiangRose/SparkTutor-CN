@@ -455,6 +455,8 @@ async function checkAiConnection(
       outputChannel.appendLine(`[ai] ${result.message}`);
       if (result.ok) {
         vscode.window.showInformationMessage(`SparkTutor: ${result.message}`);
+      } else if (result.state === "unverified") {
+        vscode.window.showWarningMessage(`SparkTutor: ${result.message}`);
       } else {
         vscode.window.showErrorMessage(`SparkTutor: ${result.message}`);
       }

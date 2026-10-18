@@ -15,7 +15,7 @@
 import * as vscode from "vscode";
 import { Bridge } from "./bridge";
 import { CopilotProvider } from "./copilotProvider";
-import { OpenAICompatProvider } from "./openaiProvider";
+import { OpenAICompatError, OpenAICompatProvider } from "./openaiProvider";
 import { EvalResult } from "./types";
 import { CoachMessage, CoachPrompt } from "./coachTypes";
 
@@ -58,6 +58,37 @@ interface HealthRecord {
   checkedAt: number;
 }
 
+export interface ConnectionCheckResult {
+  ok: boolean;
+  message: string;
+  state?: "ready" | "unverified" | "unavailable";
+}
+
+/** Network/provider details may contain credentials; show only bounded local categories. */
+function compatibleProbeFailure(error: unknown): string {
+  if (error instanceof OpenAICompatError) {
+    if (error.status === 401 || error.status === 403) {
+      return "模型接口认证未通过，请检查本地保存的密钥和访问权限。";
+    }
+    if (error.status === 404 || error.status === 405) {
+      return "模型接口路径不可用，请检查 API 基础地址是否支持 Chat Completions。";
+    }
+    if (error.status === 429) {
+      return "模型接口受到限流或额度限制，请检查服务商账户后重试。";
+    }
+    if (error.kind === "invalid-format") {
+      return "模型接口返回的数据不符合兼容协议，请检查接口类型和模型名称。";
+    }
+    if (error.kind === "transport") {
+      return "连接探测超时或网络请求未完成，请检查地址、网络和服务状态。";
+    }
+    if (error.status >= 500) {
+      return "模型服务暂时返回错误，请稍后重试。";
+    }
+  }
+  return "连接探测未完成，请检查自定义 API 地址、模型名称和密钥后重试。";
+}
+
 export class AiRouter {
   private bridge: Bridge;
   private copilot: CopilotProvider;
@@ -75,7 +106,7 @@ export class AiRouter {
    * Determine which AI provider to use based on settings,
    * API key presence, and Copilot availability.
    */
-  async resolveProvider(): Promise<AiProviderKind> {
+  async resolveProvider(ignoreHealthCooldown = false): Promise<AiProviderKind> {
     await this.openai.refreshSecret();
     const config = vscode.workspace.getConfiguration("sparktutor");
     const setting = config.get<string>("aiProvider") || "auto";
@@ -110,7 +141,7 @@ export class AiRouter {
       return "anthropic";
     }
 
-    if (this.openai.isConfigured() && !this.inHealthCooldown("openai-compatible")) {
+    if (this.openai.isConfigured() && (ignoreHealthCooldown || !this.inHealthCooldown("openai-compatible"))) {
       this.cachedProvider = "openai-compatible";
       return "openai-compatible";
     }
@@ -146,7 +177,7 @@ export class AiRouter {
 
   /**
    * Startup probe: check the resolved provider once, cache the result,
-   * and surface a warning if it is unreachable. Non-blocking.
+   * An empty generated reply is inconclusive, not a connectivity failure.
    */
   async runStartupHealthCheck(): Promise<void> {
     const result = await this.checkConnection();
@@ -160,26 +191,31 @@ export class AiRouter {
    * Returns { ok, message } — used by the "check AI connection" command
    * and the startup probe; the outcome is cached for the cooldown logic.
    */
-  async checkConnection(): Promise<{ ok: boolean; message: string }> {
-    const provider = await this.resolveProvider();
+  async checkConnection(): Promise<ConnectionCheckResult> {
+    // A user-requested probe must be able to retry a previously failed model.
+    const provider = await this.resolveProvider(true);
 
     if (provider === "openai-compatible") {
-      const cfg = this.openai.getConfig();
       const started = Date.now();
       try {
         await this.openai.sendRequest(
-          [{ role: "user", content: "ping" }],
-          8
+          [{ role: "user", content: "请只回复 OK，不要解释。" }],
+          256, 30000, { connectionProbe: true }
         );
-        const message = `OpenAI 兼容接口连接成功（${cfg.baseUrl} · ${cfg.model}），用时 ${Date.now() - started} 毫秒`;
+        const message = `自定义模型接口已返回正文，用时 ${Date.now() - started} 毫秒；教练提示的格式与证据仍需实际请求验证。`;
         this.recordHealth("openai-compatible", true);
-        return { ok: true, message };
+        return { ok: true, message, state: "ready" };
       } catch (err) {
-        const message = `OpenAI 兼容接口检查失败：${
-          err instanceof Error ? err.message : err
-        }`;
+        if (err instanceof OpenAICompatError && (err.kind === "empty" || err.kind === "incomplete")) {
+          // A valid response envelope confirms reachability, but neither an
+          // empty answer nor reasoning-only content proves a usable answer.
+          this.healthCache.delete("openai-compatible");
+          return { ok: false, state: "unverified", message:
+            "模型接口已响应，但本次探测未得到可用正文，可能与输出限制或模型的思考过程有关。尚未确认正文生成可用；本次不会据此禁用该接口，可以直接测试 AI 调试教练。" };
+        }
+        const message = compatibleProbeFailure(err);
         this.recordHealth("openai-compatible", false);
-        return { ok: false, message };
+        return { ok: false, message, state: "unavailable" };
       }
     }
 
@@ -323,7 +359,10 @@ export class AiRouter {
       let rawText: string;
       try {
         rawText = await this.openai.sendRequest(built.messages, 1024, 180000);
-      } catch {
+      } catch (error) {
+        if (error instanceof OpenAICompatError && (error.kind === "empty" || error.kind === "incomplete")) {
+          throw new Error("模型接口已响应，但没有生成可用正文，可能输出被截断或只返回了思考内容。本次未显示提示，也未计入提示记录，请重试。");
+        }
         throw new Error("教练模型请求未完成。请检查自定义 API 地址、模型、密钥和网络后重试；没有生成 AI 辅导结果。");
       }
       assertCurrent();
