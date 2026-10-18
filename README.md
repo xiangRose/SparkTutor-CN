@@ -39,7 +39,7 @@ code --install-extension sparktutor-0.3.0.vsix
 
 Windows PowerShell 中可用 `.venv\Scripts\python.exe -m pip install -e ".[spark,dev]"` 安装依赖。打包脚本需要 Bash 和 zip，可使用 WSL 或已准备相应工具的 Git Bash。
 
-将 VS Code 设置 `sparktutor.pythonPath` 指向项目虚拟环境解释器的完整路径，例如 `/path/SparkTutor-CN/.venv/bin/python` 或 `D:\project\SparkTutor-CN\.venv\Scripts\python.exe`。开发模式可打开 `sparktutor-vscode` 文件夹后按 F5。
+将 VS Code 设置 `sparktutor.pythonPath` 指向项目虚拟环境解释器的完整路径，例如 `/path/SparkTutor-CN/.venv/bin/python` 或 `D:\project\SparkTutor-CN\.venv\Scripts\python.exe`。开发模式可打开 `sparktutor-vscode` 文件夹，选择 `Run Extension` 后按 F5。若新窗口立即关闭，选择“SparkTutor：诊断启动（禁用其他扩展）”重试，见 [启动排查](docs/coach-acceptance.md#6-f5-打开的开发窗口立即关闭)。
 
 只阅读、做选择题和语法检查时，可以安装 `pip install -e .` 而不装 Spark；这种环境不能通过需要执行的综合题。终端界面另需 `pip install -e '.[tui]'`。
 

@@ -57,3 +57,13 @@
 重测时结束旧扩展调试窗口，按 F5 启动更新后的扩展。打开同一道 M&M 练习，保留测试代码，提交一次并观察实时输出；若完成断言失败，再刷新教练请求概念提示。若再次超时，保留本次启动到超时的输出用于定位；教练显示环境提醒仍符合当前证据。模型校验若再失败，记录页面的固定错误码，例如 `COACH_RESPONSE_FORMAT`、`COACH_RESPONSE_REFERENCES` 或 `COACH_RESPONSE_PROBE`，不需要分享密钥或完整模型返回。
 
 修复后的本地回归：Python 全套 460 通过、20 跳过；扩展 103 项通过，类型检查与构建通过。真实模型需要用户重试验证；这些回归和本机作者样例不能证明原有每次模型失败或超时都已消除。
+
+## 6. F5 打开的开发窗口立即关闭
+
+如果新窗口出现后马上关闭，先回到最初用于开发的 VS Code 窗口，打开 `sparktutor-vscode` 文件夹，按 `Ctrl+Shift+D`，在顶部启动配置中选择 **SparkTutor：诊断启动（禁用其他扩展）**，再按 F5。该配置使用当前 VS Code，新开窗口并暂时禁用其他已安装扩展，启用详细日志和调试控制台；不会清空用户目录、修改模型配置或删除学习记录。禁用其他扩展的方式参考 [VS Code 官方调试说明](https://code.visualstudio.com/api/working-with-extensions/testing-extension#disabling-other-extensions-while-debugging)。
+
+正常使用可选择 **Run Extension**；**Run Extension (no debug)** 保留为可选模式。VS Code 可能记住上次选择，因此更新文件后仍需在下拉框明确切换一次，而不是直接反复按 F5。
+
+若诊断窗口仍立即关闭，请在原窗口查看“调试控制台”中的退出信息，并结合该次 VS Code 的 `renderer.log`、`exthost.log` 判断是否进入 SparkTutor 激活阶段。分享必要错误行即可，不要上传完整设置、凭据或身份验证日志。
+
+本次只读检查发现，构建和类型检查通过；19:42 与 19:43 两个新窗口的日志在 SparkTutor 激活记录之前结束，尚不足以确认具体关闭原因。诊断启动是隔离与采集证据的措施，不代表已经证明或修复了原生窗口闪退。
