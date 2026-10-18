@@ -4,7 +4,9 @@ import pytest
 from pathlib import Path
 
 from sparktutor.engine.evaluator import Evaluator, EvalResult, FeedbackItem
-from sparktutor.engine.lesson_loader import load_lesson
+from sparktutor.config.settings import Settings
+from sparktutor.engine.executor import ExecMode, ExecResult
+from sparktutor.engine.lesson_loader import Step, load_lesson
 from sparktutor.engine.normalizer import choices_match, code_match, normalize_code
 
 
@@ -134,3 +136,41 @@ def test_all_course_choices_reject_every_wrong_option():
                     f"{lesson_path}: {option!r} compared with {step.correct_answer!r}"
                 )
     assert questions_checked > 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("execution,kind,eligible,message", [
+    (ExecResult(ExecMode.LOCAL, 124, "", "Execution timed out after 120s"),
+     "infrastructure", False, "执行超时，课程测试尚未完成"),
+    (ExecResult(ExecMode.LOCAL, 124, "AssertionError", "Execution timed out after 120s"),
+     "infrastructure", False, "无法判断作答是否正确"),
+    (ExecResult(ExecMode.LOCAL, 1, "ModuleNotFoundError: No module named pyspark", ""),
+     "infrastructure", False, "请先检查 Python、Java、PySpark 与运行环境"),
+    (ExecResult(ExecMode.LOCAL, 137, "", "process terminated"),
+     "infrastructure", False, "执行环境发生故障"),
+    (ExecResult(ExecMode.LOCAL, 1, "", "AssertionError: Expected quantity sum"),
+     "learner", True, "请根据反馈修正后重新提交"),
+    (ExecResult(ExecMode.LOCAL, 1, "", "Unknown launcher failure"),
+     "unverified", False, "现有信息不足以判断作答是否正确"),
+    (ExecResult(ExecMode.DRY_RUN, 0, "Syntax OK", ""),
+     "dry_run", False, "尚未验证结果"),
+    (ExecResult(ExecMode.LOCAL, 0, "partial output", ""),
+     "unverified", False, "课程测试未完整执行"),
+    (None, "unverified", False, "尚未运行课程测试"),
+])
+async def test_required_execution_feedback_preserves_assessment_attribution(
+    execution, kind, eligible, message,
+):
+    evaluator = Evaluator(settings=Settings())
+    step = Step(cls="script", requires_execution=True, correct_answer="x = 42")
+    result, needs_ai, review = await evaluator.evaluate_local("x = 42", step, exec_result=execution)
+
+    assert result is not None and not result.passed
+    assert not needs_ai and review == {}
+    assert result.assessment_source == "course_tests"
+    assert result.assessment_eligible is eligible
+    assert result.failure_kind == kind
+    assert message in result.feedback[0].message
+    assert result.feedback[0].suggestion == (execution.stderr if execution and execution.stderr else None)
+    if kind != "learner":
+        assert "修正" not in result.feedback[0].message

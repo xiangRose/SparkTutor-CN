@@ -364,16 +364,23 @@ Rules:
         # answer. Dry-run parses syntax only and cannot certify Spark behavior.
         if step.requires_execution:
             reason = ""
+            failure_kind = execution_failure_kind(exec_result)
             if exec_result is None:
                 reason = "尚未运行课程测试，请重新提交。"
             elif exec_result.mode.value == "dry_run":
                 reason = "当前为仅语法检查模式，尚未验证结果。请配置本地 Spark 或可用的 Spark 执行环境后重新提交。"
             elif not exec_result.success:
-                reason = "代码运行或课程测试失败，请根据反馈修正后重新提交。"
+                if exec_result.exit_code == 124:
+                    reason = "执行超时，课程测试尚未完成，无法判断作答是否正确。请先检查 Spark 启动、运行资源与执行环境，再重新提交。"
+                elif failure_kind == "infrastructure":
+                    reason = "执行环境发生故障，课程测试未能完成，无法判断作答是否正确。请先检查 Python、Java、PySpark 与运行环境，再重新提交。"
+                elif failure_kind == "learner":
+                    reason = "代码运行或课程测试失败，请根据反馈修正后重新提交。"
+                else:
+                    reason = "执行未成功，现有信息不足以判断作答是否正确。请先查看输出定位原因，再重新提交。"
             elif step.cls == "script" and not exec_result.validation_passed:
                 reason = "程序已退出，但课程测试未完整执行，不能判定通过。"
             if reason:
-                failure_kind = execution_failure_kind(exec_result)
                 return EvalResult(passed=False, assessment_source="course_tests",
                                   assessment_eligible=failure_kind == "learner",
                                   failure_kind=failure_kind or "unverified", feedback=[FeedbackItem(

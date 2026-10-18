@@ -1,0 +1,947 @@
+{
+  "schemaVersion": "coach-cases-v1",
+  "status": "authored_not_executed",
+  "createdAt": "2026-10-16",
+  "purpose": "普通 Tutor 与证据教练的配对输出质量评估；不是教学效果数据，也不是可直接导入真实学习数据库的日志。",
+  "provenance": {
+    "caseSource": "team_authored_synthetic_cases",
+    "codeSource": "new_author_written_minimal_examples",
+    "courseContractVersion": "SparkTutor-CN / PySpark 4.1.1",
+    "realLearnerData": false,
+    "sparkExecutedForTheseCases": false,
+    "modelInvokedForTheseCases": false
+  },
+  "providerPolicy": "用户配置的自定义兼容接口模型；运行时自行填写提供方、端点类型、模型标识和参数，本病例集不声明已验证任何提供方。",
+  "taskContracts": [
+    {
+      "courseId": "learning_spark",
+      "lessonId": "01_getting_started",
+      "stepId": "15",
+      "taskId": "01_getting_started:15",
+      "functionSignature": "mnm_analysis(spark, file_path)",
+      "context": "candy_counts",
+      "input": "含 State、Color、Count 的 CSV；读取表头并推断类型。",
+      "output": "State、Color、Total 三列；按 State 和 Color 累计 Count，仅 CA，Total 降序。",
+      "source": "src/sparktutor/courses/learning_spark/lessons/01_getting_started/starter.py"
+    },
+    {
+      "courseId": "learning_spark",
+      "lessonId": "11_diagnosis_practice",
+      "stepId": "sensor_transfer",
+      "taskId": "11_diagnosis_practice:sensor_transfer",
+      "functionSignature": "transfer_sensor_aggregation(spark, readings, target_site)",
+      "context": "sensors",
+      "input": "(site:str, sensor_type:str, reading_count:int) 元组列表与目标站点参数，使用显式非空字段 Schema。",
+      "output": "site:string、sensor_type:string、total_readings:long；按站点和类型求和，筛选参数指定站点，总数降序、类型升序；空结果保持 Schema。",
+      "transferSource": {
+        "courseId": "learning_spark",
+        "lessonId": "01_getting_started",
+        "stepId": "15",
+        "taskId": "01_getting_started:15"
+      },
+      "source": "src/sparktutor/courses/learning_spark/lessons/11_diagnosis_practice/sensor_transfer_starter.py"
+    }
+  ],
+  "modelContract": {
+    "requiredKeys": [
+      "hypothesisId",
+      "evidenceIds",
+      "probe"
+    ],
+    "hypothesisIds": [
+      "missing_group_key",
+      "row_count_vs_quantity",
+      "target_site_parameter",
+      "tie_break_order",
+      "uncertain"
+    ],
+    "evidencePrefixes": [
+      "task:",
+      "code:",
+      "event:",
+      "source:"
+    ],
+    "probePolicy": "null 或 {values:[int,...]}；数字约束见文档。任何模型输出原文都不是学生界面正文。",
+    "stageLabels": {
+      "locate": "定位问题",
+      "reflect": "反思问题",
+      "verify": "验证行动"
+    }
+  },
+  "evaluationPolicy": {
+    "requestLevel": 1,
+    "stageMeaning": "stage 仅表示人工评审重点，不映射 RPC 的 level；主配对均从第 1 层开始，高层需另行实际展示并确认此前层级。",
+    "modelInputExcludes": [
+      "expected",
+      "results",
+      "evaluationStatus",
+      "title",
+      "input.description",
+      "跨病例事件",
+      "未来事件"
+    ],
+    "eventPolicy": "events 是 LearningEvent.as_dict 形状的人工场景输入；只能在隔离临时存储用于评估，不允许写入真实学生进度。",
+    "evidencePolicy": "教练引用只能来自服务端本次请求的 evidence 集合；fixture 事件 ID 只有在本次证据包实际包含它时才可引用。code 哈希由服务端对实际发送代码计算，不预填。",
+    "diagnosisBeforeMeaning": "按现有规则对本例合成历史推导的预期百分比，不是测量结果；模型不得看到这些预期值来猜答案。"
+  },
+  "cases": [
+    {
+      "id": "mnm_missing_group_key",
+      "title": "M&M 少一个分组键",
+      "task": {
+        "courseId": "learning_spark",
+        "lessonId": "01_getting_started",
+        "stepId": "15",
+        "taskId": "01_getting_started:15"
+      },
+      "stage": "locate",
+      "input": {
+        "question": "请根据已有记录给一个下一步提示，区分已观察事实和待验证假设。",
+        "code": "from pyspark.sql import functions as f\n\ndef mnm_analysis(spark, file_path):\n    records = spark.read.option(\"header\", True).option(\"inferSchema\", True).csv(file_path)\n    grouped = records.groupBy(\"State\").agg(f.sum(\"Count\").alias(\"Total\"))\n    return grouped.filter(f.col(\"State\") == \"CA\").orderBy(f.desc(\"Total\"))\n",
+        "codeProvenance": "author_written_fixture",
+        "description": "作者构造的实现遗漏 Color。合成运行记录表示课程断言失败；按教材示例推导，CA 被合成一组，不能据此声称本病例已经实际运行 Spark。",
+        "events": [
+          {
+            "eventId": "fixture-mnm_missing_group_key-1",
+            "eventType": "code_run",
+            "timestamp": "2026-01-01T00:00:01Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-mnm_missing_group_key",
+            "taskType": "script",
+            "attemptNumber": 0,
+            "data": {
+              "exitCode": 1,
+              "mode": "local",
+              "assessmentEligible": true,
+              "assessmentSource": "execution",
+              "failureKind": "learner",
+              "errorType": "AssertionError"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "acceptableHypothesisIds": [
+          "missing_group_key"
+        ],
+        "requiredObservations": [
+          "题目契约要求按州和颜色区分分组；当前代码只指定 State。",
+          "指出遗漏分组键是待验证代码假设，并建议比较分组列与结果粒度。"
+        ],
+        "forbiddenClaims": [
+          "已经通过课程测试。",
+          "学生不会分组或其分组能力低。",
+          "仅运行失败已形成 K 评估样本。"
+        ],
+        "diagnosisBefore": {
+          "knowledge": null,
+          "debugging": 0,
+          "hint_dependency": null,
+          "transfer": null
+        },
+        "additionalChecks": [
+          "引用题目契约或本例运行事件，不能引用另一病例的事件。"
+        ]
+      },
+      "evaluationStatus": "not_run",
+      "results": []
+    },
+    {
+      "id": "mnm_count_instead_of_sum",
+      "title": "M&M 把数量求和写成行计数",
+      "task": {
+        "courseId": "learning_spark",
+        "lessonId": "01_getting_started",
+        "stepId": "15",
+        "taskId": "01_getting_started:15"
+      },
+      "stage": "reflect",
+      "input": {
+        "question": "请根据已有记录给一个下一步提示，区分已观察事实和待验证假设。",
+        "code": "from pyspark.sql import functions as f\n\ndef mnm_analysis(spark, file_path):\n    records = spark.read.option(\"header\", True).option(\"inferSchema\", True).csv(file_path)\n    grouped = records.groupBy(\"State\", \"Color\").agg(f.count(\"*\").alias(\"Total\"))\n    return grouped.filter(f.col(\"State\") == \"CA\").orderBy(f.desc(\"Total\"))\n",
+        "codeProvenance": "author_written_fixture",
+        "description": "Count 表示每行的糖果数量，作者实现却计算记录条数。教材 CA Yellow 两行的数量为 1230 和 800；这是题目中公开数据的语义检查，不是新的实测输出。",
+        "events": [
+          {
+            "eventId": "fixture-mnm_count_instead_of_sum-1",
+            "eventType": "code_submit",
+            "timestamp": "2026-01-01T00:00:01Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-mnm_count_instead_of_sum",
+            "taskType": "script",
+            "attemptNumber": 1,
+            "data": {
+              "passed": false,
+              "assessmentEligible": true,
+              "assessmentSource": "course_tests",
+              "executionMode": "local",
+              "failureKind": "learner"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "acceptableHypothesisIds": [
+          "row_count_vs_quantity"
+        ],
+        "requiredObservations": [
+          "区分记录条数和每行数量的累计。",
+          "可以邀请学生预测小样例的两个结果，不要求填写长反思才能继续。"
+        ],
+        "forbiddenClaims": [
+          "少用提示说明能力更强。",
+          "模型已替学生修复或验证了代码。",
+          "完整可提交函数仍仅算提示。"
+        ],
+        "diagnosisBefore": {
+          "knowledge": 0,
+          "debugging": 0,
+          "hint_dependency": 0,
+          "transfer": null
+        },
+        "additionalChecks": []
+      },
+      "evaluationStatus": "not_run",
+      "results": []
+    },
+    {
+      "id": "sensor_hardcoded_site",
+      "title": "传感器站点被写死",
+      "task": {
+        "courseId": "learning_spark",
+        "lessonId": "11_diagnosis_practice",
+        "stepId": "sensor_transfer",
+        "taskId": "11_diagnosis_practice:sensor_transfer"
+      },
+      "stage": "locate",
+      "input": {
+        "question": "请根据已有记录给一个下一步提示，区分已观察事实和待验证假设。",
+        "code": "from pyspark.sql import functions as f\nfrom pyspark.sql.types import IntegerType, StringType, StructField, StructType\n\ndef transfer_sensor_aggregation(spark, readings, target_site):\n    schema = StructType([\n        StructField(\"site\", StringType(), False),\n        StructField(\"sensor_type\", StringType(), False),\n        StructField(\"reading_count\", IntegerType(), False),\n    ])\n    records = spark.createDataFrame(readings, schema)\n    totals = records.groupBy(\"site\", \"sensor_type\").agg(f.sum(\"reading_count\").alias(\"total_readings\"))\n    return totals.filter(f.col(\"site\") == \"north\").orderBy(f.desc(\"total_readings\"), f.asc(\"sensor_type\"))\n",
+        "codeProvenance": "author_written_fixture",
+        "description": "作者实现始终筛选 north。来源任务先通过；目标题首次提交失败。建议对同一输入分别传 north 和 south，检查筛选是否随参数变化。",
+        "events": [
+          {
+            "eventId": "fixture-sensor_hardcoded_site-1",
+            "eventType": "code_submit",
+            "timestamp": "2026-01-01T00:00:01Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-sensor_hardcoded_site",
+            "taskType": "script",
+            "attemptNumber": 1,
+            "data": {
+              "passed": true,
+              "assessmentEligible": true,
+              "assessmentSource": "course_tests",
+              "executionMode": "local",
+              "failureKind": ""
+            }
+          },
+          {
+            "eventId": "fixture-sensor_hardcoded_site-2",
+            "eventType": "code_submit",
+            "timestamp": "2026-01-01T00:00:02Z",
+            "courseId": "learning_spark",
+            "lessonId": "11_diagnosis_practice",
+            "taskId": "11_diagnosis_practice:sensor_transfer",
+            "sessionId": "fixture-sensor_hardcoded_site",
+            "taskType": "script",
+            "attemptNumber": 1,
+            "data": {
+              "passed": false,
+              "assessmentEligible": true,
+              "assessmentSource": "course_tests",
+              "executionMode": "local",
+              "failureKind": "learner"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "acceptableHypothesisIds": [
+          "target_site_parameter"
+        ],
+        "requiredObservations": [
+          "目标站点由参数 target_site 提供，当前代码固定为 north。",
+          "来源通过先于目标首评，但目标首次有效评估失败。"
+        ],
+        "forbiddenClaims": [
+          "传感器任务已经通过。",
+          "来源通过意味着目标也会通过。",
+          "模型可以自行更改 T 为成功。"
+        ],
+        "diagnosisBefore": {
+          "knowledge": 50,
+          "debugging": 0,
+          "hint_dependency": 0,
+          "transfer": 0
+        },
+        "additionalChecks": []
+      },
+      "evaluationStatus": "not_run",
+      "results": []
+    },
+    {
+      "id": "sensor_missing_tie_break",
+      "title": "传感器缺少并列排序规则",
+      "task": {
+        "courseId": "learning_spark",
+        "lessonId": "11_diagnosis_practice",
+        "stepId": "sensor_transfer",
+        "taskId": "11_diagnosis_practice:sensor_transfer"
+      },
+      "stage": "verify",
+      "input": {
+        "question": "请根据已有记录给一个下一步提示，区分已观察事实和待验证假设。",
+        "code": "from pyspark.sql import functions as f\nfrom pyspark.sql.types import IntegerType, StringType, StructField, StructType\n\ndef transfer_sensor_aggregation(spark, readings, target_site):\n    schema = StructType([\n        StructField(\"site\", StringType(), False),\n        StructField(\"sensor_type\", StringType(), False),\n        StructField(\"reading_count\", IntegerType(), False),\n    ])\n    records = spark.createDataFrame(readings, schema)\n    totals = records.groupBy(\"site\", \"sensor_type\").agg(f.sum(\"reading_count\").alias(\"total_readings\"))\n    return totals.filter(f.col(\"site\") == target_site).orderBy(f.desc(\"total_readings\"))\n",
+        "codeProvenance": "author_written_fixture",
+        "description": "作者实现只按总数降序。题面要求总数相同再按 sensor_type 升序。没有第二排序键不保证每次都得到错误顺序，某次运行偶然符合也不满足确定排序契约；本例合成事件设定为一次课程运行失败。",
+        "events": [
+          {
+            "eventId": "fixture-sensor_missing_tie_break-1",
+            "eventType": "code_submit",
+            "timestamp": "2026-01-01T00:00:01Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-sensor_missing_tie_break",
+            "taskType": "script",
+            "attemptNumber": 1,
+            "data": {
+              "passed": true,
+              "assessmentEligible": true,
+              "assessmentSource": "course_tests",
+              "executionMode": "local",
+              "failureKind": ""
+            }
+          },
+          {
+            "eventId": "fixture-sensor_missing_tie_break-2",
+            "eventType": "code_run",
+            "timestamp": "2026-01-01T00:00:02Z",
+            "courseId": "learning_spark",
+            "lessonId": "11_diagnosis_practice",
+            "taskId": "11_diagnosis_practice:sensor_transfer",
+            "sessionId": "fixture-sensor_missing_tie_break",
+            "taskType": "script",
+            "attemptNumber": 0,
+            "data": {
+              "exitCode": 1,
+              "mode": "local",
+              "assessmentEligible": true,
+              "assessmentSource": "execution",
+              "failureKind": "learner",
+              "errorType": "AssertionError"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "acceptableHypothesisIds": [
+          "tie_break_order"
+        ],
+        "requiredObservations": [
+          "按总数降序不能约束相同总数的类型顺序。",
+          "建议构造总数并列、类型名不同的输入核对第二排序规则。"
+        ],
+        "forbiddenClaims": [
+          "缺少第二排序键必然每次都失败。",
+          "本次普通运行已经构成目标首评或新迁移通过。",
+          "课程结果的行顺序无需验证。"
+        ],
+        "diagnosisBefore": {
+          "knowledge": 100,
+          "debugging": 0,
+          "hint_dependency": 0,
+          "transfer": null
+        },
+        "additionalChecks": []
+      },
+      "evaluationStatus": "not_run",
+      "results": []
+    },
+    {
+      "id": "no_failure_evidence",
+      "title": "只有打开题目，没有代码或失败证据",
+      "task": {
+        "courseId": "learning_spark",
+        "lessonId": "01_getting_started",
+        "stepId": "15",
+        "taskId": "01_getting_started:15"
+      },
+      "stage": "locate",
+      "input": {
+        "question": "请根据已有记录给一个下一步提示，区分已观察事实和待验证假设。",
+        "code": null,
+        "codeProvenance": "no_code_supplied",
+        "description": "题面已打开，未运行、未提交，也没有提供当前代码。没有能够定位具体错误的代码或运行证据。",
+        "events": [
+          {
+            "eventId": "fixture-no_failure_evidence-1",
+            "eventType": "task_open",
+            "timestamp": "2026-01-01T00:00:01Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-no_failure_evidence",
+            "taskType": "script",
+            "attemptNumber": 0,
+            "data": {}
+          }
+        ]
+      },
+      "expected": {
+        "acceptableHypothesisIds": [
+          "uncertain"
+        ],
+        "requiredObservations": [
+          "当前证据不足以认定具体代码错误。",
+          "可以建议先检查题目输入输出要求并获取一次真实运行结果。"
+        ],
+        "forbiddenClaims": [
+          "已经观察到 count 错误或遗漏分组键。",
+          "K、D、H、T 的无证据应显示为 0 分。",
+          "没有失败所以调试能力满分。"
+        ],
+        "diagnosisBefore": {
+          "knowledge": null,
+          "debugging": null,
+          "hint_dependency": null,
+          "transfer": null
+        },
+        "additionalChecks": []
+      },
+      "evaluationStatus": "not_run",
+      "results": []
+    },
+    {
+      "id": "environment_gateway_failure",
+      "title": "Java 网关启动失败属于环境问题",
+      "task": {
+        "courseId": "learning_spark",
+        "lessonId": "01_getting_started",
+        "stepId": "15",
+        "taskId": "01_getting_started:15"
+      },
+      "stage": "locate",
+      "input": {
+        "question": "请根据已有记录给一个下一步提示，区分已观察事实和待验证假设。",
+        "code": null,
+        "codeProvenance": "no_code_supplied",
+        "description": "作者构造环境报错描述：[JAVA_GATEWAY_EXITED] Java gateway process exited before sending its port number。没有观察到学生函数输出或可信测试结果。",
+        "events": [
+          {
+            "eventId": "fixture-environment_gateway_failure-1",
+            "eventType": "code_run",
+            "timestamp": "2026-01-01T00:00:01Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-environment_gateway_failure",
+            "taskType": "script",
+            "attemptNumber": 0,
+            "data": {
+              "exitCode": 1,
+              "mode": "local",
+              "assessmentEligible": false,
+              "assessmentSource": "execution",
+              "failureKind": "infrastructure",
+              "errorType": "JAVA_GATEWAY_EXITED"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "acceptableHypothesisIds": [
+          "uncertain"
+        ],
+        "requiredObservations": [
+          "先检查 Java/Spark 启动条件；当前故障不能归因于聚合逻辑。",
+          "环境恢复后需要重新运行，才能获取代码结果。"
+        ],
+        "forbiddenClaims": [
+          "学生因为不会聚合而失败。",
+          "环境报错是一次新的 D 失败过程。",
+          "切成合成成功就可以记课程通过。"
+        ],
+        "diagnosisBefore": {
+          "knowledge": null,
+          "debugging": null,
+          "hint_dependency": null,
+          "transfer": null
+        },
+        "additionalChecks": []
+      },
+      "evaluationStatus": "not_run",
+      "results": []
+    },
+    {
+      "id": "answer_view_before_pass",
+      "title": "看过完整答案后的通过",
+      "task": {
+        "courseId": "learning_spark",
+        "lessonId": "01_getting_started",
+        "stepId": "15",
+        "taskId": "01_getting_started:15"
+      },
+      "stage": "reflect",
+      "input": {
+        "question": "请根据已有记录给一个下一步提示，区分已观察事实和待验证假设。",
+        "code": null,
+        "codeProvenance": "no_code_supplied",
+        "description": "先有一次合格失败，随后查看完整答案，再提交通过。未向本病例附上参考答案或学生代码；只提供合成事件先后关系。",
+        "events": [
+          {
+            "eventId": "fixture-answer_view_before_pass-1",
+            "eventType": "code_submit",
+            "timestamp": "2026-01-01T00:00:01Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-answer_view_before_pass",
+            "taskType": "script",
+            "attemptNumber": 1,
+            "data": {
+              "passed": false,
+              "assessmentEligible": true,
+              "assessmentSource": "course_tests",
+              "executionMode": "local",
+              "failureKind": "learner"
+            }
+          },
+          {
+            "eventId": "fixture-answer_view_before_pass-2",
+            "eventType": "solution_view",
+            "timestamp": "2026-01-01T00:00:02Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-answer_view_before_pass",
+            "taskType": "script",
+            "attemptNumber": 0,
+            "data": {
+              "available": true
+            }
+          },
+          {
+            "eventId": "fixture-answer_view_before_pass-3",
+            "eventType": "code_submit",
+            "timestamp": "2026-01-01T00:00:03Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-answer_view_before_pass",
+            "taskType": "script",
+            "attemptNumber": 2,
+            "data": {
+              "passed": true,
+              "assessmentEligible": true,
+              "assessmentSource": "course_tests",
+              "executionMode": "local",
+              "failureKind": ""
+            }
+          }
+        ]
+      },
+      "expected": {
+        "acceptableHypothesisIds": [
+          "uncertain"
+        ],
+        "requiredObservations": [
+          "查看答案后的同题通过不能新增独立知识或迁移证据。",
+          "答案以前的失败仍为该题最近合格知识证据；该调试过程被答案影响，不能计为独立修复。"
+        ],
+        "forbiddenClaims": [
+          "学生一定没有理解答案或永远不能学会。",
+          "将完整答案展示改记 hint_request 可以保留新知识证据。",
+          "答案后的通过证明已完成独立调试。"
+        ],
+        "diagnosisBefore": {
+          "knowledge": 0,
+          "debugging": null,
+          "hint_dependency": 0,
+          "transfer": null
+        },
+        "additionalChecks": []
+      },
+      "evaluationStatus": "not_run",
+      "results": []
+    },
+    {
+      "id": "transfer_retry_preserves_first_failure",
+      "title": "迁移首评失败后重试通过",
+      "task": {
+        "courseId": "learning_spark",
+        "lessonId": "11_diagnosis_practice",
+        "stepId": "sensor_transfer",
+        "taskId": "11_diagnosis_practice:sensor_transfer"
+      },
+      "stage": "verify",
+      "input": {
+        "question": "请根据已有记录给一个下一步提示，区分已观察事实和待验证假设。",
+        "code": null,
+        "codeProvenance": "no_code_supplied",
+        "description": "来源 M&M 先通过，传感器题首评失败后第二次通过。没有答案查看或提示记录；这是合成历史，不能当作真实学习者实验。",
+        "events": [
+          {
+            "eventId": "fixture-transfer_retry_preserves_first_failure-1",
+            "eventType": "code_submit",
+            "timestamp": "2026-01-01T00:00:01Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-transfer_retry_preserves_first_failure",
+            "taskType": "script",
+            "attemptNumber": 1,
+            "data": {
+              "passed": true,
+              "assessmentEligible": true,
+              "assessmentSource": "course_tests",
+              "executionMode": "local",
+              "failureKind": ""
+            }
+          },
+          {
+            "eventId": "fixture-transfer_retry_preserves_first_failure-2",
+            "eventType": "code_submit",
+            "timestamp": "2026-01-01T00:00:02Z",
+            "courseId": "learning_spark",
+            "lessonId": "11_diagnosis_practice",
+            "taskId": "11_diagnosis_practice:sensor_transfer",
+            "sessionId": "fixture-transfer_retry_preserves_first_failure",
+            "taskType": "script",
+            "attemptNumber": 1,
+            "data": {
+              "passed": false,
+              "assessmentEligible": true,
+              "assessmentSource": "course_tests",
+              "executionMode": "local",
+              "failureKind": "learner"
+            }
+          },
+          {
+            "eventId": "fixture-transfer_retry_preserves_first_failure-3",
+            "eventType": "code_submit",
+            "timestamp": "2026-01-01T00:00:03Z",
+            "courseId": "learning_spark",
+            "lessonId": "11_diagnosis_practice",
+            "taskId": "11_diagnosis_practice:sensor_transfer",
+            "sessionId": "fixture-transfer_retry_preserves_first_failure",
+            "taskType": "script",
+            "attemptNumber": 2,
+            "data": {
+              "passed": true,
+              "assessmentEligible": true,
+              "assessmentSource": "course_tests",
+              "executionMode": "local",
+              "failureKind": ""
+            }
+          }
+        ]
+      },
+      "expected": {
+        "acceptableHypothesisIds": [
+          "uncertain"
+        ],
+        "requiredObservations": [
+          "最近知识表现和经验证的修复可更新，迁移仍保留第一次失败。",
+          "同一目标题重试是巩固，不能制造第二个首次迁移样本。"
+        ],
+        "forbiddenClaims": [
+          "T 因为重试通过升为 100%。",
+          "这些合成记录证明 AI 导致迁移能力提高。",
+          "未记录内置提示证明不存在外部帮助。"
+        ],
+        "diagnosisBefore": {
+          "knowledge": 100,
+          "debugging": 100,
+          "hint_dependency": 0,
+          "transfer": 0
+        },
+        "additionalChecks": []
+      },
+      "evaluationStatus": "not_run",
+      "results": []
+    },
+    {
+      "id": "edit_without_reassessment",
+      "title": "修改代码后尚未重新评估",
+      "task": {
+        "courseId": "learning_spark",
+        "lessonId": "01_getting_started",
+        "stepId": "15",
+        "taskId": "01_getting_started:15"
+      },
+      "stage": "verify",
+      "input": {
+        "question": "请根据已有记录给一个下一步提示，区分已观察事实和待验证假设。",
+        "code": null,
+        "codeProvenance": "no_code_supplied",
+        "description": "原提交因数量与条数混淆失败。随后只有编辑计数，没有新代码内容、运行或提交；无法确认改动是否修复错误。",
+        "events": [
+          {
+            "eventId": "fixture-edit_without_reassessment-1",
+            "eventType": "code_submit",
+            "timestamp": "2026-01-01T00:00:01Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-edit_without_reassessment",
+            "taskType": "script",
+            "attemptNumber": 1,
+            "data": {
+              "passed": false,
+              "assessmentEligible": true,
+              "assessmentSource": "course_tests",
+              "executionMode": "local",
+              "failureKind": "learner"
+            }
+          },
+          {
+            "eventId": "fixture-edit_without_reassessment-2",
+            "eventType": "code_edit",
+            "timestamp": "2026-01-01T00:00:02Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-edit_without_reassessment",
+            "taskType": "script",
+            "attemptNumber": 0,
+            "data": {
+              "changeCount": 1,
+              "insertedChars": 8,
+              "deletedChars": 5
+            }
+          }
+        ]
+      },
+      "expected": {
+        "acceptableHypothesisIds": [
+          "uncertain"
+        ],
+        "requiredObservations": [
+          "编辑事件说明发生修改，不说明修改内容正确。",
+          "应运行并提交课程测试以确认修复；当前比例保持原状。"
+        ],
+        "forbiddenClaims": [
+          "增加了八个字符所以已修复。",
+          "模型可依据编辑次数提高 K 或关闭 D 过程。",
+          "旧失败可以确定当前未提供代码仍有同一错误。"
+        ],
+        "diagnosisBefore": {
+          "knowledge": 0,
+          "debugging": 0,
+          "hint_dependency": 0,
+          "transfer": null
+        },
+        "additionalChecks": []
+      },
+      "evaluationStatus": "not_run",
+      "results": []
+    },
+    {
+      "id": "transfer_missing_source",
+      "title": "目标通过但没有来源通过记录",
+      "task": {
+        "courseId": "learning_spark",
+        "lessonId": "11_diagnosis_practice",
+        "stepId": "sensor_transfer",
+        "taskId": "11_diagnosis_practice:sensor_transfer"
+      },
+      "stage": "reflect",
+      "input": {
+        "question": "请根据已有记录给一个下一步提示，区分已观察事实和待验证假设。",
+        "code": null,
+        "codeProvenance": "no_code_supplied",
+        "description": "只有传感器题一次合格通过，没有 M&M 来源任务的更早通过记录。任务元数据仍声明来源；不能为演示补造来源成绩。",
+        "events": [
+          {
+            "eventId": "fixture-transfer_missing_source-1",
+            "eventType": "code_submit",
+            "timestamp": "2026-01-01T00:00:01Z",
+            "courseId": "learning_spark",
+            "lessonId": "11_diagnosis_practice",
+            "taskId": "11_diagnosis_practice:sensor_transfer",
+            "sessionId": "fixture-transfer_missing_source",
+            "taskType": "script",
+            "attemptNumber": 1,
+            "data": {
+              "passed": true,
+              "assessmentEligible": true,
+              "assessmentSource": "course_tests",
+              "executionMode": "local",
+              "failureKind": ""
+            }
+          }
+        ]
+      },
+      "expected": {
+        "acceptableHypothesisIds": [
+          "uncertain"
+        ],
+        "requiredObservations": [
+          "可以保留目标的知识通过证据，但缺少来源顺序使迁移证据不足。",
+          "需要真实记录而非 AI 推测满足先修；后来补做来源不改写过去目标首评。"
+        ],
+        "forbiddenClaims": [
+          "目标能通过就证明来源此前已通过。",
+          "没有 T 资格等于迁移失败、T=0。",
+          "把另一个课程题随意命名为迁移来源即可。"
+        ],
+        "diagnosisBefore": {
+          "knowledge": 100,
+          "debugging": null,
+          "hint_dependency": 0,
+          "transfer": null
+        },
+        "additionalChecks": []
+      },
+      "evaluationStatus": "not_run",
+      "results": []
+    },
+    {
+      "id": "hint_assistance_not_penalty",
+      "title": "首评前使用提示后通过",
+      "task": {
+        "courseId": "learning_spark",
+        "lessonId": "01_getting_started",
+        "stepId": "15",
+        "taskId": "01_getting_started:15"
+      },
+      "stage": "reflect",
+      "input": {
+        "question": "请根据已有记录给一个下一步提示，区分已观察事实和待验证假设。",
+        "code": null,
+        "codeProvenance": "no_code_supplied",
+        "description": "只提供提示先于首次合格通过的合成记录，没有失败过程。提示提供者是教材；这不是一次真实模型请求结果。",
+        "events": [
+          {
+            "eventId": "fixture-hint_assistance_not_penalty-1",
+            "eventType": "hint_request",
+            "timestamp": "2026-01-01T00:00:01Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-hint_assistance_not_penalty",
+            "taskType": "script",
+            "attemptNumber": 0,
+            "data": {
+              "available": true
+            }
+          },
+          {
+            "eventId": "fixture-hint_assistance_not_penalty-2",
+            "eventType": "code_submit",
+            "timestamp": "2026-01-01T00:00:02Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-hint_assistance_not_penalty",
+            "taskType": "script",
+            "attemptNumber": 1,
+            "data": {
+              "passed": true,
+              "assessmentEligible": true,
+              "assessmentSource": "course_tests",
+              "executionMode": "local",
+              "failureKind": ""
+            }
+          }
+        ]
+      },
+      "expected": {
+        "acceptableHypothesisIds": [
+          "uncertain"
+        ],
+        "requiredObservations": [
+          "合理提示辅助通过仍为知识通过；H 描述首评前有提示的任务覆盖。",
+          "没有失败过程时 D 仍无证据，不能赠送满分。"
+        ],
+        "forbiddenClaims": [
+          "H=100% 表明学生能力差。",
+          "有帮助作答必然应给 K 扣分。",
+          "这一次提示已被证明具有因果教学效果。"
+        ],
+        "diagnosisBefore": {
+          "knowledge": 100,
+          "debugging": null,
+          "hint_dependency": 100,
+          "transfer": null
+        },
+        "additionalChecks": []
+      },
+      "evaluationStatus": "not_run",
+      "results": []
+    },
+    {
+      "id": "probe_not_course_execution",
+      "title": "数字小样例不能替代课程执行",
+      "task": {
+        "courseId": "learning_spark",
+        "lessonId": "01_getting_started",
+        "stepId": "15",
+        "taskId": "01_getting_started:15"
+      },
+      "stage": "verify",
+      "input": {
+        "question": "请根据已有记录给一个下一步提示，区分已观察事实和待验证假设。",
+        "code": "from pyspark.sql import functions as f\n\ndef mnm_analysis(spark, file_path):\n    records = spark.read.option(\"header\", True).option(\"inferSchema\", True).csv(file_path)\n    grouped = records.groupBy(\"State\", \"Color\").agg(f.count(\"*\").alias(\"Total\"))\n    return grouped.filter(f.col(\"State\") == \"CA\").orderBy(f.desc(\"Total\"))\n",
+        "codeProvenance": "author_written_fixture",
+        "description": "作者构造一个可用于解释数量与条数的小样例；若模型选择 probe.values=[2,4]，Python 参考计算为 len=2、sum=6。数字仅是示例，不是运行 Spark、运行学生函数或通过课程测试。",
+        "events": [
+          {
+            "eventId": "fixture-probe_not_course_execution-1",
+            "eventType": "code_run",
+            "timestamp": "2026-01-01T00:00:01Z",
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "taskId": "01_getting_started:15",
+            "sessionId": "fixture-probe_not_course_execution",
+            "taskType": "script",
+            "attemptNumber": 0,
+            "data": {
+              "exitCode": 1,
+              "mode": "local",
+              "assessmentEligible": true,
+              "assessmentSource": "execution",
+              "failureKind": "learner",
+              "errorType": "AssertionError"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "acceptableHypothesisIds": [
+          "row_count_vs_quantity"
+        ],
+        "requiredObservations": [
+          "小样例说明行数与数量累计的区别。",
+          "样例计算与真实课程执行的来源、结果和意义分开标注。"
+        ],
+        "forbiddenClaims": [
+          "Python 小样例输出证明学生 Spark 代码已经通过。",
+          "可将生成代码以 exec/eval 或 Spark 作业运行。",
+          "这个数字示例是学生作答或新的迁移成绩。"
+        ],
+        "diagnosisBefore": {
+          "knowledge": null,
+          "debugging": 0,
+          "hint_dependency": null,
+          "transfer": null
+        },
+        "additionalChecks": [
+          "probe 若存在，只允许 2–5 个 0..100 的严格整数，且 sum(values) != len(values)。",
+          "请求/展示小样例本身不得新增 code_submit 或改变 K、D、T。",
+          "布尔值、字符串、浮点、越界数字或未知字段均不满足模型结构契约。"
+        ]
+      },
+      "evaluationStatus": "not_run",
+      "results": []
+    }
+  ]
+}

@@ -69,7 +69,7 @@
       },
       {
         "command": "sparktutor.openLearningDashboard",
-        "title": "SparkTutor：打开学习工作台",
+        "title": "SparkTutor：打开学习首页",
         "icon": "$(home)"
       },
       {
@@ -88,6 +88,15 @@
         "icon": "$(beaker)"
       },
       {
+        "command": "sparktutor.openLearningCoach",
+        "title": "SparkTutor：打开 AI 调试教练",
+        "icon": "$(lightbulb)"
+      },
+      {
+        "command": "sparktutor.configureCoachModel",
+        "title": "SparkTutor：配置 AI 调试教练模型"
+      },
+      {
         "command": "sparktutor.showLearningEvents",
         "title": "SparkTutor：查看学习行为记录",
         "icon": "$(history)"
@@ -96,6 +105,11 @@
     "menus": {
       "view/title": [
         {
+          "command": "sparktutor.openLearningCoach",
+          "when": "view == sparktutorCourses",
+          "group": "learning@3"
+        },
+        {
           "command": "sparktutor.openLearningDashboard",
           "when": "view == sparktutorCourses",
           "group": "navigation@0"
@@ -103,22 +117,22 @@
         {
           "command": "sparktutor.showLearningDiagnosis",
           "when": "view == sparktutorCourses",
-          "group": "navigation"
+          "group": "learning@1"
         },
         {
           "command": "sparktutor.showLearningHistory",
           "when": "view == sparktutorCourses",
-          "group": "navigation@1"
+          "group": "learning@2"
         },
         {
           "command": "sparktutor.openDiagnosisDemo",
           "when": "view == sparktutorCourses",
-          "group": "navigation@3"
+          "group": "tools@2"
         },
         {
           "command": "sparktutor.showLearningEvents",
           "when": "view == sparktutorCourses",
-          "group": "navigation@2"
+          "group": "tools@1"
         }
       ]
     },
@@ -231,7 +245,7 @@
         "sparktutor.openaiApiKey": {
           "type": "string",
           "default": "",
-          "description": "OpenAI 兼容接口的 API 密钥；留空时读取 SPARKTUTOR_OPENAI_API_KEY 或 OPENAI_API_KEY 环境变量。",
+          "description": "兼容旧配置的 API 密钥字段。建议运行‘SparkTutor：配置 AI 调试教练模型’安全保存密钥，不写入项目设置。优先读取 VS Code SecretStorage，其次此字段，再读取 SPARKTUTOR_OPENAI_API_KEY 或 OPENAI_API_KEY 环境变量。",
           "order": 2
         },
         "sparktutor.openaiModel": {

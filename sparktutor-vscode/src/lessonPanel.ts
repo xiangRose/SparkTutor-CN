@@ -19,6 +19,8 @@ export class LessonPanel {
   public onChat?: (question: string) => void;
   public onChoiceSelect?: (choice: string) => void;
   public onDiagnosis?: () => void;
+  public onCoach?: () => void;
+  public onHome?: () => void;
 
   constructor(extensionUri: vscode.Uri) {
     this.extensionUri = extensionUri;
@@ -49,6 +51,9 @@ export class LessonPanel {
 
     this.panel.webview.onDidReceiveMessage((msg) => {
       switch (msg.type) {
+        case "home":
+          this.onHome?.();
+          break;
         case "submit":
           this.onSubmit?.();
           break;
@@ -72,6 +77,9 @@ export class LessonPanel {
           break;
         case "diagnosis":
           this.onDiagnosis?.();
+          break;
+        case "coach":
+          this.onCoach?.();
           break;
       }
     });
@@ -194,6 +202,10 @@ export class LessonPanel {
   <title>SparkTutor</title>
 </head>
 <body>
+  <div class="lesson-topbar">
+    <button class="btn btn-secondary" onclick="send('home')">&larr; 学习首页</button>
+    <span>阅读题目 → 编写答案 → 提交判题 → 查看反馈</span>
+  </div>
   <div class="lesson-header">
     <h2>${escapeHtml(lessonTitle)}</h2>
     <div class="progress-bar">
@@ -224,16 +236,30 @@ export class LessonPanel {
   ${actionButtonsHtml}
 
   <div class="nav-buttons">
-    ${practiceMode ? "" : `<button class="btn btn-secondary" onclick="send('back')">&larr; 上一步</button>`}
-    <button class="btn btn-secondary" onclick="send('hint')">提示</button>
-    <button class="btn btn-secondary" onclick="send('next')">${practiceMode ? "完成练习" : "下一步 &rarr;"}</button>
+    <div class="step-navigation">
+      ${practiceMode ? "" : `<button class="btn btn-secondary" onclick="send('back')">&larr; 上一步</button>`}
+      <button class="btn btn-secondary" onclick="send('next')">${practiceMode ? "完成练习" : "下一步 &rarr;"}</button>
+    </div>
+    <section class="lesson-help" aria-label="学习帮助">
+      <h3>卡住了？选择适合你的帮助</h3>
+      <div class="help-option">
+        <button class="btn btn-secondary" onclick="send('hint')">课程提示</button>
+        <p>想找解题方向：查看本题预设的提示。</p>
+      </div>
+      <div class="help-option">
+        <button class="btn btn-secondary" onclick="send('coach')">AI 调试教练</button>
+        <p>代码不对、却不知道从哪查：结合当前代码和学习记录，逐步给出排查建议。当前试点为 M&amp;M 糖果计数与传感器聚合（迁移练习）两道练习。</p>
+      </div>
+      <p class="help-note">想问概念或题意？使用下方的<strong>导师问答</strong>。教练的建议用于帮助排查，是否通过以<strong>提交判题</strong>的反馈为准。</p>
+    </section>
   </div>
 
   <div id="hint-section" class="hint-section hidden"></div>
 
   <hr>
   <div class="chat-section">
-    <h3>向导师提问</h3>
+    <h3>导师问答</h3>
+    <p class="help-note">对概念、题意或当前步骤有疑问，在这里直接提问。</p>
     <div id="chat-messages" class="chat-messages"></div>
     <div class="chat-input-row">
       <input type="text" id="chat-input" placeholder="就本步骤提问..." onkeydown="if(event.key==='Enter')sendChat()">

@@ -39,13 +39,13 @@ code --install-extension sparktutor-0.3.0.vsix
 
 Windows PowerShell 中可用 `.venv\Scripts\python.exe -m pip install -e ".[spark,dev]"` 安装依赖。打包脚本需要 Bash 和 zip，可使用 WSL 或已准备相应工具的 Git Bash。
 
-将 VS Code 设置 `sparktutor.pythonPath` 指向项目虚拟环境解释器的完整路径，例如 `/path/SparkTutor-CN/.venv/bin/python` 或 `D:\project\SparkTutor-CN\.venv\Scripts\python.exe`。开发模式可打开 `sparktutor-vscode` 文件夹后按 F5。
+将 VS Code 设置 `sparktutor.pythonPath` 指向项目虚拟环境解释器的完整路径，例如 `/path/SparkTutor-CN/.venv/bin/python` 或 `D:\project\SparkTutor-CN\.venv\Scripts\python.exe`。开发模式可打开 `sparktutor-vscode` 文件夹，选择 `Run Extension` 后按 F5。若新窗口立即关闭，选择“SparkTutor：诊断启动（禁用其他扩展）”重试，见 [启动排查](docs/coach-acceptance.md#6-f5-打开的开发窗口立即关闭)。
 
 只阅读、做选择题和语法检查时，可以安装 `pip install -e .` 而不装 Spark；这种环境不能通过需要执行的综合题。终端界面另需 `pip install -e '.[tui]'`。
 
 ## 使用与判题
 
-1. 在 SparkTutor 侧边栏选择课程、课节和难度。
+1. 点击 SparkTutor 侧边栏顶部的“学习首页”，选择“从这一课开始”或“继续学习”；也可展开目录选择课节和难度。首次进入会打开首页，明确选择恢复课程时优先进入课程。
 2. 阅读题面。短代码题保存在当前课节的练习文件中，综合练习打开独立文件。
 3. **运行代码**：查看程序输出或错误；dry-run 只检查 Python 语法。
 4. **提交判题**：选择题按选项内容判定；短代码题先做本地检查，必要时交由 AI 评审。
@@ -57,6 +57,14 @@ Windows PowerShell 中可用 `.venv\Scripts\python.exe -m pip install -e ".[spar
 选择题稳定洗牌：不同题目答案位置不同，返回同一题时顺序保持稳定。中文答案和 API 符号不会在匹配时被删除。
 
 快捷键：`Ctrl+Shift+R` 运行、`Ctrl+Shift+S` 提交、`Ctrl+Shift+N` 下一步、`Ctrl+Shift+B` 上一步、`Ctrl+Shift+H` 提示。
+
+不确定该用哪个功能时，可以从学习首页查看用途说明：
+
+- **课程提示**：查看当前题目预设的提示；**导师问答**：自由询问概念和题意。
+- **AI 调试教练**：写代码卡住时，结合当前代码和已有运行记录，依次提供概念提问、检查方法和局部示例。目前支持 M&M 糖果计数与传感器聚合两题，需要先配置模型；不会自动改代码，是否通过仍由提交判题确认。
+- **学习画像与推荐**：从已有学习记录生成四维指标、中文诊断和推荐练习；**学习历史与复盘**：回看每道题的运行、提交和求助过程。
+
+首页优先展示学习流程与继续学习，课节目录、四维计算依据和演示工具按需展开。课程页和教练页均可返回学习首页。命令入口为“SparkTutor：打开学习首页”；原命令 ID 保持兼容。
 
 ## AI 配置
 
@@ -71,6 +79,8 @@ Windows PowerShell 中可用 `.venv\Scripts\python.exe -m pip install -e ".[spar
 使用用户级设置或环境变量配置密钥，不要写入仓库。运行“SparkTutor：检查 AI 连接”确认可用性。自动模式依次尝试已配置的 Anthropic、兼容接口、Copilot，均不可用时仅使用本地检查。
 
 AI 使用课程、代码及固定的 Spark 知识提示，输出简体中文；没有自动检索官方文档或训练专有模型。学习诊断通过下面的本地规则计算，无需 AI 密钥。难度仍由学习者选择，不会被诊断结果自动修改。
+
+新增的 AI 调试教练使用独立的自定义兼容接口入口，运行“SparkTutor：配置 AI 调试教练模型”后填写地址、模型名称并保存密钥。教练不会自动切换至原有模型；原聊天与评审路由保持独立。配置与验收见 [AI 调试教练说明](docs/coach-acceptance.md)。
 
 ## 学习画像、诊断与推荐（Issue #5）
 
@@ -87,9 +97,17 @@ AI 使用课程、代码及固定的 Spark 知识提示，输出简体中文；�
 
 设计参考了本地论文资料中的知识追踪、调试、求助和迁移研究，移除了旧原型的任意加权总分。**这些比例是有文献论证的工程操作定义，并非论文验证过的标准化能力量表，也未宣称训练了 DKT 模型。** 逐篇引用、公式、排除规则和后续效度验证方案见 [学习诊断设计说明](docs/learning-diagnosis-model.md)。
 
-## 学习工作台（Issue #6）
+## 学习证据驱动的 AI 调试教练
 
-点击课程侧栏的主页图标，或运行“SparkTutor：打开学习工作台”，可以在一页查看继续学习、全部课程与逐课进度、四维诊断、知识点证据和推荐练习。
+运行“SparkTutor：打开 AI 调试教练”，可在 M&M 综合题和传感器迁移题中，将当前代码、四维指标与可追溯历史交给自定义模型分析。模型选择待验证错误假设和证据，系统核验引用后展示作者维护的概念追问、检查方法和局部示例，逐级提供帮助；没有证据时保留不确定性。
+
+模型还可提供小规模数字样例，系统用固定 Python 参考模板核验“记录条数与数量总和”的区别。它不是 Spark 或学生代码测试，不产生课程通过或新的迁移样本。提示真正展示后才记录一次求助，失败和过期回复不记为已用帮助。教练不能改分、放行题目或绕过答案查看规则。
+
+当前是两道题、有限假设目录的可验收实现：AI 负责假设/证据选择和样例数字生成，中文提示正文由作者审核；没有训练新的模型，也尚未证明优于普通 AI Tutor。配置及手动操作见 [AI 教练验收](docs/coach-acceptance.md)，病例与后续配对测试见 [评估说明](docs/coach-evaluation.md)。
+
+## 学习首页（Issue #6）
+
+点击侧栏顶部的“学习首页”，或运行“SparkTutor：打开学习首页”，可以在一页找到继续学习、全部课程与逐课进度、四维诊断、知识点证据和推荐练习。首页先展示操作流程与工具用途；课节目录和详细画像按需展开。
 
 继续学习优先打开最近更新的有效未完成课节，恢复保存的难度、题目位置和练习代码；没有历史时从首课开始。课节状态逐课读取，跳课不会把前面的课节误标为完成。回看保留已完成记录，主动重置该课后重新计进度；完成记录不代表每个难度都完成。课程完成率仅描述已完成课节的比例，不代表知识掌握度。
 
@@ -140,7 +158,7 @@ AI 使用课程、代码及固定的 Spark 知识提示，输出简体中文；�
 
 运行“SparkTutor：查看学习行为记录”，可查看最近 200 条学习事件，包括运行、提交、提示、答案查看、代码编辑和正常会话结束。编辑记录按短时间输入聚合，只保存修改次数、增删字符数等元数据，并绑定当前题目；这些过程记录本身不增加四维分数。界面自动准备起始代码、其他文件和参考答案文件的编辑不算学生作答。
 
-Tracker 的操作步骤见 [第一阶段验收说明](docs/tracker-acceptance.md)，学习工作台见 [第二阶段验收说明](docs/dashboard-acceptance.md)，学习历史与复盘见 [第三阶段验收说明](docs/history-acceptance.md)，诊断演示见 [第四阶段验收说明](docs/demo-acceptance.md)。各阶段分别验收，后续模块等待用户指令。
+Tracker 的操作步骤见 [第一阶段验收说明](docs/tracker-acceptance.md)，学习工作台见 [第二阶段验收说明](docs/dashboard-acceptance.md)，学习历史与复盘见 [第三阶段验收说明](docs/history-acceptance.md)，诊断演示见 [第四阶段验收说明](docs/demo-acceptance.md)，新增 AI 调试教练见 [本阶段验收说明](docs/coach-acceptance.md)。各阶段分别验收，后续模块等待用户指令。
 
 ```bash
 pip install -e '.[dev]'
