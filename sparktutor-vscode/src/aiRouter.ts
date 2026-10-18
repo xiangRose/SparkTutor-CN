@@ -24,6 +24,24 @@ export type AiProviderKind = "anthropic" | "copilot" | "openai-compatible" | "no
 /** Cooldown after a failed probe during which auto mode skips the provider. */
 const HEALTH_COOLDOWN_MS = 60_000;
 
+/** Only these backend-owned categories may be surfaced; never echo a model/provider error body. */
+const COACH_RESPONSE_ERRORS: Record<string, string> = {
+  COACH_RESPONSE_FORMAT: "模型未返回有效的单个 JSON 对象。",
+  COACH_RESPONSE_FIELDS: "模型回复的字段不符合教练接口约定。",
+  COACH_RESPONSE_HYPOTHESIS: "模型选择的假设不适用于当前练习或执行状态。",
+  COACH_RESPONSE_REFERENCES: "模型没有正确引用本次提供的学习证据。",
+  COACH_RESPONSE_PROBE: "模型提供的样例数据不符合当前练习的核查规则。",
+  COACH_RESPONSE_TOO_LARGE: "模型回复超过 8 KB 限制。",
+};
+
+function coachResponseFailure(error: unknown): Error {
+  const code = error instanceof Error ? error.message.match(/\[(COACH_RESPONSE_[A-Z_]+)\]$/)?.[1] : undefined;
+  if (code && Object.hasOwn(COACH_RESPONSE_ERRORS, code)) {
+    return new Error(`${COACH_RESPONSE_ERRORS[code]} [${code}] 本次未显示提示，也未计入提示记录。请点击同一层级重试；若反复出现，请检查模型是否支持按要求输出 JSON。`);
+  }
+  return new Error("模型回复未通过证据与格式校验，或练习已变化。本次未显示提示，请刷新后重试。");
+}
+
 interface BuildReviewResult {
   needsAiReview: boolean;
   reviewId?: string;
@@ -314,8 +332,8 @@ export class AiRouter {
       if (code !== params.code) { throw new Error("代码已变化，旧回复已撤下。请刷新教练后重新请求。"); }
       try {
         return await this.bridge.call<CoachMessage>("parseCoachResponse", { requestId, rawText, code }, 180000);
-      } catch {
-        throw new Error("模型回复未通过证据与格式校验，或练习已变化。本次未显示提示，请刷新后重试。");
+      } catch (error) {
+        throw coachResponseFailure(error);
       }
     } catch (error) {
       if (requestId) {

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 import uuid
-from typing import Optional
+from typing import Callable, Optional
 
 from sparktutor.engine.adaptive import Depth, LearnerProfile
 from sparktutor.engine.evaluator import EvalResult, Evaluator
@@ -133,15 +133,17 @@ class LessonRunner:
             return None
         return self.state.current_step
 
-    async def submit(self, user_input: str) -> EvalResult:
+    async def submit(self, user_input: str, *, on_output: Optional[Callable[[str], None]] = None) -> EvalResult:
         """Use the same execution gates for Anthropic and external providers."""
-        result, needs_ai, kwargs = await self.submit_local(user_input)
+        result, needs_ai, kwargs = await self.submit_local(user_input, on_output=on_output)
         if needs_ai:
             result = await self.evaluator.claude_review(**kwargs)
             self.complete_review(result)
         return result or EvalResult(passed=False)
 
-    async def submit_local(self, user_input: str) -> tuple[Optional[EvalResult], bool, dict]:
+    async def submit_local(
+        self, user_input: str, *, on_output: Optional[Callable[[str], None]] = None,
+    ) -> tuple[Optional[EvalResult], bool, dict]:
         """Submit and run local checks only. Returns (result, needs_ai, review_kwargs).
 
         Handles execution and state tracking like submit(), but uses
@@ -172,7 +174,7 @@ class LessonRunner:
                 except (SyntaxError, ValueError, OSError) as error:
                     exec_result = ExecResult(ExecMode.LOCAL, 1, "", str(error))
             if exec_result is None:
-                exec_result = await self.executor.execute(code_to_run)
+                exec_result = await self.executor.execute(code_to_run, on_output=on_output)
             if step.cls == "script":
                 exec_result.validation_passed = (
                     exec_result.mode != ExecMode.DRY_RUN

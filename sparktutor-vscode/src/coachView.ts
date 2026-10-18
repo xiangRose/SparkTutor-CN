@@ -43,7 +43,7 @@ export function coachContent(view: CoachViewState): string {
   body += `<section class="coach-task"><div class="eyebrow">当前任务</div><h2>${escapeHtml(state.task.title)}</h2>
     <p class="muted">${escapeHtml(state.task.courseId)} · ${escapeHtml(state.task.taskId)}</p>
     ${state.answerViewed ? `<p class="notice">本题已记录参考答案查看。教练会保留这一背景，不能将之后的结果解释为未受答案影响的表现。</p>` : ""}</section>
-    <section aria-label="四维证据摘要"><h2>请求前的证据摘要</h2><p class="muted">分别描述已有记录，不合成总分；缺少样本不等于零分或未学会。</p>
+    <section aria-label="四维证据摘要"><h2>请求前的证据摘要</h2><p class="muted">以下汇总当前课程历史，不代表当前这道题已通过。分别描述已有记录，不合成总分；缺少样本不等于零分或未学会。</p>
       <div class="coach-dimensions">${state.dimensions.map((item) => `<article class="coach-dimension${item.key === "hint_dependency" ? " descriptive" : ""}">
         <h3>${escapeHtml(NAMES[item.key] || item.name)}</h3><strong>${item.score === null ? "证据不足" : `${item.score.toFixed(1)}%`}</strong>
         <p>计数 ${item.numerator} / ${item.denominator} · 样本 ${item.sampleSize} ${escapeHtml(UNITS[item.key] || "条")}</p>

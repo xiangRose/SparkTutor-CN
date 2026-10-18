@@ -66,6 +66,7 @@ test('coach renders null, zero, neutral hint usage, escaped evidence and honest 
   assert.ok(html.includes('证据不足'));
   assert.ok(html.includes('提示使用率（描述性）'));
   assert.ok(html.includes('不用于判断能力强弱'));
+  assert.ok(html.includes('以下汇总当前课程历史，不代表当前这道题已通过'));
   assert.ok(html.includes('未运行 Spark 或学生代码，不影响成绩'));
   assert.ok(html.includes('教学措辞来自审核节点'));
   assert.ok(html.includes('未验证'));
@@ -240,6 +241,56 @@ test('code changes and expired parsing reject old responses without ACK or retri
   await assert.rejects(stale.router.requestCoach({ code: 'same', level: 1 }, async () => 'same', () => true), /未通过证据与格式校验/);
   assert.deepEqual(stale.calls.at(-1)[1], { requestId: 'old-id' });
   assert.equal(stale.calls.filter(([name]) => name === 'completeCoachFailure').length, 1);
+});
+
+test('coach response failures explain only fixed safe categories and never automatically call the model again', async (t) => {
+  const reasons = {
+    COACH_RESPONSE_FORMAT: '有效的单个 JSON 对象',
+    COACH_RESPONSE_FIELDS: '字段不符合教练接口约定',
+    COACH_RESPONSE_HYPOTHESIS: '假设不适用于当前练习或执行状态',
+    COACH_RESPONSE_REFERENCES: '没有正确引用本次提供的学习证据',
+    COACH_RESPONSE_PROBE: '样例数据不符合当前练习的核查规则',
+    COACH_RESPONSE_TOO_LARGE: '超过 8 KB 限制',
+  };
+  for (const [code, reason] of Object.entries(reasons)) {
+    await t.test(code, async () => {
+      const f = routerFixture({}, (method) => {
+        if (method === 'buildCoachPrompt') return { requestId: 'request-1', messages: [] };
+        if (method === 'parseCoachResponse') throw Error(`PRIVATE provider body or student code [${code}]`);
+        return {};
+      });
+      await assert.rejects(f.router.requestCoach({ code: 'same', level: 2 }, async () => 'same', () => true), (error) => {
+        assert.ok(error.message.includes(reason));
+        assert.ok(error.message.includes(`[${code}]`));
+        assert.ok(error.message.includes('请点击同一层级重试'));
+        assert.ok(error.message.includes('未计入提示记录'));
+        assert.ok(!error.message.includes('PRIVATE'));
+        assert.ok(!error.message.includes('student code'));
+        return true;
+      });
+      assert.deepEqual(f.calls.map(([name]) => name), ['buildCoachPrompt', 'model', 'parseCoachResponse', 'completeCoachFailure']);
+      assert.deepEqual(f.calls.at(-1)[1], { requestId: 'request-1' });
+    });
+  }
+});
+
+test('unknown parse errors and unknown category codes are not echoed into the coach panel', async () => {
+  for (const raw of ['PRIVATE provider body or student code', 'PRIVATE [COACH_RESPONSE_NEW_CATEGORY]',
+    'PRIVATE [COACH_RESPONSE_FORMAT] with trailing PRIVATE text']) {
+    const f = routerFixture({}, (method) => {
+      if (method === 'buildCoachPrompt') return { requestId: 'request-1', messages: [] };
+      if (method === 'parseCoachResponse') throw Error(raw);
+      return {};
+    });
+    await assert.rejects(f.router.requestCoach({ code: 'same', level: 1 }, async () => 'same', () => true), (error) => {
+      assert.ok(error.message.includes('未通过证据与格式校验，或练习已变化'));
+      assert.ok(!error.message.includes('PRIVATE'));
+      assert.ok(!error.message.includes('COACH_RESPONSE_'));
+      return true;
+    });
+    assert.equal(f.calls.filter(([name]) => name === 'model').length, 1);
+    assert.equal(f.calls.filter(([name]) => name === 'completeCoachFailure').length, 1);
+  }
 });
 
 test('custom endpoint credentials use SecretStorage, explicit settings and one shared abort deadline without real network', async (t) => {

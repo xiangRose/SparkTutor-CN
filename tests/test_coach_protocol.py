@@ -148,14 +148,16 @@ def test_coach_protocol_failed_or_edited_reply_does_not_count_help(tmp_path):
         later = request("buildCoachPrompt", {"code": code, "level": 1})
         assert request("completeCoachFailure", {"requestId": first["requestId"]})["cleared"] is False
         parsed = request("parseCoachResponse", {
-            "requestId": later["requestId"], "rawText": _response(later, probe=False), "code": code,
+            "requestId": later["requestId"], "rawText": "```json\n" + _response(later, probe=False) + "\n```", "code": code,
         })
         request("ackCoachMessage", {"messageId": parsed["messageId"], "code": "# edited"}, error=True)
         forged = request("buildCoachPrompt", {"code": code, "level": 1})
         raw = json.loads(_response(forged, probe=False))
         raw["evidenceIds"] = ["event:invented"]
-        request("parseCoachResponse", {
+        reason = request("parseCoachResponse", {
             "requestId": forged["requestId"], "rawText": json.dumps(raw), "code": code,
         }, error=True)
+        assert "[COACH_RESPONSE_REFERENCES]" in reason
+        assert "event:invented" not in reason
         assert request("getLearningEvents")["totalCount"] == original
         assert request("getLearningCoach")["maxLevel"] == 1

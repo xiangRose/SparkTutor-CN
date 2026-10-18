@@ -9,7 +9,7 @@ from sparktutor.config.settings import ExecutionMode, Settings
 from sparktutor.engine.evaluator import EvalResult, FeedbackItem
 from sparktutor.engine.executor import ExecMode, ExecResult
 from sparktutor.engine.exercise_validation import VALIDATION_MARKER
-from sparktutor.engine.learning_coach import LearningCoachManager
+from sparktutor.engine.learning_coach import CoachResponseError, LearningCoachManager
 from sparktutor.server.handler import ServerHandler
 
 
@@ -62,6 +62,13 @@ async def test_supported_state_has_real_task_metadata_and_unknown_evidence(handl
     assert context["currentCode"] == CODE and context["knowledgeComponents"]
     assert context["hypothesisMeanings"]["row_count_vs_quantity"]
     assert context["sources"] == [] and context["recentExecution"] is None
+    assert context["probePolicy"]["requiredNull"] is False
+    assert set(context["probePolicy"]["allowedHypotheses"]) == {"row_count_vs_quantity", "uncertain"}
+    # The example uses a real ID from this request and is accepted without
+    # inventing evidence, a diagnosis, or learner progress.
+    example = await manager.parse(handler, {"requestId": build["requestId"], "code": CODE,
+                                           "rawText": json.dumps(context["responseExample"])})
+    assert example["hypothesisId"] == "uncertain" and example["probe"] is None
     assert handler.events.count_events() == before
 
 
@@ -245,6 +252,69 @@ async def test_untrusted_model_schema_and_references_rejected_without_echo(handl
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("wrapper", ["```json\n{}\n```", "```\n{}\n```", " \r\n```JSON\r\n{}\r\n```\r\n"])
+async def test_whole_response_json_fence_is_compatible_without_bypassing_validation(handler, wrapper):
+    await open_task(handler)
+    manager = LearningCoachManager()
+    build = await manager.build(handler, {"code": CODE, "level": 1})
+    message = await manager.parse(handler, {"requestId": build["requestId"], "code": CODE,
+                                           "rawText": wrapper.format(response(build, probe={"values": [3, 7]}))})
+    assert message["hypothesisId"] == "row_count_vs_quantity"
+    assert message["probe"] == {"values": [3, 7]}
+    assert not any(event.event_type == "hint_request" for event in handler.events.list_events(limit=None))
+    build = await manager.build(handler, {"code": CODE, "level": 1})
+    with pytest.raises(CoachResponseError) as error:
+        await manager.parse(handler, {"requestId": build["requestId"], "code": CODE,
+                                      "rawText": wrapper.format(response(build, evidence=["event:SECRET_PAYLOAD"]))})
+    assert error.value.code == "COACH_RESPONSE_REFERENCES"
+    assert "SECRET_PAYLOAD" not in str(error.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wrapper", [
+    "Here is the answer:\n```json\n{}\n```", "```json\n{}\n```\nUse this answer.",
+    "```json\n{}\n```\n```json\n{{}}\n```", "```python\n{}\n```", "{}\n{{}}",
+])
+async def test_json_is_not_extracted_from_prose_multiple_blocks_or_other_languages(handler, wrapper):
+    await open_task(handler)
+    manager = LearningCoachManager()
+    build = await manager.build(handler, {"code": CODE, "level": 1})
+    with pytest.raises(CoachResponseError) as error:
+        await manager.parse(handler, {"requestId": build["requestId"], "code": CODE,
+                                      "rawText": wrapper.format(response(build))})
+    assert error.value.code == "COACH_RESPONSE_FORMAT"
+    with pytest.raises(ValueError, match="失效"):
+        manager.pending_messages(handler, build["requestId"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure, code", [
+    ("invalid_json", "COACH_RESPONSE_FORMAT"), ("extra_field", "COACH_RESPONSE_FIELDS"),
+    ("wrong_hypothesis", "COACH_RESPONSE_HYPOTHESIS"), ("bad_reference", "COACH_RESPONSE_REFERENCES"),
+    ("irrelevant_probe", "COACH_RESPONSE_PROBE"), ("too_large", "COACH_RESPONSE_TOO_LARGE"),
+])
+async def test_model_rejection_reports_only_safe_fixed_reason_and_clears_request(handler, failure, code):
+    await open_task(handler)
+    manager = LearningCoachManager()
+    build = await manager.build(handler, {"code": CODE, "level": 1})
+    value = json.loads(response(build))
+    if failure == "extra_field": value["SECRET_PAYLOAD"] = "SECRET_PAYLOAD"
+    elif failure == "wrong_hypothesis": value["hypothesisId"] = "SECRET_PAYLOAD"
+    elif failure == "bad_reference": value["evidenceIds"] = ["event:SECRET_PAYLOAD"]
+    elif failure == "irrelevant_probe": value.update(hypothesisId="missing_group_key", probe={"values": [3, 7]})
+    raw = json.dumps(value)
+    if failure == "invalid_json": raw = "SECRET_PAYLOAD"
+    elif failure == "too_large": raw = "SECRET_PAYLOAD" * 1000
+    with pytest.raises(CoachResponseError) as error:
+        await manager.parse(handler, {"requestId": build["requestId"], "code": CODE, "rawText": raw})
+    assert error.value.code == code and error.value.retryable is True
+    assert code in str(error.value) and "SECRET_PAYLOAD" not in str(error.value)
+    with pytest.raises(ValueError, match="失效"):
+        manager.pending_messages(handler, build["requestId"])
+    assert not any(event.event_type == "hint_request" for event in handler.events.list_events(limit=None))
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["infrastructure", "dry_run", "ai_failure", "worker"])
 async def test_environment_and_unverified_checks_never_become_knowledge_claims(handler, kind):
     await open_task(handler)
@@ -258,11 +328,21 @@ async def test_environment_and_unverified_checks_never_become_knowledge_claims(h
     build = await manager.build(handler, {"code": CODE, "level": 1})
     context = json.loads(build["messages"][-1]["content"])
     assert context["allowedHypotheses"] == ["uncertain"]
+    assert context["probePolicy"]["requiredNull"] is True
+    assert context["probePolicy"]["allowedHypotheses"] == []
+    assert context["responseExample"]["probe"] is None
     message = await manager.parse(handler, {"requestId": build["requestId"], "code": CODE,
-                                           "rawText": response(build, "uncertain")})
+                                           "rawText": json.dumps(context["responseExample"])})
     assert "环境" in message["question"] and "不能" in message["reflection"]
     assert "private path" not in json.dumps(message)
     assert all(item["score"] is None for item in manager.get_state(handler)["dimensions"])
+    build = await manager.build(handler, {"code": CODE, "level": 1})
+    # This otherwise well-formed response is exactly what the old, incomplete
+    # prompt permitted. The advertised policy now matches the strict parser.
+    with pytest.raises(CoachResponseError) as error:
+        await manager.parse(handler, {"requestId": build["requestId"], "code": CODE,
+                                      "rawText": response(build, "uncertain", {"values": [3, 7]})})
+    assert error.value.code == "COACH_RESPONSE_PROBE"
 
 
 @pytest.mark.asyncio

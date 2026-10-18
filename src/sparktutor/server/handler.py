@@ -351,16 +351,13 @@ class ServerHandler:
             "starterCode": starter_code,
         }
 
+    def _notify_output(self, line: str) -> None:
+        self._write_notification(Notification("output", {"line": line}))
+
     async def _run(self, params: dict) -> dict:
         code = params["code"]
         self._coach_visit_id = uuid.uuid4().hex
-
-        def on_output(line: str):
-            self._write_notification(
-                Notification("output", {"line": line})
-            )
-
-        result = await self.executor.execute(code, on_output=on_output)
+        result = await self.executor.execute(code, on_output=self._notify_output)
         if self._runner and self._runner.state:
             self._runner.state.last_exec = result
         self._record_event(
@@ -393,7 +390,7 @@ class ServerHandler:
 
         code = params["code"]
         self._coach_visit_id = uuid.uuid4().hex
-        result = await self._runner.submit(code)
+        result = await self._runner.submit(code, on_output=self._notify_output)
         self._record_submission(result)
         if not result.passed:
             self._record_event(
@@ -556,7 +553,7 @@ class ServerHandler:
 
         code = params["code"]
         self._coach_visit_id = uuid.uuid4().hex
-        result, needs_ai, review_kwargs = await self._runner.submit_local(code)
+        result, needs_ai, review_kwargs = await self._runner.submit_local(code, on_output=self._notify_output)
         response: dict = {"needsAiReview": needs_ai}
 
         if result is not None:
