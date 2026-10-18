@@ -7,7 +7,19 @@ import { Bridge } from "./bridge";
 import { SparkOutputChannel } from "./outputChannel";
 import { CourseMeta, CourseProgress } from "./types";
 
-type TreeNode = CourseNode | LessonNode;
+type TreeNode = HomeNode | CourseNode | LessonNode;
+
+class HomeNode extends vscode.TreeItem {
+  constructor() {
+    super("学习首页", vscode.TreeItemCollapsibleState.None);
+    this.id = "sparktutor.learningHome";
+    this.iconPath = new vscode.ThemeIcon("home");
+    this.description = "从这里开始";
+    this.tooltip = "继续学习、选择课程，了解提示、导师问答与 AI 调试教练。";
+    this.contextValue = "learningHome";
+    this.command = { command: "sparktutor.openLearningDashboard", title: "打开学习首页" };
+  }
+}
 
 class CourseNode extends vscode.TreeItem {
   constructor(
@@ -86,7 +98,8 @@ export class CourseTreeProvider
 
   async getChildren(element?: TreeNode): Promise<TreeNode[]> {
     if (!element) {
-      // Root: list courses
+      // Keep the home entry available even while the course catalog is loading.
+      const home = new HomeNode();
       try {
         const result = await this.bridge.call<{ courses: CourseMeta[] }>(
           "listCourses"
@@ -111,7 +124,7 @@ export class CourseTreeProvider
             nodes.push(node);
           }
         }
-        return nodes;
+        return [home, ...nodes];
       } catch (err) {
         // Log the failure so it is visible in the SparkTutor output channel,
         // then retry a few times: the tree view can render before the Python
@@ -124,7 +137,7 @@ export class CourseTreeProvider
           this.retryCount++;
           setTimeout(() => this.refresh(), 2000);
         }
-        return [];
+        return [home];
       }
     }
 

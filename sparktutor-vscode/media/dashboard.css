@@ -16,6 +16,38 @@ select:focus-visible, summary:focus-visible { outline: 2px solid var(--vscode-fo
 .toolbar { gap: 9px; flex-wrap: wrap; }
 .toolbar label, .scope-note, .section-help { color: var(--vscode-descriptionForeground); font-size: .9em; }
 .scope-note { margin-bottom: 24px; }
+.learning-guide { margin-bottom: 22px; }
+.guide-heading { display: flex; justify-content: space-between; align-items: center; gap: 18px; }
+.guide-heading h2 { font-size: 1.3em; }
+.guide-heading p { color: var(--vscode-descriptionForeground); margin-top: 5px; }
+.home-link { color: var(--vscode-textLink-foreground); text-underline-offset: 3px; }
+.home-link:hover { color: var(--vscode-textLink-activeForeground); }
+.home-link:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 4px; }
+.guide-heading > .home-link { flex-shrink: 0; }
+.learning-path { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 15px 0; margin: 15px 0 0; border-block: 1px solid var(--vscode-panel-border); gap: 15px; }
+.learning-path li { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.learning-path li > span { display: grid; place-items: center; width: 25px; height: 25px; flex-shrink: 0; border: 1px solid var(--vscode-panel-border); border-radius: 50%; color: var(--vscode-charts-orange, #d98640); font-weight: 600; }
+.learning-path strong, .learning-path small { display: block; }
+.learning-path small { color: var(--vscode-descriptionForeground); margin-top: 2px; }
+.help-tools { margin-bottom: 25px; }
+.help-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; margin-top: 13px; }
+.help-card { display: flex; flex-direction: column; align-items: flex-start; padding: 18px; border: 1px solid var(--vscode-panel-border); border-radius: 9px; min-width: 0; overflow-wrap: anywhere; }
+.help-card .eyebrow { margin-bottom: 4px; }
+.help-card p { font-size: .94em; }
+.help-card .muted { margin-bottom: 16px; font-size: .86em; }
+.help-card > button, .help-card > .home-link { margin-top: auto; white-space: normal; text-align: left; }
+.coach-entry { border-top: 3px solid var(--vscode-charts-orange, #d98640); }
+.quick-help { margin-top: 12px; font-size: .92em; }
+.quick-help li { padding: 5px 0; }
+.quick-help ul { padding-left: 22px; }
+.course-lessons { border-top: 1px solid var(--vscode-panel-border); margin-top: 13px; }
+.course-lessons > summary { font-weight: 600; }
+.course-lessons .lesson-list { margin-top: 0; }
+.profile-details { margin-top: 13px; border: 1px solid var(--vscode-panel-border); border-radius: 9px; padding: 8px 17px; }
+.profile-details > summary { font-weight: 600; }
+.profile-details[open] > summary { margin-bottom: 8px; }
+.more-tools { width: 100%; }
+.more-tools .history-links { margin-top: 13px; }
 .continue-card { padding: 25px; margin: 0 0 30px; border: 1px solid var(--vscode-panel-border); border-left: 4px solid var(--vscode-charts-orange, #d98640); border-radius: 10px; background: var(--vscode-editor-inactiveSelectionBackground); }
 .continue-card h2 { font-size: 1.55em; line-height: 1.35; }
 .continue-card .primary, .recommendation .primary { margin: 0; }
@@ -82,6 +114,7 @@ footer p { color: var(--vscode-descriptionForeground); font-size: .91em; }
 .warning { border-left: 3px solid var(--vscode-editorWarning-foreground); }
 .notice.loading { min-height: 150px; display: flex; flex-direction: column; justify-content: center; }
 @media (max-width: 1050px) { .dimensions.abilities { grid-template-columns: repeat(2, minmax(0, 1fr)); } .course-grid { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { .help-grid { grid-template-columns: 1fr; } .learning-path { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) {
   body { padding: 16px; } .dimensions.abilities { grid-template-columns: 1fr; }
   .continue-card, .recommendation, footer { align-items: flex-start; flex-direction: column; }
@@ -91,4 +124,6 @@ footer p { color: var(--vscode-descriptionForeground); font-size: .91em; }
   .course-card { padding: 15px; } .course-heading { flex-wrap: wrap; }
   .dimension .direction { min-height: 0; } .descriptive .dimension-heading { display: block; }
   .knowledge-details > summary span { display: block; margin: 5px 0 0; }
+  .guide-heading { align-items: flex-start; flex-direction: column; gap: 10px; }
 }
+@media (max-width: 360px) { .learning-path { grid-template-columns: 1fr; } }

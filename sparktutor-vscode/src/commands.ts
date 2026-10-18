@@ -138,6 +138,7 @@ export function registerCommands(
       treeProvider.refresh();
     }),
     configure: () => configureCoachModel(context.secrets),
+    home: async () => { await vscode.commands.executeCommand("sparktutor.openLearningDashboard"); },
   });
   context.subscriptions.push(coach);
   const coachEdits = vscode.workspace?.onDidChangeTextDocument?.((event) => {
@@ -207,6 +208,7 @@ export function registerCommands(
   };
   lessonPanel.onDiagnosis = () => vscode.commands.executeCommand("sparktutor.showLearningDiagnosis");
   lessonPanel.onCoach = () => vscode.commands.executeCommand("sparktutor.openLearningCoach");
+  lessonPanel.onHome = () => vscode.commands.executeCommand("sparktutor.openLearningDashboard");
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -292,6 +294,7 @@ export function registerCommands(
 
     vscode.commands.registerCommand("sparktutor.openLearningDashboard", async () => {
       await dashboard.show();
+      await context.globalState.update("sparktutor.learningHomeOpened", true);
     }),
 
     vscode.commands.registerCommand("sparktutor.showSolution", async () => learningAction(async () => {

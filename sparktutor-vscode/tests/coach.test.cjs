@@ -45,7 +45,7 @@ function fixture(overrides = {}) {
       panels.push(panel); return panel;
     } } };
   const actions = { load: async () => state(), request: async () => message(), acknowledge: async () => ({ recorded: true }),
-    probe: async () => probe, discard: async () => {}, openExercise: async () => {}, configure: async () => {}, ...overrides };
+    probe: async () => probe, discard: async () => {}, openExercise: async () => {}, configure: async () => {}, home: async () => {}, ...overrides };
   for (const key of Object.keys(actions)) {
     const original = actions[key];
     actions[key] = (...args) => { calls.push([key, ...args]); return original(...args); };
@@ -72,6 +72,51 @@ test('coach renders null, zero, neutral hint usage, escaped evidence and honest 
   assert.ok(html.includes('未验证'));
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('&lt;img'));
+});
+
+test('coach explains its purpose and next actions before optional course history and technical detail', () => {
+  const view = { state: state(), message: null, acknowledged: false, probe: null, reflection: false,
+    busy: false, loading: false, error: '', notice: '' };
+  for (const withMessage of [false, true]) {
+    const html = coachContent({ ...view, message: withMessage ? message() : null, acknowledged: withMessage });
+    assert.ok(html.includes('写 Spark 练习卡住时，帮你一步步排查问题'));
+    assert.ok(html.includes('目前支持 M&amp;M 糖果计数分析、传感器聚合练习'));
+    assert.ok(html.includes('也可以先问概念'));
+    assert.ok(html.includes('不会自动修改代码，也不负责判断本题是否通过'));
+    assert.ok(html.includes('再点“提交判题”检查是否通过'));
+    assert.ok(html.includes('刷新当前练习再请求新的提示'));
+    assert.ok(html.includes('data-action="home"'));
+    assert.ok(html.indexOf('data-action="request"') < html.indexOf('<details class="coach-history">'));
+    assert.ok(html.includes('不是本题得分'));
+    assert.ok(!/<details[^>]*class="coach-history"[^>]*\bopen\b/.test(html));
+    assert.ok(!/<details[^>]*class="coach-about"[^>]*\bopen\b/.test(html));
+    if (withMessage) {
+      assert.ok(html.indexOf('id="coach-message"') < html.indexOf('<details class="coach-history">'));
+    }
+  }
+});
+
+test('coach home action opens the learning home without requesting or recording help', async () => {
+  const f = fixture(); await f.coach.show();
+  const before = version(f.panels[0]);
+  await receive(f.panels[0], { type: 'home' });
+  assert.deepEqual(f.calls.map(([name]) => name), ['load', 'home']);
+  assert.ok(version(f.panels[0]) > before, 'returning to the coach must reset the media click lock');
+  assert.match(f.panels[0].webview.html, /data-level="1">/);
+  await receive(f.panels[0], { type: 'request', level: 1 });
+  assert.deepEqual(f.calls.map(([name]) => name), ['load', 'home', 'request']);
+});
+
+test('a failed home navigation restores coach controls without generating help or exposing raw errors', async () => {
+  const f = fixture({ home: async () => { throw new Error('PRIVATE TRANSPORT DETAIL'); } });
+  await f.coach.show();
+  const before = version(f.panels[0]);
+  await receive(f.panels[0], { type: 'home' });
+  assert.ok(version(f.panels[0]) > before);
+  assert.match(f.panels[0].webview.html, /data-level="1">/);
+  assert.ok(f.panels[0].webview.html.includes('暂时无法打开学习首页'));
+  assert.ok(!f.panels[0].webview.html.includes('PRIVATE TRANSPORT DETAIL'));
+  assert.deepEqual(f.calls.map(([name]) => name), ['load', 'home']);
 });
 
 test('read-only opening never generates AI content; forged levels and exercise targets cannot bypass loaded state', async () => {
@@ -378,7 +423,10 @@ test('coach command preserves current work, uses validated exercise RPC, flushes
     const newest = await read(); operations.push(['parse', newest]); return message();
   } };
   const lesson = { updateStep: (...args) => steps.push(args) };
-  registerCommands({ extensionUri: 'extension', subscriptions: disposables, secrets: {}, globalState: { update() { assert.fail('Practice must preserve ordered progress'); } } },
+  registerCommands({ extensionUri: 'extension', subscriptions: disposables, secrets: {}, globalState: { update(key, value) {
+    assert.equal(key, 'sparktutor.learningHomeOpened', 'Practice must preserve ordered progress');
+    assert.equal(value, true);
+  } } },
     bridge, { refresh() {} }, lesson, workspace, { clear() {} }, { clear() {} }, { setStep() {}, setDepth() {} }, router, tracker);
   await f.commands.get('sparktutor.openLearningCoach')(); const panel = f.panels[0];
   assert.deepEqual(operations.map(([name]) => name), ['flush', 'getLearningCoach']);

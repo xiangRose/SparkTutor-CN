@@ -69,7 +69,7 @@
       },
       {
         "command": "sparktutor.openLearningDashboard",
-        "title": "SparkTutor：打开学习工作台",
+        "title": "SparkTutor：打开学习首页",
         "icon": "$(home)"
       },
       {
@@ -107,7 +107,7 @@
         {
           "command": "sparktutor.openLearningCoach",
           "when": "view == sparktutorCourses",
-          "group": "navigation@4"
+          "group": "learning@3"
         },
         {
           "command": "sparktutor.openLearningDashboard",
@@ -117,22 +117,22 @@
         {
           "command": "sparktutor.showLearningDiagnosis",
           "when": "view == sparktutorCourses",
-          "group": "navigation"
+          "group": "learning@1"
         },
         {
           "command": "sparktutor.showLearningHistory",
           "when": "view == sparktutorCourses",
-          "group": "navigation@1"
+          "group": "learning@2"
         },
         {
           "command": "sparktutor.openDiagnosisDemo",
           "when": "view == sparktutorCourses",
-          "group": "navigation@3"
+          "group": "tools@2"
         },
         {
           "command": "sparktutor.showLearningEvents",
           "when": "view == sparktutorCourses",
-          "group": "navigation@2"
+          "group": "tools@1"
         }
       ]
     },

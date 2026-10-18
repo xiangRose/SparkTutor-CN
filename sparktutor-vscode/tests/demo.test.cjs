@@ -238,7 +238,10 @@ test('command and homepage open an idle demo, and execution uses only the isolat
       if (method === 'getLearningDashboard') return { courses: [], selectedCourseId: '', resume: null, diagnosis: null, knowledgeComponents: {} };
       assert.fail(`unexpected normal learning mutation: ${method}`);
     } };
-  registerCommands({ extensionUri: 'extension', subscriptions: disposables, globalState: { update() { assert.fail('No progress writes'); } } },
+  registerCommands({ extensionUri: 'extension', subscriptions: disposables, globalState: { update(key, value) {
+    assert.equal(key, 'sparktutor.learningHomeOpened', 'No progress writes');
+    assert.equal(value, true);
+  } } },
     bridge, {}, {}, {}, {}, {}, {}, {}, { flush: async () => operations.push(['flush']) });
   await commands.get('sparktutor.openDiagnosisDemo')();
   assert.equal(operations.length, 0);

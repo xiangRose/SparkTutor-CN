@@ -31,7 +31,7 @@ export class DashboardPanel {
 
   async show(): Promise<void> {
     if (!this.panel) {
-      const panel = vscode.window.createWebviewPanel("sparktutorDashboard", "SparkTutor 学习工作台", vscode.ViewColumn.One,
+      const panel = vscode.window.createWebviewPanel("sparktutorDashboard", "SparkTutor 学习首页", vscode.ViewColumn.One,
         { enableScripts: true, retainContextWhenHidden: true,
           localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, "media")] });
       this.panel = panel;
@@ -66,7 +66,7 @@ export class DashboardPanel {
           const exercise = this.report?.diagnosis?.recommendedExercise;
           if (exercise) {
             const scope = this.report?.selectedCourseId || undefined;
-            await this.perform(() => this.openRecommendation(exercise, scope), "推荐练习已打开。完成后刷新工作台查看新证据。");
+            await this.perform(() => this.openRecommendation(exercise, scope), "推荐练习已打开。完成后刷新学习首页查看新记录。");
           }
         }
       });
@@ -124,7 +124,7 @@ export class DashboardPanel {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src ${webview.cspSource};">
       <link rel="stylesheet" href="${resource("diagnosis.css")}"><link rel="stylesheet" href="${resource("dashboard.css")}">
-      <title>SparkTutor 学习工作台</title></head><body data-version="${this.version}"><main>${content}</main>
+      <title>SparkTutor 学习首页</title></head><body data-version="${this.version}"><main>${content}</main>
       <script src="${resource("dashboard.js")}"></script></body></html>`;
   }
 

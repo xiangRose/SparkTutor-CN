@@ -168,6 +168,25 @@ test('panel ignores forged resume IDs, uses catalog indices, and rejects unavail
   assert.equal(opened.length, 2);
 });
 
+test('home help entries open their tools without starting lessons, running code, or changing the report', async () => {
+  const { vscode, panels } = vscodeFixture();
+  const { DashboardPanel } = loadTs('dashboardPanel.ts', { vscode });
+  const calls = [], result = report();
+  const panel = new DashboardPanel('extension', async () => result,
+    async () => assert.fail('a help entry must not open a lesson'),
+    async () => assert.fail('a help entry must not open an exercise'),
+    async () => calls.push('events'), async () => calls.push('history'),
+    async () => calls.push('demo'), async () => calls.push('coach'));
+  await panel.show();
+  const before = JSON.stringify(result);
+  for (const type of ['coach', 'learningHistory', 'history', 'demo']) {
+    await receive(panels[0], { type });
+  }
+  assert.deepEqual(calls, ['coach', 'history', 'events', 'demo']);
+  assert.equal(JSON.stringify(result), before);
+  assert.equal(panels[0].messages.at(-1).busy, false);
+});
+
 test('filter refresh races retain the latest scope, reject obsolete actions, and recommend within that scope', async () => {
   const { vscode, panels } = vscodeFixture();
   const { DashboardPanel } = loadTs('dashboardPanel.ts', { vscode });
@@ -268,19 +287,20 @@ test('sidebar uses individual lesson facts and clears a previous successful prog
     return { started: true, lessonsCompleted: 1, lessons };
   } });
   const roots = await provider.getChildren();
-  const children = await provider.getChildren(roots[0]);
+  const children = await provider.getChildren(roots.find((node) => node.course?.id === 'a'));
   assert.deepEqual(children.map((node) => node.status), [...Array(9).fill('not-started'), 'completed']);
   assert.equal(children[9].label, '10. 真实课题9');
   failure = true;
   const failedRoots = await provider.getChildren();
-  assert.match(failedRoots[0].description, /读取失败/);
-  assert.ok((await provider.getChildren(failedRoots[0])).every((node) => node.status !== 'completed'));
+  const failedCourse = failedRoots.find((node) => node.course?.id === 'a');
+  assert.match(failedCourse.description, /读取失败/);
+  assert.ok((await provider.getChildren(failedCourse)).every((node) => node.status !== 'completed'));
 });
 
 test('dashboard command resumes saved step after saving current code and sends the recommendation filter scope', async () => {
   const { vscode, panels, commands } = vscodeFixture();
   const { registerCommands } = loadTs('commands.ts', { vscode });
-  const operations = [], displayed = [];
+  const operations = [], displayed = [], homeSeen = [];
   let failLoad = false;
   const result = report(); result.selectedCourseId = 'a';
   const loaded = { step: { id: '19', cls: 'script', output: 'saved step' }, currentIndex: 4,
@@ -294,10 +314,11 @@ test('dashboard command resumes saved step after saving current code and sends t
   } };
   const workspace = { saveCurrentExercise: async () => operations.push({ method: 'save' }),
     switchCourse: async () => {}, setStepType() {}, openExercise: async () => {}, getCurrentCode: () => 'dirty_work()' };
-  registerCommands({ extensionUri: 'extension', subscriptions: [], globalState: { update() {} } }, bridge,
+  registerCommands({ extensionUri: 'extension', subscriptions: [], globalState: { update: (...args) => homeSeen.push(args) } }, bridge,
     { refresh() {} }, { updateStep: (...args) => displayed.push(args) }, workspace,
     { clear() {} }, { clear() {} }, { setStep() {}, setDepth() {} }, {});
   await commands.get('sparktutor.openLearningDashboard')();
+  assert.deepEqual(homeSeen, [['sparktutor.learningHomeOpened', true]]);
   operations.length = 0;
   await receive(panels[0], { type: 'resume', lessonIdx: 0 });
   assert.deepEqual(operations.map((item) => item.method), ['save', 'loadLesson']);

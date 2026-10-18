@@ -16,6 +16,7 @@ import { createTrackerShutdown, LearningEventTracker } from "./learningEventTrac
 
 let bridge: Bridge;
 let shutdownExtension: (() => Promise<void>) | undefined;
+const LEARNING_HOME_OPENED = "sparktutor.learningHomeOpened";
 
 export async function activate(
   context: vscode.ExtensionContext
@@ -115,7 +116,23 @@ export async function activate(
     () => {} // Silently ignore if view isn't ready yet
   );
 
-  // Check for a saved session and offer to resume
+  // Show the home once; an explicitly resumed lesson takes priority so that
+  // onboarding never covers the lesson the learner just chose to continue.
+  const showLearningHomeOnce = async (): Promise<void> => {
+    if (context.globalState.get<boolean>(LEARNING_HOME_OPENED)) {
+      return;
+    }
+    try {
+      await vscode.commands.executeCommand("sparktutor.openLearningDashboard");
+      if (!context.globalState.get<boolean>(LEARNING_HOME_OPENED)) {
+        await context.globalState.update(LEARNING_HOME_OPENED, true);
+      }
+    } catch {
+      outputChannel.appendLine("学习首页暂未打开，可点击侧栏顶部的‘学习首页’重试。");
+    }
+  };
+
+  // Check for a saved session and offer to resume.
   const saved = getSavedSession();
   if (saved) {
     vscode.window
@@ -124,7 +141,7 @@ export async function activate(
         "继续",
         "重新开始"
       )
-      .then((resume) => {
+      .then(async (resume) => {
         if (resume === "继续") {
           vscode.commands.executeCommand(
             "sparktutor.openLesson",
@@ -135,8 +152,13 @@ export async function activate(
           );
         } else if (resume === "重新开始") {
           clearSavedSession();
+          await showLearningHomeOnce();
+        } else {
+          await showLearningHomeOnce();
         }
       });
+  } else {
+    await showLearningHomeOnce();
   }
 }
 

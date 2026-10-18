@@ -10,6 +10,7 @@ export interface CoachActions {
   discard(requestId: string): Promise<unknown>;
   openExercise(task: CoachTask): Promise<void>;
   configure(): Promise<void>;
+  home?(): Promise<void>;
 }
 
 /** Requests remain locked across close/reopen. UI versions never identify a backend task. */
@@ -49,7 +50,8 @@ export class CoachPanel {
           return;
         }
         if (this.busy || (this.message && !this.acknowledged)) { return; }
-        if (value.type === "refresh") { await this.refreshIfOpen(); }
+        if (value.type === "home" && this.actions.home) { await this.openHome(); }
+        else if (value.type === "refresh") { await this.refreshIfOpen(); }
         else if (value.type === "configure") { await this.configure(); }
         else if (value.type === "request" && typeof value.level === "number" && Number.isInteger(value.level) &&
           value.level >= 1 && value.level <= 3 && this.state?.available && this.state.task && value.level <= this.state.maxLevel) {
@@ -151,6 +153,14 @@ export class CoachPanel {
     this.busy = true; this.error = ""; this.render();
     try { await this.actions.openExercise(task); }
     catch { if (this.panel === panel) { this.error = "练习打开失败，请刷新后重试。"; } }
+    finally { this.busy = false; this.render(); }
+  }
+
+  private async openHome(): Promise<void> {
+    const panel = this.panel;
+    this.busy = true; this.error = ""; this.render();
+    try { await this.actions.home?.(); }
+    catch { if (this.panel === panel) { this.error = "暂时无法打开学习首页，请从侧栏重试。"; } }
     finally { this.busy = false; this.render(); }
   }
 

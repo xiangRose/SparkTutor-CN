@@ -28,6 +28,20 @@ h3 {
 }
 
 /* Progress bar */
+.lesson-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 4px 0 16px;
+}
+
+.lesson-topbar span,
+.help-note {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+
 .lesson-header {
   margin-bottom: 10px;
 }
@@ -205,8 +219,42 @@ h3 {
 
 .nav-buttons {
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  gap: 12px;
   margin-bottom: 10px;
+}
+
+.step-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lesson-help {
+  padding: 12px;
+  border: 1px solid var(--vscode-panel-border, #333);
+  border-radius: 6px;
+}
+
+.lesson-help h3 {
+  margin: 0 0 10px;
+}
+
+.help-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 8px 0;
+}
+
+.help-option p {
+  flex: 1 1 200px;
+  margin: 4px 0;
+}
+
+.help-note {
+  margin: 8px 0 4px;
 }
 
 /* Instruction banner — tells the user what to do for this step type */
