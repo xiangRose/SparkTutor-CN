@@ -68,6 +68,8 @@ Windows PowerShell 中可用 `.venv\Scripts\python.exe -m pip install -e ".[spar
 
 ## AI 配置
 
+首次接入请阅读 [API 配置与使用指南](docs/api.md)，按步骤填写接口、保存密钥、检查连接并测试导师问答与 AI 调试教练。文档同时说明 Anthropic、Copilot、Ollama 的可选配置和常见报错。
+
 支持 Anthropic Claude、GitHub Copilot 和 OpenAI 兼容接口（支持该协议的国内模型或 Ollama）。在设置中搜索 SparkTutor：
 
 - `sparktutor.aiProvider`：auto、anthropic、copilot、openai-compatible。
