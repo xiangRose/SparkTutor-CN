@@ -7,6 +7,8 @@ export interface CourseMeta {
   lessonCount: number;
   requiresLakehouse: boolean;
   lessons: string[];
+  /** Lesson titles from the catalogue, independent of progress availability. */
+  lessonTitles?: Record<string, string>;
   prerequisites: string[];
 }
 

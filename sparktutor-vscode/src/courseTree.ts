@@ -153,8 +153,10 @@ export class CourseTreeProvider
         else if (detail?.status === "in_progress" || (!detail && progress.started &&
           (progress.currentLessonId === lessonId || progress.currentLessonIdx === idx))) { status = "in-progress"; }
 
-        // Format lesson name: "01_spark_session" → "1. Spark Session"
-        const label = detail?.title ? `${idx + 1}. ${detail.title}` : formatLessonName(lessonId, idx);
+        // Prefer catalogue metadata so a missing progress response cannot
+        // change the language or hide newly added lessons' display titles.
+        const title = course.lessonTitles?.[lessonId]?.trim() || detail?.title?.trim() || "课节标题暂不可用";
+        const label = `${idx + 1}. ${title}`;
         return new LessonNode(course.id, lessonId, idx, label, status);
       });
     }
@@ -165,43 +167,4 @@ export class CourseTreeProvider
   getTreeItem(element: TreeNode): vscode.TreeItem {
     return element;
   }
-}
-
-function formatLessonName(lessonId: string, idx: number): string {
-  // Chinese display names, kept in sync with lesson.yaml "Lesson:" titles
-  const CN_LESSON_NAMES: Record<string, string> = {
-    // learning_spark
-    "01_getting_started": "简介与快速上手",
-    "02_dataframes_schemas": "DataFrame 与 Schema",
-    "03_data_sources": "数据源与格式",
-    "04_external_sources_hof": "复杂类型与高阶函数",
-    "05_spark_sql_deep_dive": "Spark SQL 与 Catalyst 优化器",
-    "06_optimization_tuning": "性能优化与调优",
-    "07_join_strategies": "Join 策略",
-    "08_structured_streaming": "Structured Streaming 结构化流处理",
-    "09_data_lakes": "数据湖与湖仓",
-    "10_mllib": "用 MLlib 进行机器学习",
-    // spark_declarative_pipelines
-    "01_spark_session": "SparkSession 与管道搭建",
-    "02_functions_and_transforms": "函数与转换",
-    "03_reading_writing_data": "读写数据",
-    "04_pipeline_framework": "管道框架",
-    "05_bronze_layer": "Bronze 层",
-    "06_silver_layer": "Silver 层",
-    "07_gold_layer": "Gold 层",
-    "08_full_pipeline": "完整管道",
-  };
-
-  const cn = CN_LESSON_NAMES[lessonId];
-  if (cn) {
-    return `${idx + 1}. ${cn}`;
-  }
-
-  // Fallback: remove leading number prefix like "01_" "02_"
-  const stripped = lessonId.replace(/^\d+_/, "");
-  // Convert underscores to spaces and title-case
-  const words = stripped.split("_").map(
-    (w) => w.charAt(0).toUpperCase() + w.slice(1)
-  );
-  return `${idx + 1}. ${words.join(" ")}`;
 }

@@ -26,7 +26,9 @@ export class DashboardPanel {
     private readonly showHistory: () => Promise<void>,
     private readonly showLearningHistory?: () => Promise<void>,
     private readonly showDemo?: () => Promise<void>,
-    private readonly showCoach?: () => Promise<void>
+    private readonly showCoach?: () => Promise<void>,
+    private readonly showEnvironment?: () => Promise<void>,
+    private readonly manageData?: () => Promise<void>
   ) {}
 
   async show(): Promise<void> {
@@ -50,6 +52,10 @@ export class DashboardPanel {
           await this.perform(() => this.showHistory(), "学习行为记录已在输出窗口打开。");
         } else if (message.type === "learningHistory" && this.showLearningHistory) {
           await this.perform(() => this.showLearningHistory!(), "学习历史与复盘已打开。");
+        } else if (message.type === "environment" && this.showEnvironment) {
+          await this.perform(() => this.showEnvironment!(), "环境检查已打开，可查看当前可用功能与配置步骤。");
+        } else if (message.type === "manageData" && this.manageData) {
+          await this.perform(() => this.manageData!(), "学习数据管理已打开。");
         } else if (message.type === "demo" && this.showDemo) {
           await this.perform(() => this.showDemo!(), "独立诊断演示已打开，请选择场景并明确运行。");
         } else if (message.type === "coach" && this.showCoach) {

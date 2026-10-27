@@ -18,6 +18,20 @@
   "contributes": {
     "commands": [
       {
+        "command": "sparktutor.checkEnvironment",
+        "title": "SparkTutor：检查学习环境",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "sparktutor.manageLearningData",
+        "title": "SparkTutor：管理学习数据"
+      },
+      {
+        "command": "sparktutor.refreshCourses",
+        "title": "SparkTutor：刷新课程目录",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "sparktutor.run",
         "title": "SparkTutor：运行代码",
         "icon": "$(play)"
@@ -104,6 +118,16 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "sparktutor.checkEnvironment",
+          "when": "view == sparktutorCourses",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sparktutor.refreshCourses",
+          "when": "view == sparktutorCourses",
+          "group": "tools@0"
+        },
         {
           "command": "sparktutor.openLearningCoach",
           "when": "view == sparktutorCourses",

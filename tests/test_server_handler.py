@@ -41,6 +41,13 @@ class TestListCourses:
         assert courses[0]["id"] == "test_course"
         assert courses[0]["title"] == "Test Course"
         assert courses[0]["lessonCount"] == 1
+        assert courses[0]["lessonTitles"] == {"01_test_lesson": "Test Lesson"}
+
+    @pytest.mark.asyncio
+    async def test_missing_lesson_title_does_not_hide_catalogue(self, handler, sample_lesson_dir):
+        (sample_lesson_dir / "lesson.yaml").unlink()
+        result = await handler.dispatch({"method": "listCourses", "params": {}})
+        assert result["courses"][0]["lessonTitles"] == {"01_test_lesson": "课节 1（标题暂不可用）"}
 
     @pytest.mark.asyncio
     async def test_unknown_method(self, handler):

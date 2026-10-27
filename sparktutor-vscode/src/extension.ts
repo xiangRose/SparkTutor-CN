@@ -13,6 +13,8 @@ import { SparkOutputChannel } from "./outputChannel";
 import { StatusBarManager } from "./statusBar";
 import { WorkspaceManager } from "./workspaceManager";
 import { createTrackerShutdown, LearningEventTracker } from "./learningEventTracker";
+import { registerEnvironmentCheck } from "./environmentCommands";
+import { extensionBuild } from "./buildInfo";
 
 let bridge: Bridge;
 let shutdownExtension: (() => Promise<void>) | undefined;
@@ -25,16 +27,21 @@ export async function activate(
 
   // Start the Python JSON-lines server
   bridge = new Bridge(context.extensionPath);
+  let backendReady = false;
+  registerEnvironmentCheck(context, bridge, () => outputChannel.show(), () => backendReady);
   shutdownExtension = async () => { bridge.dispose(); };
   bridge.on("log", (text: string) => outputChannel.appendLine(`[server] ${text}`));
 
   try {
     await bridge.start();
+    backendReady = true;
     outputChannel.appendLine("SparkTutor 后端已启动");
   } catch (err) {
     const msg =
       err instanceof Error ? err.message : "启动后端时发生未知错误";
-    vscode.window.showErrorMessage(`SparkTutor: ${msg}`);
+    outputChannel.appendLine(`SparkTutor 后端启动失败：${msg}`);
+    const action = await vscode.window.showErrorMessage("SparkTutor 后端未能启动，请检查 Python 路径与依赖。", "打开环境检查");
+    if (action === "打开环境检查") { await vscode.commands.executeCommand("sparktutor.checkEnvironment"); }
     return;
   }
 
@@ -109,6 +116,8 @@ export async function activate(
   // Show the output channel so the user knows it exists
   outputChannel.show();
   outputChannel.appendLine("SparkTutor 扩展已启用");
+  outputChannel.appendLine(`扩展版本：${context.extension.packageJSON.version}；加载目录：${context.extensionPath}`);
+  outputChannel.appendLine(`当前加载构建（UTC）：${extensionBuild}`);
 
   // Auto-focus the SparkTutor sidebar so courses are visible on startup
   vscode.commands.executeCommand("sparktutorCourses.focus").then(

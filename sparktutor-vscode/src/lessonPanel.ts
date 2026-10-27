@@ -186,7 +186,8 @@ export class LessonPanel {
         step.cls === "script"
           ? "在<strong>左侧独立练习文件</strong>中完成综合练习。<strong>运行代码</strong>查看输出；<strong>提交判题</strong>执行课程测试并检查答案。需要可用的 Spark 环境；仅语法检查不能通过综合题。"
           : "在<strong>左侧本课练习文件</strong>中编写代码。<strong>运行代码</strong>查看执行结果；<strong>提交判题</strong>检查本题答案。每次运行都会启动新进程，所需变量和导入须在文件中定义。";
-      instructionHtml = `<div class="instruction-banner prompt">${label}</div>`;
+      instructionHtml = `<div class="instruction-banner prompt">${label}</div>
+        <p class="help-note">练习代码会在所选环境中执行。请仅运行可信代码；当前执行器不提供不可信 Python 的安全隔离。</p>`;
       actionButtonsHtml = `<div class="actions">
         <button class="btn btn-primary" onclick="send('run')">&#9654; 运行代码</button>
         <button class="btn btn-success" onclick="send('submit')">&check; 提交判题</button>

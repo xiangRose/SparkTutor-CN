@@ -23,11 +23,11 @@ function loadTs(name, mocks) {
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const saved = { courseId: 'course', lessonIdx: 2, lessonTitle: '上次课程', depth: 'beginner' };
 function activationFixture({ session, seen = false, choice, failHome = false, failStart = false } = {}) {
-  const calls = [], updates = [], messages = [], logs = [];
+  const calls = [], updates = [], messages = [], logs = [], lifecycle = [];
   let cleared = false;
   const noop = () => {};
   class Bridge {
-    async start() { if (failStart) throw new Error('backend unavailable'); }
+    async start() { lifecycle.push('start'); if (failStart) throw new Error('backend unavailable'); }
     on() {}
     onNotification() {}
     async call() { return { mode: 'local' }; }
@@ -63,14 +63,16 @@ function activationFixture({ session, seen = false, choice, failHome = false, fa
     './statusBar': { StatusBarManager: Status },
     './workspaceManager': { WorkspaceManager: Manager },
     './learningEventTracker': { LearningEventTracker: Manager, createTrackerShutdown: () => async () => {} },
+    './environmentCommands': { registerEnvironmentCheck() { lifecycle.push('environment'); } },
+    './buildInfo': { extensionBuild: 'test-build' },
   };
   const extension = loadTs('extension.ts', mocks);
   const state = new Map(seen ? [['sparktutor.learningHomeOpened', true]] : []);
-  const context = { extensionPath: 'extension', extensionUri: 'extension', subscriptions: [], secrets: {},
+  const context = { extensionPath: 'extension', extensionUri: 'extension', extension: { packageJSON: { version: 'test' } }, subscriptions: [], secrets: {},
     globalState: { get: (key) => state.get(key), async update(key, value) { state.set(key, value); updates.push([key, value]); } },
   };
   return { async activate() { await extension.activate(context); await flush(); }, calls, updates, messages, logs,
-    state, wasCleared: () => cleared };
+    state, lifecycle, wasCleared: () => cleared };
 }
 const homes = (fixture) => fixture.calls.filter(([command]) => command === 'sparktutor.openLearningDashboard');
 
@@ -119,6 +121,7 @@ test('a returning learner retains the resume prompt without another automatic ho
 test('failed activation or opening the home never marks onboarding as complete', async () => {
   const failedStart = activationFixture({ failStart: true });
   await failedStart.activate();
+  assert.deepEqual(failedStart.lifecycle, ['environment', 'start']);
   assert.equal(homes(failedStart).length, 0);
   assert.equal(failedStart.updates.length, 0);
   const failedHome = activationFixture({ failHome: true });

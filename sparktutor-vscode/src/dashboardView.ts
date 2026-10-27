@@ -40,6 +40,7 @@ function learningGuide(): string {
   return `<section class="learning-guide" aria-labelledby="guide-title"><div class="guide-heading"><div>
     <h2 id="guide-title">从一课开始，完成你的第一道 Spark 练习</h2>
     <p>按课程理解概念，在编辑器里写代码，用测试检查结果。</p></div><a class="home-link" href="#courses-title">浏览全部课程 ↓</a></div>
+    <p>第一次使用或运行报错？<button data-action="environment">检查我的环境</button> 查看目前能做哪些练习，以及缺项的配置步骤。</p>
     <ol class="learning-path" aria-label="学习流程">
       <li><span aria-hidden="true">1</span><div><strong>打开课程</strong><small>阅读讲解，进入练习</small></div></li>
       <li><span aria-hidden="true">2</span><div><strong>编写并提交</strong><small>运行看输出，提交看判题</small></div></li>
@@ -49,7 +50,8 @@ function learningGuide(): string {
 }
 
 function helpTools(): string {
-  return `<section class="help-tools" aria-labelledby="help-title"><h2 id="help-title">需要帮助时，选对工具</h2>
+  return `<section class="help-tools" aria-labelledby="help-title"><h2 id="help-title">遇到困难，按问题选择帮助</h2>
+    <p>不懂题意或概念：在课程页查看「题目提示」或向「导师问答」提问。代码报错或结果不对：先看运行反馈，支持的两题可找调试教练。无法启动或运行超时：先检查环境。</p>
     <div class="help-grid"><article class="help-card coach-entry"><div class="eyebrow">写代码卡住了</div><h3>AI 调试教练</h3>
       <p>结合当前代码和已有运行记录，逐步给出排查问题、检查方法和局部示例，帮助你自己修正代码。</p>
       <p class="muted">目前支持 M&amp;M 糖果计数与传感器聚合两道练习，使用前需配置模型。是否通过由提交判题确认。</p>
@@ -157,7 +159,8 @@ export function dashboardContent(result: LearningDashboardResult): string {
     ${diagnosisSection(result)}
     <footer><details class="more-tools"><summary>更多工具：行为记录与诊断演示</summary>
       <p>行为记录列出最近的学习操作；诊断演示使用独立的预设轨迹，便于了解规则，不计入你的正常学习记录。</p>
-      <div class="history-links"><button data-action="history">打开行为记录</button><button data-action="demo">打开诊断演示</button></div>
+      <div class="history-links"><button data-action="history">打开行为记录</button><button data-action="demo">打开诊断演示</button>
+      <button data-action="manageData">学习数据与备份</button></div>
       </details></footer><p id="dashboard-status" role="status" aria-live="polite"></p>`;
 }
 

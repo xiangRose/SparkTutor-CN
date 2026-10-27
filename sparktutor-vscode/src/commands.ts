@@ -23,6 +23,7 @@ import { DemoReport } from "./demoTypes";
 import { CoachPanel } from "./coachPanel";
 import { CoachAck, CoachProbe, CoachState } from "./coachTypes";
 import { configureCoachModel } from "./coachModel";
+import { openDataManagement, LearningDataOverview } from "./dataManagement";
 import {
   AdvanceResult,
   EvalResult,
@@ -187,7 +188,9 @@ export function registerCommands(
       await openLesson(bridge, lessonPanel, workspace, diagnostics, outputChannel, statusBar,
         target.courseId, target.lessonIdx, target.depth, true, true);
       treeProvider.refresh();
-    }), openRecommendedExercise, () => afterEdits(() => eventsView.show()), () => learningHistory.show(), async () => demo.show(), () => coach!.show());
+    }), openRecommendedExercise, () => afterEdits(() => eventsView.show()), () => learningHistory.show(), async () => demo.show(), () => coach!.show(),
+    async () => { await vscode.commands.executeCommand("sparktutor.checkEnvironment"); },
+    async () => { await vscode.commands.executeCommand("sparktutor.manageLearningData"); });
   context.subscriptions.push(dashboard);
   // Wire up webview button callbacks
   lessonPanel.onSubmit = () =>
@@ -211,6 +214,33 @@ export function registerCommands(
   lessonPanel.onHome = () => vscode.commands.executeCommand("sparktutor.openLearningDashboard");
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("sparktutor.refreshCourses", () => treeProvider.refresh()),
+    vscode.commands.registerCommand("sparktutor.manageLearningData", async () => {
+      await openDataManagement({
+        getOverview: () => afterEdits(() => bridge.call<LearningDataOverview>("getLearningDataOverview")),
+        exportSummary: () => afterEdits(() => bridge.call("exportLearningSummary")),
+        backupDatabase: (destination) => afterEdits(() => bridge.call("backupLearningDatabase", { destination })),
+        clearRecords: () => navigate(async () => {
+          const result = await bridge.call<{ cleared: boolean; deletedProgress: number; deletedEvents: number }>(
+            "clearLearningRecords", { confirmation: "clear-learning-records" });
+          if (result.cleared) {
+            tracker?.bind(null);
+            coach?.dispose();
+          }
+          return result;
+        }),
+        afterClear: async () => {
+          currentCourseId = undefined; currentLessonId = undefined; currentLessonIdx = undefined;
+          currentStep = undefined; currentLessonTitle = undefined; currentDepth = undefined;
+          currentIndex = 0; totalSteps = 0; currentPracticeMode = false;
+          lessonPanel.dispose(); diagnosisPanel.dispose(); learningHistory.dispose(); dashboard.dispose(); eventsView.dispose();
+          diagnostics.clear(); treeProvider.refresh();
+          await context.globalState.update("sparktutorSession", undefined);
+          await vscode.commands.executeCommand("setContext", "sparktutor.active", false);
+          await vscode.commands.executeCommand("workbench.action.reloadWindow");
+        },
+      });
+    }),
     vscode.commands.registerCommand(
       "sparktutor.openLesson",
       async (courseId: string, lessonIdx: number, depth?: string, skipResumePrompt?: boolean) => {

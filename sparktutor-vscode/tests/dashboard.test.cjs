@@ -176,13 +176,14 @@ test('home help entries open their tools without starting lessons, running code,
     async () => assert.fail('a help entry must not open a lesson'),
     async () => assert.fail('a help entry must not open an exercise'),
     async () => calls.push('events'), async () => calls.push('history'),
-    async () => calls.push('demo'), async () => calls.push('coach'));
+    async () => calls.push('demo'), async () => calls.push('coach'),
+    async () => calls.push('environment'), async () => calls.push('manageData'));
   await panel.show();
   const before = JSON.stringify(result);
-  for (const type of ['coach', 'learningHistory', 'history', 'demo']) {
+  for (const type of ['coach', 'learningHistory', 'history', 'demo', 'environment', 'manageData']) {
     await receive(panels[0], { type });
   }
-  assert.deepEqual(calls, ['coach', 'history', 'events', 'demo']);
+  assert.deepEqual(calls, ['coach', 'history', 'events', 'demo', 'environment', 'manageData']);
   assert.equal(JSON.stringify(result), before);
   assert.equal(panels[0].messages.at(-1).busy, false);
 });

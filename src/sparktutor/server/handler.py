@@ -101,6 +101,7 @@ class ServerHandler:
         self._task_started_at: dict[str, float] = {}
         self._hinted_tasks: set[str] = set()
         self._demo_running = False
+        self._learning_data_cleared = False
         from sparktutor.engine.learning_coach import LearningCoachManager
         self._coach = LearningCoachManager()
         self._coach_visit_id = uuid.uuid4().hex
@@ -154,9 +155,21 @@ class ServerHandler:
         params = msg.get("params", {})
         print(f"sparktutor-server: dispatch {method}", file=sys.stderr)
 
+        if self._learning_data_cleared and method not in {
+            "listCourses", "getCourseProgress", "getLearningDashboard", "getLearningHistory",
+            "getLearningEvents", "getDiagnosis", "getEnvironmentReport", "getLearningDataOverview",
+            "exportLearningSummary", "backupLearningDatabase",
+        }:
+            raise ValueError("学习记录已清除，请重载窗口后开始新的学习会话。")
+
         handler_map = {
             "listCourses": self._list_courses,
             "getCourseProgress": self._get_course_progress,
+            "getEnvironmentReport": self._get_environment_report,
+            "getLearningDataOverview": self._get_learning_data_overview,
+            "exportLearningSummary": self._export_learning_summary,
+            "backupLearningDatabase": self._backup_learning_database,
+            "clearLearningRecords": self._clear_learning_records,
             "getLearningDashboard": self._get_learning_dashboard,
             "getLearningHistory": self._get_learning_history,
             "getTaskHistory": self._get_task_history,
@@ -200,21 +213,66 @@ class ServerHandler:
         return await handler(params)
 
     async def _list_courses(self, params: dict) -> dict:
-        courses = self.registry.list_courses()
-        return {
-            "courses": [
-                {
-                    "id": c.id,
-                    "title": c.title,
-                    "description": c.description,
-                    "lessonCount": len(c.lessons),
-                    "requiresLakehouse": c.requires_lakehouse,
-                    "lessons": c.lessons,
-                    "prerequisites": c.prerequisites,
-                }
-                for c in courses
-            ]
-        }
+        from sparktutor.engine.lesson_loader import load_lesson
+
+        courses = []
+        for course in self.registry.list_courses():
+            # Titles belong to the catalogue, not to saved learning progress.
+            # Keep the existing ID list for clients that use course ordering.
+            lesson_titles = {}
+            for index, lesson_id in enumerate(course.lessons):
+                try:
+                    lesson = load_lesson(self.registry.courses_dir / course.id / "lessons" / lesson_id)
+                    title = lesson.title.strip()
+                except Exception:
+                    title = ""
+                lesson_titles[lesson_id] = title or f"课节 {index + 1}（标题暂不可用）"
+            courses.append({
+                "id": course.id,
+                "title": course.title,
+                "description": course.description,
+                "lessonCount": len(course.lessons),
+                "requiresLakehouse": course.requires_lakehouse,
+                "lessons": course.lessons,
+                "lessonTitles": lesson_titles,
+                "prerequisites": course.prerequisites,
+            })
+        return {"courses": courses}
+
+    async def _get_environment_report(self, params: dict) -> dict:
+        from sparktutor.engine.environment_check import build_environment_report
+        return await build_environment_report(self.settings, self.executor)
+
+    async def _get_learning_data_overview(self, params: dict) -> dict:
+        from sparktutor.state.data_management import get_data_overview
+        return get_data_overview(self.progress.db_path, Path.home() / ".sparktutor" / "workspace")
+
+    async def _export_learning_summary(self, params: dict) -> dict:
+        from sparktutor.state.data_management import export_learning_summary
+        return export_learning_summary(self.progress.db_path)
+
+    async def _backup_learning_database(self, params: dict) -> dict:
+        from sparktutor.state.data_management import backup_learning_database
+        destination = params.get("destination")
+        if not isinstance(destination, str) or not destination or not Path(destination).is_absolute():
+            raise ValueError("请选择本机备份文件的完整路径。")
+        return backup_learning_database(self.progress.db_path, Path(destination))
+
+    async def _clear_learning_records(self, params: dict) -> dict:
+        from sparktutor.state.data_management import clear_learning_records
+        if params != {"confirmation": "clear-learning-records"}:
+            raise ValueError("需要在学习数据管理中明确确认清除。")
+        result = clear_learning_records(self.progress.db_path)
+        self._learning_data_cleared = True
+        self._runner = None
+        self._current_course_id = None
+        self._task_started_at.clear()
+        self._hinted_tasks.clear()
+        self._profile = LearnerProfile()
+        from sparktutor.engine.learning_coach import LearningCoachManager
+        self._coach = LearningCoachManager()
+        self._coach_visit_id = uuid.uuid4().hex
+        return result
 
     async def _get_course_progress(self, params: dict) -> dict:
         return get_course_progress(self.registry, self.progress, params["courseId"],
@@ -678,6 +736,8 @@ class ServerHandler:
 
     def end_session(self, reason: str = "server_shutdown") -> dict:
         """Record an observed orderly end once; never infer one after a crash."""
+        if self._learning_data_cleared:
+            return {"recorded": False, "reason": "learning_data_cleared"}
         if reason not in {"extension_deactivated", "server_shutdown"}:
             raise ValueError("Unsupported session end reason")
         if self._session_end_event is not None:

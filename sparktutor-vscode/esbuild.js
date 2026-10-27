@@ -13,6 +13,7 @@ const config = {
   target: "node18",
   sourcemap: true,
   minify: !watch,
+  define: { __SPARKTUTOR_BUILD__: JSON.stringify(new Date().toISOString()) },
 };
 
 if (watch) {
