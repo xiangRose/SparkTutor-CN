@@ -1,0 +1,4 @@
+# Keep the locked generated editor byte-for-byte reproducible, including its
+# upstream license comments. Review the editable source and lockfile instead.
+src/sparktutor/web/static/vendor/editor.bundle.js linguist-generated=true whitespace=-blank-at-eol,-blank-at-eof
+src/sparktutor/web/static/vendor/EDITOR-LICENSES.txt whitespace=-blank-at-eof

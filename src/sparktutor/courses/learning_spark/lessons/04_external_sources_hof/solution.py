@@ -15,7 +15,7 @@ ORDER_DATA = [
     (2, "West", 280.0, ["printer", "paper", "ink"]),
     (3, "East", 95.0,  ["pencil", "eraser"]),
     (4, "East", 320.0, ["projector", "screen", "cable"]),
-    (5, "West", 210.0, ["phone", "case", "charger"]),
+    (5, "West", 280.0, ["phone", "case", "charger"]),
     (6, "East", 175.0, ["paper", "pen", "folder"]),
 ]
 
@@ -63,11 +63,11 @@ if __name__ == "__main__":
     first_upper = df.filter(f.col("order_id") == 1).select("items_upper").collect()[0][0]
     assert first_upper == ["PEN", "PAPER", "PENCIL"], f"items_upper 错误：{first_upper}"
 
-    expected_rank = {1: 3, 2: 1, 3: 3, 4: 1, 5: 2, 6: 2}
+    expected_rank = {1: 3, 2: 1, 3: 3, 4: 1, 5: 1, 6: 2}
     for row in df.collect():
         assert row.items_upper == [item.upper() for item in row["items"]]
         assert row.p_items == [item for item in row["items"] if item.startswith("p")]
-        assert row.region_rank == expected_rank[row.order_id]
+        assert row.region_rank == expected_rank[row.order_id], "region_rank 必须使用 rank：并列第一后应为第三名"
 
     print("所有测试通过！")
     df.show(truncate=False)

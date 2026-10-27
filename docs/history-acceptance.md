@@ -1,12 +1,14 @@
+> 本文验收当前网页版本。原扩展的 F5 与命令面板操作见 [vscode-legacy 历史文档](https://github.com/xiangRose/SparkTutor-CN/blob/vscode-legacy/docs/history-acceptance.md)。安装与数据目录见 [README](../README.md)。
+
 # 第三阶段验收：学习历史与复盘
 
-本阶段把题目历史、行为时间线、四维趋势和单次记录复盘接入 VS Code。评分沿用 Issue #5；指标变化描述平台可见记录，不直接证明能力提升或教学效果。
+本阶段把题目历史、行为时间线、四维趋势和单次记录复盘接入网页。评分沿用 Issue #5；指标变化描述平台可见记录，不直接证明能力提升或教学效果。
 
-## 打开开发版
+## 打开网页验收环境
 
-1. 在 VS Code 中打开本项目的 `sparktutor-vscode` 文件夹，确认 `sparktutor.pythonPath` 指向项目虚拟环境。
-2. 按 F5，在新开的“扩展开发宿主”中操作。若之前的开发宿主仍开着，先关闭旧窗口，再启动本次版本。
-3. 按 Ctrl+Shift+P，运行“SparkTutor：查看学习历史与复盘”，或从学习工作台的“历史与复盘”入口进入。
+1. 按 [README](../README.md#新电脑首次安装与启动) 安装并启动网站，可使用独立验收数据目录。
+2. 浏览器打开服务地址，点击侧栏“学习历史”，或从学习工作台的“学习足迹”入口进入。
+3. 后端更新后应停止旧服务、重新启动并刷新浏览器；无需启动扩展开发宿主。
 
 已有学习记录会继续使用，不需要清空数据库。基本验收可使用选择题，无需 AI 密钥、Java 或 Spark；综合题仍需要其声明的执行环境。页面不会填充虚构的演示历史。
 
@@ -62,23 +64,21 @@
 
 - [ ] 没有待记录编辑时，刷新与复盘只读取数据，不新增评估、不推进课节、不修改代码。
 - [ ] 待记录编辑会在读取前补发元数据，不因此增加成绩。
-- [ ] 原来的行为记录输出窗口、学习工作台、诊断与推荐仍可使用。
+- [ ] 侧栏的行为记录、学习工作台、学习画像与推荐仍可使用。
 - [ ] 读取失败时有明确提示和重试入口；关闭页面后，迟到响应不会重新打开或改写界面。
 
 ## 自动化验证
 
-仓库根目录：
+在已安装开发依赖的项目环境中，于仓库根目录执行：
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest tests/test_learning_history.py tests/test_learning_trend.py tests/test_history_protocol.py tests/test_learning_diagnosis.py -q
+```bash
+python -m pytest tests/test_learning_history.py tests/test_learning_trend.py tests/test_history_protocol.py tests/test_learning_diagnosis.py tests/test_web.py -q
 ```
 
-`sparktutor-vscode` 目录：
+浏览器行为检查（需要 Node.js）：
 
-```powershell
-npm.cmd run lint
-npm.cmd test
-npm.cmd run build
+```bash
+node --test tests/web_frontend.test.cjs
 ```
 
-测试使用临时数据库与编辑器模拟，不修改真实学习记录。真实 Python 协议测试验证历史读取、事件归属与前后重建；自动化检查不能代替上述真实 VS Code 界面验收。完成本阶段后，再按用户指令进入后续模块。
+测试使用临时数据库与浏览器模拟，不修改真实学习记录。真实 Python 协议测试验证历史读取、事件归属与前后重建；自动化检查不能代替上述真实浏览器界面验收。

@@ -1,26 +1,108 @@
 - Class: meta
-  Lesson: Spark SQL 与 Catalyst 优化器
-  EstimatedMinutes: 30
+  Id: '0'
+  Lesson: Spark SQL：先写查询，再读执行计划
+  EstimatedMinutes: 70
 
 - Class: text
+  Id: '1'
   Depth: all
   Output: |
     ## 你将学到什么
 
-    你已经使用 DataFrame API 好几课了。在幕后，每个 `select()`、
-    `filter()` 和 `groupBy()` 都经过同一个引擎：**Spark SQL**。
-    本课你将深入其内部原理。
-
-    学完本课后，你将能够：
-
-    - 解释 Catalyst 优化器管道的四个阶段
-    - 用 `explain()` 阅读执行计划
-    - 使用临时视图对 DataFrame 编写 SQL 查询
-    - 创建和使用用户自定义函数（UDF）
-    - 理解为什么 DataFrame 优于 RDD
-    - 解释自适应查询执行（AQE）在运行时做什么
+    先用已经熟悉的筛选和聚合，分别写 DataFrame 与 SQL 查询，验证两份结果相同。
+    再认识 Catalyst 和执行计划，理解 Spark 如何处理你描述的计算。
+    核心目标是能写 SELECT、WHERE、GROUP BY、ORDER BY，并定位计划中的过滤与聚合；
+    UDF、RDD 对比和 AQE 是后续拓展，不是写第一条 SQL 的前提。
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：会筛选行、分组求和，已在第三课见过临时视图。
+
+    **完成后能做什么**：用两种 API 表达同一查询，先检查业务结果，再阅读计划。
+
+    SQL 小查询 → 筛选聚合小练习 → 与 DataFrame 对照 → Catalyst 概念 → explain → 员工汇总综合题。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: '8'
+  Depth: all
+  Output: |
+    ## 从 SELECT 和 WHERE 开始
+
+    先把已有 DataFrame 注册为当前会话中的视图，再查询它：
+
+    ```python
+    employees_df.createOrReplaceTempView("employees")
+    result = spark.sql("SELECT name, department FROM employees WHERE salary > 50000")
+    ```
+
+    SELECT 决定保留哪些列，FROM 指定查询对象，WHERE 指定保留哪些行。
+    employees_df 由练习上下文提供；SQL 视图名 employees 不是磁盘上的文件路径。
+    先练会这三个部分，下一小节再增加分组和排序，不必同时掌握完整 SQL 语法。
+
+- Class: cmd_question
+  Id: sql-first-query
+  Depth: all
+  KnowledgeComponents:
+  - spark.sql
+  Output: |
+    已有名为 employees 的临时视图，列为 name、department、salary。只查询 salary > 50000 的 name 和 department，赋给 result。
+  CorrectAnswer: |
+    result = spark.sql("SELECT name, department FROM employees WHERE salary > 50000")
+  Hint: SELECT 写列，FROM 写视图，WHERE 写行条件。
+  Context: regional_sales_sql
+
+- Class: text
+  Id: sql-grouping-primer
+  Depth: all
+  Output: |
+    ## 再增加分组：先筛选，再汇总
+
+    ```sql
+    SELECT department, AVG(salary) AS avg_salary
+    FROM employees
+    WHERE salary > 50000
+    GROUP BY department
+    ORDER BY avg_salary DESC
+    ```
+
+    WHERE 先筛选员工，GROUP BY 再分部门求均值；不会先算全体均值再筛选。
+    例如同部门工资是 40000 和 60000，筛选后均值是 60000。
+    对应 DataFrame 步骤是 filter → groupBy → agg → orderBy。
+
+- Class: script
+  Id: practice-sql-aggregation
+  Depth: all
+  RequiresExecution: true
+  ExerciseTitle: 筛选员工后计算部门均薪
+  KnowledgeComponents: [spark.sql, dataframe.aggregate]
+  Context: salary_sql_practice
+  StarterCode: sql_practice_starter.py
+  SolutionCode: sql_practice_solution.py
+  Output: |
+    ## 单项练习：WHERE 应当在求均值之前
+
+    **输入、输出与通过条件**
+
+    实现 `summarize_payroll(spark, employees)`。输入 DataFrame 的列为 department（string）、
+    salary（double），均不为 null。先将 employees 注册为 payroll 临时视图，用 SQL 查询它。
+    只保留 salary **严格大于 50000** 的员工，再按 department 计算 AVG(salary)，命名为 avg_salary。
+    返回 department、avg_salary 两列，按 avg_salary 降序；均值相同时按部门名升序。
+
+    例如 Engineering 工资为 40000、60000、90000，先筛选后应得到均值 75000；
+    Sales 的 50000、55000 只保留 55000。不能先对所有员工求均值再筛部门。
+    测试还检查同均值的排序、工资刚好为 50000、无合格员工和空输入。
+  Hint: 依次写 SELECT、FROM、WHERE、GROUP BY、ORDER BY；AVG(salary) AS avg_salary。
+
+- Class: text
+  Id: "2"
   Depth: all
   Output: |
     ## Catalyst 优化器
@@ -42,13 +124,15 @@
     Catalyst。
 
 - Class: text
+  Id: '3'
   Depth: beginner
   Output: |
     把 Catalyst 想象成 GPS 导航系统。你告诉它你想去哪里（你的查询），
-    它计算出最佳路线（执行计划）。它考虑捷径（跳过不需要列等优化）和
-    路况（数据统计）来找到最快路径。你不需要知道路线 —— 只需知道目的地。
+    它依据已有统计信息和规则选择执行路线（执行计划）。它考虑捷径（跳过不需要列等优化）和
+    路况（数据统计）来选择执行方式，但不保证任何数据上都最优；遇到性能问题仍应检查实际计划。
 
 - Class: mult_question
+  Id: "4"
   KnowledgeComponents: [spark.catalyst]
   Context: regional_sales_sql
   Depth: all
@@ -58,6 +142,7 @@
   Hint: "在计划被解析、列引用被解析之后，哪个阶段将其重写为更高效的形式？"
 
 - Class: text
+  Id: "5"
   Depth: intermediate
   Output: |
     ## 关键 Catalyst 优化
@@ -82,6 +167,7 @@
     —— 涵盖 Catalyst 阶段、谓词下推、列裁剪和计划优化。
 
 - Class: text
+  Id: "6"
   Depth: all
   Output: |
     ## 阅读执行计划
@@ -107,6 +193,7 @@
     - `BroadcastHashJoin` / `SortMergeJoin` —— join 策略
 
 - Class: cmd_question
+  Id: "7"
   KnowledgeComponents: [spark.catalyst]
   Context: regional_sales_sql
   Depth: all
@@ -118,32 +205,7 @@
   Hint: "链式调用 filter()、select()，然后 .explain('extended')。"
 
 - Class: text
-  Depth: all
-  Output: |
-    ## 用 spark.sql() 编写 SQL 查询
-
-    你已经使用过 `createOrReplaceTempView` 将 DataFrame 注册为
-    SQL 表。以下是完整工作流程：
-
-    ```python
-    # 将 DataFrame 注册为 SQL 视图
-    employees_df.createOrReplaceTempView("employees")
-
-    # 用标准 SQL 查询
-    result = spark.sql("""
-        SELECT department, AVG(salary) AS avg_salary
-        FROM employees
-        WHERE hire_date > '2020-01-01'
-        GROUP BY department
-        HAVING AVG(salary) > 80000
-        ORDER BY avg_salary DESC
-    """)
-    ```
-
-    SQL 和 DataFrame 可以互换。当查询自然地表达为 SELECT 语句时用 SQL。
-    当你需要程序化组合（动态构建查询）时用 DataFrame。
-
-- Class: text
+  Id: "9"
   Depth: intermediate
   Output: |
     ## 用户自定义函数（UDF）
@@ -175,6 +237,7 @@
     —— `returnType` 参数、批量 UDF 签名和性能指导。
 
 - Class: mult_question
+  Id: "10"
   KnowledgeComponents: [spark.udf]
   Context: regional_sales_sql
   Depth: intermediate
@@ -184,6 +247,7 @@
   Hint: "PySpark 运行在 JVM 之上。当 Python 代码需要处理 JVM 数据时会发生什么？"
 
 - Class: text
+  Id: "11"
   Depth: intermediate
   Output: |
     ## DataFrame 与 RDD 的对比
@@ -202,6 +266,7 @@
     类型，否则使用 DataFrame。
 
 - Class: text
+  Id: "12"
   Depth: advanced
   Output: |
     ## 自适应查询执行（AQE）
@@ -226,6 +291,7 @@
     ```
 
 - Class: cmd_question
+  Id: "13"
   KnowledgeComponents: [spark.aqe]
   Context: regional_sales_sql
   Depth: advanced
@@ -236,8 +302,36 @@
     spark.conf.set("spark.sql.adaptive.advisoryPartitionSizeInBytes", "128m")
   Hint: "用 spark.conf.set 设置 spark.sql.adaptive.enabled 和 advisoryPartitionSizeInBytes。"
 
+- Class: text
+  Id: sql-plan-check-example
+  Depth: all
+  Output: |
+    ## 综合前：结果相同不等于计划文字逐字相同
+
+    两种 API 都先过滤 salary > 50000，再按 department 求平均值并降序。
+    先比较结果中的部门与 avg_salary；再用 explain 查看过滤、聚合等算子。
+    计划可能包含不同表达式编号，不能用整段字符串完全相等代替结果核验。
+    课程起始代码提供捕获计划的方法；该综合题使用经典 Spark，不适用于 Spark Connect。
+
+- Class: mult_question
+  Id: sql-plan-check-check
+  Depth: all
+  KnowledgeComponents:
+  - spark.sql
+  - dataframe.aggregate
+  Output: |
+    某部门两名员工工资为 40000 和 60000，先 WHERE salary > 50000 再求平均，结果是什么？
+  AnswerChoices: 60000;50000;40000
+  CorrectAnswer: '60000'
+  Hint: 先判断哪些行进入聚合。
+  Context: regional_sales_sql
+
 - Class: script
-  KnowledgeComponents: [spark.sql, dataframe.group_by, dataframe.aggregate]
+  Id: '14'
+  KnowledgeComponents:
+  - spark.sql
+  - dataframe.group_by
+  - dataframe.aggregate
   Context: regional_sales_sql
   Depth: all
   RequiresExecution: true
@@ -247,7 +341,7 @@
     实现 `compare_plans(spark)`，用 DataFrame API 和 Spark SQL 编写
     相同的查询，然后捕获执行计划。
 
-    这展示了两个 API 产生相同的优化计划 —— 这是在实践中选择它们时的
+    这展示了语义等价的查询可以由同一个引擎优化 —— 这是在实践中选择它们时的
     关键认知。
 
     1. 创建一个示例员工 DataFrame
@@ -267,9 +361,10 @@
     请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
-  Hint: "将 DataFrame 注册为临时视图，在两个 API 中编写相同的 filter-groupBy-agg-orderBy，并用 explain() 捕获计划。"
+  Hint: 将 DataFrame 注册为临时视图，在两个 API 中编写相同的 filter-groupBy-agg-orderBy，并用 explain() 捕获计划。
 
 - Class: text
+  Id: "15"
   Depth: all
   Output: |
     ## 小结

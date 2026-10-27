@@ -1,4 +1,4 @@
-name: Teaching quality
+name: Web learning quality
 
 on:
   push:
@@ -9,8 +9,11 @@ permissions:
 
 jobs:
   unit:
+    name: Python ${{ matrix.python }} / local rules
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
         python: ['3.10', '3.12']
     steps:
@@ -18,25 +21,54 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: pip install -e '.[dev]'
-      - run: pytest tests -q
-  extension:
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m pytest tests -q -m 'not spark'
+
+  browser:
+    name: Offline editor and browser behavior
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sparktutor-vscode
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
-          cache-dependency-path: sparktutor-vscode/package-lock.json
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
+          cache-dependency-path: src/sparktutor/web/static/editor-src/package-lock.json
+      - run: node --test tests/web_frontend.test.cjs
+      - name: Rebuild the committed offline editor
+        working-directory: src/sparktutor/web/static/editor-src
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+      - name: Check that the shipped editor matches its locked source
+        run: git diff --exit-code -- src/sparktutor/web/static/vendor/editor.bundle.js
+
+  distribution:
+    name: Source and wheel installation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install build
+      - run: python -m build
+      - name: Check course, browser and license resources
+        run: python tools/check_distribution.py dist/*.whl dist/*.tar.gz
+      - name: Install the wheel instead of the source checkout
+        run: python -m pip install dist/*.whl
+      - name: Serve the installed wheel without source-path access or npm
+        run: python -I tools/smoke_installed_web.py
+
   spark-courses:
+    name: Real Spark / course reference and negative cases
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -52,10 +84,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - run: pip install -e '.[spark,dev]'
-      - run: pytest tests/test_course_execution.py -q
+      - run: python -m pip install -e '.[spark,dev]'
+      - run: python -m pytest tests/test_course_execution.py -q -m spark
 
   demo-spark:
+    name: Real Spark / isolated diagnosis scenarios
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -71,5 +104,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - run: pip install -e '.[spark,dev]'
-      - run: pytest tests/test_demo_scenarios.py -q -m spark
+      - run: python -m pip install -e '.[spark,dev]'
+      - run: python -m pytest tests/test_demo_scenarios.py -q -m spark
+
+  web-spark:
+    name: Real Spark / browser execution and grading
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SPARKTUTOR_TEST_SPARK: '1'
+      SPARK_LOCAL_IP: 127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: python -m pip install -e '.[spark,dev]'
+      - run: python -m pytest tests/test_web_execution.py -q -m spark

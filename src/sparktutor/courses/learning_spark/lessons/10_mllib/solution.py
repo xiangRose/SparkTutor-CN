@@ -99,7 +99,26 @@ if __name__ == "__main__":
         .master("local[*]")
         .getOrCreate())
 
-    result = build_pipeline(spark)
+    # 观察真实拟合输入，不依赖学生使用的变量名或代码写法。
+    # 只在目标函数执行期间包装 fit，任何异常都会恢复原方法。
+    from collections import Counter
+    _course_expected_rows = Counter(generate_housing_data())
+    _course_fit_records = []
+    _course_original_fit = Pipeline.fit
+
+    def _course_checked_fit(self, dataset, *args, **kwargs):
+        rows = Counter(tuple(row) for row in dataset.select(*SCHEMA.fieldNames()).collect())
+        assert 0 < sum(rows.values()) < sum(_course_expected_rows.values()), "Pipeline 只能在训练子集上拟合，不能使用全部数据或空数据"
+        assert not rows - _course_expected_rows, "拟合输入必须来自题目提供的房屋数据"
+        model = _course_original_fit(self, dataset, *args, **kwargs)
+        _course_fit_records.append((model.uid, rows))
+        return model
+
+    Pipeline.fit = _course_checked_fit
+    try:
+        result = build_pipeline(spark)
+    finally:
+        Pipeline.fit = _course_original_fit
     assert result is not None, "函数返回了 None"
     assert result["model"] is not None, "模型为 None"
     assert result["predictions"] is not None, "预测为 None"
@@ -119,8 +138,13 @@ if __name__ == "__main__":
     assert isinstance(result["model"], PipelineModel) and len(result["model"].stages) == 4
     assert result["train_count"] > 0 and result["test_count"] > 0
     assert result["train_count"] + result["test_count"] == 500
-    assert result["predictions"].count() == result["test_count"]
+    assert result["predictions"].count() == result["test_count"], "预测必须来自测试集，行数应与 test_count 一致"
     assert {"features", "price", "prediction"} <= set(result["predictions"].columns)
+    fitted = [rows for uid, rows in _course_fit_records if uid == result["model"].uid]
+    assert len(fitted) == 1, "返回的模型必须来自本次 Pipeline 拟合"
+    assert sum(fitted[0].values()) == result["train_count"], "train_count 必须等于模型实际使用的训练行数"
+    predicted = Counter(tuple(row) for row in result["predictions"].select(*SCHEMA.fieldNames()).collect())
+    assert fitted[0] + predicted == _course_expected_rows, "训练数据与测试预测必须恰好覆盖原数据，不能重复使用或遗漏样本"
     check_evaluator = RegressionEvaluator(labelCol="price", predictionCol="prediction")
     for metric in ["rmse", "r2"]:
         measured = check_evaluator.setMetricName(metric).evaluate(result["predictions"])

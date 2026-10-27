@@ -1,8 +1,10 @@
 - Class: meta
-  Lesson: "Bronze 层"
-  EstimatedMinutes: 20
+  Id: '0'
+  Lesson: Bronze 层
+  EstimatedMinutes: 50
 
 - Class: text
+  Id: "1"
   Depth: all
   Output: |
     ## 你将学到什么
@@ -20,6 +22,23 @@
     - 理解增量接入模式（高级）
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：已理解函数返回 DataFrame、CSV 读入、全字符串 Schema 和临时视图。
+
+    **完成后能做什么**：读取原始业务值，添加来源信息，并按本题约定处理重复订单。
+
+    保留原始值 → 来源元数据 → 小样例去重 → Bronze 综合题。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: "2"
   Depth: all
   Output: |
     ## Bronze 层的职责
@@ -36,6 +55,7 @@
     不做转换。
 
 - Class: text
+  Id: "3"
   Depth: beginner
   Output: |
     一个最小化的 bronze 接入逻辑读取原始文件并添加两个元数据列：
@@ -64,6 +84,7 @@
     —— `subset` 参数用于按指定列去重。
 
 - Class: mult_question
+  Id: "4"
   KnowledgeComponents: [pipeline.bronze]
   Context: raw_orders
   Depth: all
@@ -73,6 +94,7 @@
   Hint: "Bronze 关注的是原始数据的接入与保留，而不是转换。"
 
 - Class: cmd_question
+  Id: "5"
   KnowledgeComponents: [dataframe.io, dataframe.schema]
   Context: raw_orders
   Depth: all
@@ -89,6 +111,7 @@
   Hint: "使用 spark.read.json()，并用 .withColumn 配合 f.current_timestamp()。"
 
 - Class: text
+  Id: "6"
   Depth: all
   Output: |
     ## Schema-on-Read（读取时定义 Schema）
@@ -112,15 +135,18 @@
     来决定如何处理这些情况。
 
 - Class: mult_question
-  KnowledgeComponents: [dataframe.schema]
+  Id: '7'
+  KnowledgeComponents:
+  - dataframe.schema
   Context: raw_orders
-  Depth: intermediate
-  Output: "为什么 bronze 层把列读成字符串而不是它们的实际类型？"
-  AnswerChoices: "避免因解析错误丢数据 —— 类型转换放在 silver 层完成;为了节省内存;因为 Spark 无法从 CSV 推断类型;为了让查询更快"
-  CorrectAnswer: "避免因解析错误丢数据 —— 类型转换放在 silver 层完成"
-  Hint: "如果 price 列包含 'N/A'，转成 double 会变成 null，丢失原始值。"
+  Depth: all
+  Output: 为什么 bronze 层把列读成字符串而不是它们的实际类型？
+  AnswerChoices: 避免因解析错误丢数据 —— 类型转换放在 silver 层完成;为了节省内存;因为 Spark 无法从 CSV 推断类型;为了让查询更快
+  CorrectAnswer: 避免因解析错误丢数据 —— 类型转换放在 silver 层完成
+  Hint: 如果 price 列包含 'N/A'，转成 double 会变成 null，丢失原始值。
 
 - Class: text
+  Id: "8"
   Depth: all
   Output: |
     ## 去重
@@ -146,9 +172,11 @@
     ```
 
 - Class: cmd_question
-  KnowledgeComponents: [dataframe.with_column]
+  Id: '9'
+  KnowledgeComponents:
+  - dataframe.with_column
   Context: raw_orders
-  Depth: intermediate
+  Depth: all
   Output: |
     给定一个包含 `event_id`、`user_id`、`action` 和
     `_ingested_at` 列的 DataFrame `raw_df`，按 `event_id`
@@ -163,9 +191,10 @@
         .withColumn("_rn", f.row_number().over(w))
         .filter(f.col("_rn") == 1)
         .drop("_rn"))
-  Hint: "按 event_id 分区，按 _ingested_at 降序排列，取 row_number == 1。"
+  Hint: 按 event_id 分区，按 _ingested_at 降序排列，取 row_number == 1。
 
 - Class: text
+  Id: "10"
   Depth: advanced
   Output: |
     ## 增量接入
@@ -194,6 +223,7 @@
     很容易地包装流式数据源。
 
 - Class: mult_question
+  Id: "11"
   KnowledgeComponents: [spark.streaming]
   Context: raw_orders
   Depth: advanced
@@ -202,7 +232,31 @@
   CorrectAnswer: "spark.readStream 配合文件源"
   Hint: "Structured Streaming 的文件源会维护已处理文件的内部状态。"
 
+- Class: text
+  Id: bronze-contract-example
+  Depth: all
+  Output: |
+    ## 综合题前：先检查保留与去重的边界
+
+    Bronze 保留 price="N/A" 这样的原始文本，留给 Silver 决定如何处理，不在这里把它改成 0。
+    对内容一致的重复订单，`dropDuplicates(["order_id"])` 按本题要求保留一条。
+    如果同一 order_id 对应不同内容，它并不保证选择最新的一条；真实业务需要额外规则。
+    添加元数据后应能回答“何时接入、来自哪个文件”，但这些字段不是事务保证。
+
+- Class: mult_question
+  Id: bronze-contract-check
+  Depth: all
+  KnowledgeComponents:
+  - pipeline.bronze
+  Output: |
+    本题 Bronze 读到 price='N/A'，在尚未到 Silver 清洗阶段时应如何处理？
+  AnswerChoices: 作为原始字符串保留;直接改成 0 并当作真实价格;无法解释就随意删除整批数据
+  CorrectAnswer: 作为原始字符串保留
+  Hint: 原始记录与清洗策略分层处理。
+  Context: raw_orders
+
 - Class: script
+  Id: "12"
   KnowledgeComponents: [pipeline.bronze, dataframe.schema, dataframe.io]
   Context: raw_orders
   Depth: all
@@ -235,6 +289,7 @@
   Hint: "用 StringType schema 读取 CSV，用 withColumn 添加元数据列，然后 dropDuplicates。"
 
 - Class: text
+  Id: "13"
   Depth: all
   Output: |
     ## 小结

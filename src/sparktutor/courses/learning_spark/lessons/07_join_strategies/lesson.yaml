@@ -1,26 +1,61 @@
 - Class: meta
+  Id: '0'
   Lesson: Join 策略
-  EstimatedMinutes: 25
+  EstimatedMinutes: 60
 
 - Class: text
+  Id: '1'
   Depth: all
   Output: |
     ## 你将学到什么
 
-    Join 将来自多个数据源的数据合并 —— 它们是分布式计算中
-    最昂贵的操作。错误的 join 策略可以把一个 10 秒的查询
-    变成 10 分钟的查询。
-
-    在上一课中，你学习了调优分区和缓存。现在你将学习
-    如何选择和优化 join：
-
-    - 五种 join 类型（inner、outer、semi、anti、cross）
-    - Broadcast Hash Join —— 小表与大表 join 的最快策略
-    - Sort Merge Join —— 大表与大表 join 的默认策略
-    - Bucket 表 —— 预分区数据以跳过 shuffle
-    - 处理 join 中的数据倾斜
+    关联先解决业务问题：用共同的键把订单和产品、用户和事件对应起来。
+    本课先理解 inner、left 等关联类型及重复键对行数的影响，再看 Spark 怎样执行等值关联。
+    完成后能写普通关联、为适合的小表提出广播建议，并核对不同策略的结果与计划。
+    Bucket 与数据倾斜处理作为拓展；实际策略和收益需要结合统计信息、资源及执行计划判断。
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：会按键分组、筛选与查看执行计划；无需先背 join 算法。
+
+    **完成后能做什么**：先选对 inner/left 语义，再比较相同结果的不同执行策略。
+
+    手工对齐两张小表 → inner 与 left → 代码练习 → broadcast 与 merge → 计划对照。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: join-meaning-example
+  Depth: all
+  Output: |
+    ## 先在纸上关联两张表
+
+    订单有 product_id=1、2；产品表只有 product_id=1，对应名称 pen。
+    inner join 只留下匹配到产品 1 的订单；left join 保留两条订单，产品 2 的名称为 null。
+    `orders.join(products, "product_id", "left")` 表示按同名键做左关联。
+    如果产品表同一个键有两行，一条订单可能匹配出两行；关联前要理解键是否唯一。
+    Join 类型决定保留什么行，执行策略决定引擎怎样算，两者不要混为一谈。
+
+- Class: mult_question
+  Id: join-meaning-check
+  Depth: all
+  KnowledgeComponents:
+  - dataframe.join
+  Output: |
+    订单有产品 1、2，产品表只有产品 1；想保留所有订单，应优先选哪种关联？
+  AnswerChoices: left join;inner join;只对产品表 count()
+  CorrectAnswer: left join
+  Hint: 明确哪一张表的行必须保留。
+  Context: retail_product_join
+
+- Class: text
+  Id: "2"
   Depth: all
   Output: |
     ## Join 类型
@@ -50,53 +85,62 @@
     **文档：** [DataFrame.join](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html)
     —— `on`（列名或表达式）、`how`（`inner`、`left`、`full`、`left_semi`、`left_anti`、`cross`）。
 
+- Class: cmd_question
+  Id: left-join-practice
+  Depth: all
+  KnowledgeComponents:
+  - dataframe.join
+  Output: |
+    已有 orders 和 products，都含 product_id；按该键做 left join，结果赋给 result。先不添加性能提示。
+  CorrectAnswer: |
+    result = orders.join(products, "product_id", "left")
+  Hint: 先把业务语义写对，再选择执行策略。
+  Context: retail_product_join
+
 - Class: text
+  Id: '3'
   Depth: beginner
   Output: |
-    想象你有一本巨大的电话簿（大表）和一份简短的客人名单（小表）。
-    与其为每个客人翻遍电话簿，不如复印客人名单，给每个工人一份。
-    每个工人将自己负责的电话簿部分与本地客人名单进行匹配。
-    没有人需要移动电话簿 —— 这就是 **Broadcast Hash Join**。
+    ## 类比：给每位工作人员一份小字典
 
-    如果两张表都很大（两本电话簿），你别无选择，只能排序和合并它们
-    —— 这就是 **Sort Merge Join**。它更慢，因为两侧都必须先
-    经过 shuffle 和排序。
+    如果产品字典足够小，可以复制给处理不同订单分区的工作人员，各自在本地查找产品。
+    这个类比帮助理解广播关联如何减少大表重分布，并不表示广播没有内存和网络成本。
+    当两边都大时，排序合并是常见策略之一；引擎也可能选择其他适用策略，应查看计划。
 
 - Class: text
+  Id: '4'
   Depth: all
   Output: |
     ## Broadcast Hash Join（BHJ）
 
-    当一张表小到足以放入执行器内存时，Spark 会将其 **广播**
-    到每个执行器。大表保持不动 —— 不需要为它做 shuffle。
-    这是最快的 join 策略。
-
-    当一侧小于 `spark.sql.autoBroadcastJoinThreshold`
-    （默认：**10MB**）时，Spark 会自动使用 BHJ。
-
-    你可以用 hint 强制广播：
+    对适合的等值关联，如果一侧足够小，Spark 可以把它广播给执行器，减少大表为关联进行的 shuffle。
+    自动广播阈值 `spark.sql.autoBroadcastJoinThreshold` 默认是 10MB，但还要结合统计信息、关联类型等条件选择。
+    小于阈值是一个候选条件，不是所有查询一定使用 BHJ 的保证。
 
     ```python
     from pyspark.sql import functions as f
-
     result = large_df.join(f.broadcast(small_df), "key")
+    result.explain()
     ```
 
-    用 `explain()` 检查执行计划 —— 查找 `BroadcastHashJoin`。
-
-    **文档：** [f.broadcast](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.broadcast.html)
-    —— 在 join 调用中用 `f.broadcast(df)` 包装小 DataFrame。
+    `broadcast` 提示优化器优先考虑广播；必须评估小表是否适合每个执行器的内存。
+    不要仅凭行数少或名称叫 small 就广播。实际策略用 explain 中的算子确认。
+    **文档：** [广播与策略提示](https://spark.apache.org/docs/4.1.1/sql-performance-tuning.html)。
 
 - Class: mult_question
-  KnowledgeComponents: [spark.broadcast]
+  Id: '5'
+  KnowledgeComponents:
+  - spark.broadcast
   Context: retail_product_join
   Depth: all
-  Output: "Spark 什么时候自动选择 Broadcast Hash Join？"
-  AnswerChoices: "当一张表小于 autoBroadcastJoinThreshold（默认 10MB）时;当两张表都很大时;当 join 键有索引时;对 inner join 总是如此"
-  CorrectAnswer: "当一张表小于 autoBroadcastJoinThreshold（默认 10MB）时"
-  Hint: "哪种策略通过复制小表来避免 shuffle 大表？"
+  Output: |
+    哪些条件使 Spark 有机会自动考虑 Broadcast Hash Join？
+  AnswerChoices: 适用的等值关联中，小表估计大小低于广播阈值且满足其他条件;只要文件名含 small;对所有 inner join 总是广播;只要先调用 count()
+  CorrectAnswer: 适用的等值关联中，小表估计大小低于广播阈值且满足其他条件
+  Hint: 阈值、统计信息、关联类型与资源都影响选择；最终看执行计划。
 
 - Class: cmd_question
+  Id: "6"
   KnowledgeComponents: [dataframe.join, spark.broadcast]
   Context: retail_product_join
   Depth: all
@@ -110,51 +154,39 @@
   Hint: "在 join 调用中用 f.broadcast() 包装小 DataFrame。"
 
 - Class: text
+  Id: '7'
   Depth: all
   Output: |
     ## Sort Merge Join（SMJ）
 
-    当两张表都太大无法广播时，Spark 回退到 Sort Merge Join：
-
-    1. **Shuffle** —— 两侧都按 join 键分区
-    2. **Sort** —— 每个分区按 join 键排序
-    3. **Merge** —— 排序后的分区被合并（类似归并排序）
-
-    shuffle 是代价高昂的部分 —— 每一行都必须通过网络发送到
-    拥有其键哈希值的分区。对于大表与大表的 join，这是不可避免的。
-
-    你可以用 `explain()` 验证策略 —— 在物理计划中查找
-    `SortMergeJoin`。
+    排序合并是大表等值关联的常见策略之一：按键分布数据、在分区内排序，再合并匹配行。
+    如果数据已有适用的分布或排序，部分重分布与排序工作可能省略；不一定每次都重新跨网络搬全部数据。
+    Spark 还可能根据条件采用哈希关联等策略，并可能通过 AQE 在运行中调整。
+    在物理计划中查找 SortMergeJoin，结合实际读写和 shuffle 指标解释成本。
 
 - Class: text
+  Id: '8'
   Depth: all
   Output: |
-    ## 强制使用特定的 Join 策略
-
-    有时候你比优化器更懂行：
+    ## 使用策略提示，并验证执行计划
 
     ```python
-    # Force broadcast (even if above threshold)
-    result = big_df.join(f.broadcast(medium_df), "key")
-
-    # Force sort-merge (disable broadcast for testing)
-    spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "-1")
-    result = df1.join(df2, "key")
-
-    # Reset to default
-    spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "10485760")
+    broadcast_result = big_df.join(f.broadcast(small_df), "key")
+    merge_result = df1.hint("merge").join(df2.hint("merge"), "key")
     ```
 
-    join 之后使用 `explain()` 确认 Spark 选择的策略。
+    提示表达倾向，不保证任何关联条件都支持该策略。先检查结果正确，再用 explain 验证。
+    不要为一个练习改动全局阈值后忘记恢复原值；禁用自动广播也不等于强制排序合并。
 
 - Class: text
+  Id: '9'
   Depth: intermediate
   Output: |
     ## Bucket 表
 
-    如果两张表经常在同一个键上 join，将它们保存为 **bucketed** 表。
-    Bucketing 会预分区并预排序数据，因此相同 bucketing 的表之间
-    的 join 完全跳过 shuffle：
+    如果两张表经常在同一个键上 join，可评估保存为 **bucketed** 表。
+    `bucketBy` 按指定列的哈希组织数据，`sortBy` 则指定桶内排序。
+    优化器识别出兼容的桶分布、关联条件和执行策略时，部分 join 可能减少或省去 shuffle：
 
     ```python
     # Write bucketed
@@ -168,25 +200,30 @@
         .sortBy("user_id")
         .saveAsTable("users_bucketed"))
 
-    # Join — no shuffle needed!
+    # 是否省去 shuffle，要检查本次实际执行计划。
     orders = spark.table("orders_bucketed")
     users = spark.table("users_bucketed")
     result = orders.join(users, "user_id")
+    result.explain()
     ```
 
-    两张表必须有**相同数量的 bucket** 和**相同的 bucket 列**，
-    该优化才会生效。
+    示例使用相同的桶列与桶数，但这本身不保证省去 shuffle。
+    还要检查读取计划是否保留了可用的桶分布，以及 join 键和实际策略是否兼容。
+    特定配置也支持合并兼容的不同桶数，不能把“桶数相同”当作所有情况的必要条件。
+    用 `explain` 查找本次计划中的 `Exchange`，并结合实际执行确认。
 
 - Class: mult_question
+  Id: "10"
   KnowledgeComponents: [spark.bucketing]
   Context: retail_product_join
   Depth: intermediate
   Output: "Bucket 表对 join 的主要优势是什么？"
-  AnswerChoices: "Join 跳过 shuffle，因为数据已按 join 键预分区;数据压缩更高效;查询无需 SparkSession 即可运行;Bucket 表占用更少磁盘空间"
-  CorrectAnswer: "Join 跳过 shuffle，因为数据已按 join 键预分区"
-  Hint: "Sort Merge Join 中最昂贵的部分是 shuffle。Bucketing 如何帮助？"
+  AnswerChoices: "兼容的桶分布被优化器利用时，Join 可能减少或省去 shuffle;所有 Join 都必定跳过 shuffle;查询无需 SparkSession 即可运行;Bucket 表必定占用更少磁盘空间"
+  CorrectAnswer: "兼容的桶分布被优化器利用时，Join 可能减少或省去 shuffle"
+  Hint: "桶布局提供优化机会，但是否生效还取决于关联条件、配置和实际执行计划。"
 
 - Class: text
+  Id: "11"
   Depth: advanced
   Output: |
     ## 处理 Join 中的数据倾斜
@@ -203,34 +240,63 @@
     spark.conf.set("spark.sql.adaptive.skewJoin.skewedPartitionFactor", "5")
     ```
 
-    **解决方案 2：加盐（Salting）** —— 给倾斜的键添加随机前缀
-    以将其分散到多个分区：
-    ```python
-    from pyspark.sql import functions as f
-    salted = df.withColumn("salted_key",
-        f.concat(f.col("key"), f.lit("_"), (f.rand() * 10).cast("int")))
-    ```
-    然后在加盐后的键上 join。这用略大的 shuffle 换来了
-    瓶颈的消除。
+    **解决方案 2：加盐（Salting）的双表思路** —— 以下仅解释非空键的
+    inner join，不是可以直接套用到外连接的完整实现：
 
-    **解决方案 3：过滤 null** —— 如果 null 键导致倾斜，
-    过滤掉它们，单独处理，然后 union 结果。
+    1. 大表中同一热点键的各行分配不同盐值，例如 0、1。
+    2. 小表中该键的每一行都复制为盐值 0、1 两份；不能让两表各自随机加盐。
+    3. 按原键和盐值同时 inner join，输出时去掉辅助盐列，保留原业务列与重复记录。
+    4. 与未加盐的结果比较行数和内容，确认没有丢失或增加匹配，再比较运行代价。
+
+    例如大表键 A 有三行，盐为 0、1、0；小表键 A 只有一行，复制为 A/0、A/1。
+    关联后仍有三行。若小表也随机只选一个盐，另一盐的匹配会丢失。
+    复制会增大另一侧数据；仅在适合的热点键和表规模下考虑，不保证一定更快。
+
+    **解决方案 3：先明确 null 的业务语义** —— 普通等值 inner join 不匹配 null 键；
+    外连接和 null-safe 等值关联的保留规则不同，不能直接丢弃 null 行或照搬上述加盐步骤。
 
 - Class: cmd_question
-  KnowledgeComponents: [spark.broadcast]
+  Id: '12'
+  KnowledgeComponents:
+  - spark.broadcast
   Context: retail_product_join
   Depth: advanced
   Output: |
-    将 `autoBroadcastJoinThreshold` 设置为 -1 以禁用 broadcast join，
-    在 `'user_id'` 上 join DataFrame `users` 和 `events`，
-    然后展示物理计划以验证使用了 Sort Merge Join。
+    在 user_id 上关联 users 和 events，对两侧使用 merge 提示，将结果赋给 result 并展示物理计划；观察是否出现 SortMergeJoin，不要改全局广播阈值。
   CorrectAnswer: |
-    spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "-1")
-    result = users.join(events, "user_id")
+    result = users.hint("merge").join(events.hint("merge"), "user_id")
     result.explain()
-  Hint: "将阈值设为 -1，join，然后调用 explain() 查看计划。"
+  Hint: 提示加在两侧 DataFrame 上，使用 explain 检查实际策略。
+
+- Class: text
+  Id: join-plan-rehearsal-example
+  Depth: all
+  Output: |
+    ## 综合题前：同一个查询，两种执行策略
+
+    ```python
+    broadcast_result = events.join(f.broadcast(users), "user_id")
+    merge_result = events.hint("merge").join(users.hint("merge"), "user_id")
+    ```
+
+    先检查两份结果是否相同，再检查计划中的 BroadcastHashJoin、SortMergeJoin。
+    hints 是给优化器的策略建议，适用性由 join 类型、条件和引擎决定，不是任意场景的强制保证。
+    本题不修改全局广播阈值，不用小样例的耗时推断生产环境谁一定更快。
+
+- Class: mult_question
+  Id: join-plan-rehearsal-check
+  Depth: all
+  KnowledgeComponents:
+  - dataframe.join
+  Output: |
+    换了执行策略后，同一等值 inner join 的业务结果应如何？
+  AnswerChoices: 应保持一致，先比较结果再看计划;广播策略应自动删掉重复行;排序合并策略应额外保留未匹配行
+  CorrectAnswer: 应保持一致，先比较结果再看计划
+  Hint: 策略与 inner/left 等结果语义是两层概念。
+  Context: retail_product_join
 
 - Class: script
+  Id: "13"
   KnowledgeComponents: [dataframe.join, spark.broadcast]
   Context: retail_product_join
   Depth: all
@@ -264,21 +330,12 @@
   Hint: "BHJ 用 f.broadcast(users_df)，SMJ 在两侧用 hint('merge')，获取两份计划字符串并比较结果。"
 
 - Class: text
+  Id: '14'
   Depth: all
   Output: |
-    ## 小结
+    ## 小结：先保证关联结果，再讨论策略
 
-    本课你学到了：
-
-    - **Join 类型** —— inner、left/right/full outer、left_semi（EXISTS）、
-      left_anti（NOT EXISTS）
-    - **Broadcast Hash Join** —— 小表与大表 join 最快；低于 10MB
-      阈值时自动选择；用 `f.broadcast()` 强制
-    - **Sort Merge Join** —— 大表与大表 join 的默认策略；
-      shuffle + sort + merge
-    - **Bucket 表** —— 预分区数据以在频繁 join 时跳过 shuffle
-    - **倾斜处理** —— AQE 倾斜 join、加盐或 null 过滤
-
-    你现在可以编写高效的 join 并用 `explain()` 诊断 join 性能。
-    在下一课中，你将从批处理转向**流处理** —— 在数据到达时
-    持续处理数据。
+    inner/left 等类型决定保留哪些行；重复键可能让结果行数增加。
+    广播、排序合并等策略决定引擎怎样执行，不应改变同一查询的业务结果。
+    是否广播取决于统计信息、关联条件和资源；hints 也需要通过计划验证。
+    本课小数据用于观察算子，不足以证明生产性能优劣。下一课转向持续到来的数据。

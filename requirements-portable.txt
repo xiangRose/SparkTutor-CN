@@ -1,0 +1,28 @@
+# Historical snapshot of the optional Windows portable runtime only.
+# This is not the source-install dependency list or a cross-platform lockfile.
+# Install the submitted source with: python -m pip install -e ".[spark,dev]"
+# The portable interpreter itself is not committed to this repository.
+annotated-types==0.8.0
+anthropic==1.7.0
+anyio==4.15.1
+click==8.5.0
+colorama==0.4.6
+docstring_parser==0.18.0
+h11==0.16.0
+httpcore2==2.13.0
+httpx2==2.13.0
+idna==3.20
+jiter==0.17.0
+markdown-it-py==4.2.0
+mdurl==0.1.2
+pydantic==2.13.5
+pydantic_core==2.46.5
+pydantic-settings==2.15.0
+Pygments==2.21.0
+python-dotenv==1.2.3
+PyYAML==6.0.3
+rich==15.0.0
+sniffio==1.3.1
+truststore==0.10.4
+typing_extensions==4.16.0
+typing-inspection==0.4.4

@@ -1,8 +1,10 @@
 - Class: meta
+  Id: '0'
   Lesson: 性能优化与调优
-  EstimatedMinutes: 30
+  EstimatedMinutes: 55
 
 - Class: text
+  Id: "1"
   Depth: all
   Output: |
     ## 你将学到什么
@@ -19,9 +21,26 @@
     - 运用系统化的 Spark 调优方法
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：能读 explain 中的过滤和聚合，知道 transformation 与 action。
+
+    **完成后能做什么**：说明缓存和分区的用途，正确物化、复用并释放练习中的缓存。
+
+    先确定瓶颈与测量对象 → 分区 → 缓存生命周期 → 小样例检查 → 综合练习。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: '2'
   Depth: beginner
   Output: |
-    把 Spark 分区想象成高速公路上的车道。更多的车道（分区）
+    把 Spark 分区想象成高速公路上的车道。适当的车道数（分区数）
     让更多的车辆（任务）并行行驶，但车道过多会浪费空间并产生合并开销。
     目标是让分区数量与集群容量和数据规模相匹配。
 
@@ -29,6 +48,18 @@
     找到恰当的平衡。
 
 - Class: text
+  Id: measure-before-tuning
+  Depth: all
+  Output: |
+    ## 先定义“慢在哪里”，再调整配置
+
+    一次总耗时可能包含 JVM 启动、读取文件、真正计算、网络交换和输出。
+    只给 transformation 计时，可能测到的只是构建计划；比较时要触发相同的 action。
+    先确认两份结果一致，再比较同一数据、同一环境的多次执行，不用本课小数据宣布某个配置总是更快。
+    先减少不需要的列和行，再考虑复用缓存；Join 专属策略下一课展开。
+
+- Class: text
+  Id: "3"
   Depth: all
   Output: |
     ## 影响最大的配置项
@@ -60,6 +91,7 @@
     `spark.executor.memory`、`spark.memory.fraction` 等。
 
 - Class: mult_question
+  Id: "4"
   KnowledgeComponents: [spark.shuffle]
   Context: transaction_optimization
   Depth: all
@@ -69,6 +101,7 @@
   Hint: "在 groupBy 或 join 之后，数据会被重新 shuffle。这个设置控制结果有多少个分区。"
 
 - Class: text
+  Id: "5"
   Depth: all
   Output: |
     ## Repartition 与 Coalesce 的对比
@@ -95,6 +128,7 @@
     增加分区、重新均衡数据，或大幅减少分区导致并行度不足时，考虑 `repartition`。
 
 - Class: cmd_question
+  Id: "6"
   KnowledgeComponents: [spark.partition]
   Context: transaction_optimization
   Depth: all
@@ -106,6 +140,7 @@
   Hint: "你在减少分区，所以用 coalesce（而不是 repartition）来避免不必要的 shuffle。"
 
 - Class: text
+  Id: "7"
   Depth: all
   Output: |
     ## 缓存与持久化
@@ -130,7 +165,8 @@
     —— `persist()` 的 `StorageLevel` 参数、惰性物化行为。
 
 - Class: text
-  Depth: intermediate
+  Id: '8'
+  Depth: all
   Output: |
     ## 存储级别
 
@@ -152,6 +188,7 @@
     根据复用次数、内存容量和重算成本选择是否缓存；PySpark 不提供 `MEMORY_ONLY_SER` 常量。
 
 - Class: mult_question
+  Id: "9"
   KnowledgeComponents: [spark.cache]
   Context: transaction_optimization
   Depth: all
@@ -161,6 +198,7 @@
   Hint: "cache() 只是一个便捷方法 —— 它封装了什么？"
 
 - Class: text
+  Id: "10"
   Depth: all
   Output: |
     ## 何时缓存（以及何时不要缓存）
@@ -180,9 +218,11 @@
     并可能在后续 stage 中导致 OOM 错误。
 
 - Class: cmd_question
-  KnowledgeComponents: [spark.cache]
+  Id: '11'
+  KnowledgeComponents:
+  - spark.cache
   Context: transaction_optimization
-  Depth: intermediate
+  Depth: all
   Output: |
     缓存 DataFrame `df`，用 `count()` 触发物化，打印计数，
     然后用 `unpersist()` 释放缓存。
@@ -191,9 +231,10 @@
     count = df.count()
     print(count)
     df.unpersist()
-  Hint: "cache() 标记它，count() 物化它，unpersist() 释放它。"
+  Hint: cache() 标记它，count() 物化它，unpersist() 释放它。
 
 - Class: text
+  Id: "12"
   Depth: advanced
   Output: |
     ## 系统化的调优方法
@@ -218,6 +259,7 @@
     缓存它。你是否在读取不需要的列？尽早使用 `select()`。
 
 - Class: text
+  Id: '13'
   Depth: advanced
   Output: |
     ## 监控缓存使用情况
@@ -227,10 +269,41 @@
     应结合内存/磁盘占用与任务指标判断，不能仅凭比例认定发生了溢写。
 
     **实用提示**：缓存*过滤后*的 DataFrame，而不是原始读取。
-    缓存 100GB 的原始读取是浪费；一个 5GB 的过滤+聚合中间结果
-    才是合适的缓存候选。
+    如果下游只复用过滤聚合后的结果，它通常比完整原始表更值得优先评估。
+    是否缓存仍要结合复用次数、重算成本和可用资源测量，不能仅凭数据量判断。
+
+- Class: text
+  Id: cache-lifecycle-example
+  Depth: all
+  Output: |
+    ## 综合题前：把缓存生命周期走一遍
+
+    ```python
+    cached = df.groupBy("department").agg(f.sum("revenue").alias("total"))
+    cached.cache()          # 声明要缓存
+    cached.count()          # action，计算并物化缓存
+    # 在这里复用 cached 做不同分析
+    cached.unpersist()      # 不再需要时释放
+    ```
+
+    练习返回的分析结果在释放缓存后仍能重新计算；如果要保存加速收益，应在释放前执行需要的 action。
+    coalesce(1) 只用于本题很小的最终结果，不应照搬到所有大数据输出。
+
+- Class: mult_question
+  Id: cache-lifecycle-check
+  Depth: all
+  KnowledgeComponents:
+  - spark.cache
+  - spark.execution
+  Output: |
+    只调用 cache()、还没有 action，能否据此认定整个结果已经计算并驻留缓存？
+  AnswerChoices: 不能，需要 action 触发并检查执行;能，cache() 会立即完成全部计算;能，创建变量就会执行全部任务
+  CorrectAnswer: 不能，需要 action 触发并检查执行
+  Hint: 回忆惰性求值。
+  Context: transaction_optimization
 
 - Class: script
+  Id: "14"
   KnowledgeComponents: [spark.partition, spark.cache, dataframe.aggregate]
   Context: transaction_optimization
   Depth: all
@@ -264,6 +337,7 @@
   Hint: "用 spark.conf.set 设置 shuffle 分区，.cache() + .count() 来物化，返回前用 .coalesce()。"
 
 - Class: text
+  Id: '15'
   Depth: all
   Output: |
     ## 小结
@@ -274,7 +348,7 @@
       文件分区大小是影响最大的设置
     - **repartition 与 coalesce** —— repartition 用于增加或均衡分区；
       coalesce 用于不 shuffle 地减少分区
-    - **缓存** —— 缓存被复用 2 次以上的 DataFrame；始终 unpersist
+    - **缓存** —— 对重算代价高且会复用的 DataFrame 评估缓存；不用时 unpersist
     - **存储级别** —— MEMORY_AND_DISK_DESER 是安全的默认值；
       通过 persist 选择适合工作负载的可用级别
     - **调优流程** —— Spark UI → 倾斜 → shuffle → 分区 → 缓存

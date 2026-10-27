@@ -1,8 +1,10 @@
 - Class: meta
-  Lesson: "函数与转换"
-  EstimatedMinutes: 15
+  Id: '0'
+  Lesson: 函数与转换
+  EstimatedMinutes: 45
 
 - Class: text
+  Id: "1"
   Depth: all
   Output: |
     ## 你将学到什么
@@ -20,6 +22,23 @@
     - 编写 Arrow 优化的 UDF 实现自定义逻辑（高级）
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：会创建小表，并知道筛选行与增加列的区别。
+
+    **完成后能做什么**：按正确顺序增加数值列与条件列，再把转换组合成一个表达式。
+
+    col 与 lit → select → filter → withColumn → when/otherwise → 链式组合。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: "2"
   Depth: all
   Output: |
     Spark 在 `pyspark.sql.functions` 中内置了数百个函数。
@@ -39,6 +58,7 @@
     等**动作**之前，什么都不会执行。
 
 - Class: text
+  Id: "3"
   Depth: beginner
   Output: |
     下面是一个简单示例。假设有一个 DataFrame `df`，包含列
@@ -69,6 +89,7 @@
     [f.when](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.when.html)
 
 - Class: mult_question
+  Id: "4"
   KnowledgeComponents: [dataframe.column]
   Context: product_transforms
   Depth: all
@@ -78,6 +99,7 @@
   Hint: "它是 pyspark.sql.functions 中一个三个字母的函数。"
 
 - Class: cmd_question
+  Id: "5"
   KnowledgeComponents: [dataframe.select]
   Context: product_transforms
   Depth: all
@@ -89,6 +111,7 @@
   Hint: "将列名作为字符串传给 df.select()。"
 
 - Class: cmd_question
+  Id: "6"
   KnowledgeComponents: [dataframe.filter]
   Context: product_transforms
   Depth: all
@@ -99,6 +122,7 @@
   Hint: "用 f.col('price') 引用列，然后用 > 比较。"
 
 - Class: mult_question
+  Id: "7"
   KnowledgeComponents: [dataframe.column]
   Context: product_transforms
   Depth: all
@@ -107,19 +131,58 @@
   CorrectAnswer: "创建一个带有常量值的列"
   Hint: "'lit' 是 'literal' 的缩写 —— 它将一个 Python 值包装成 Spark 列表达式。"
 
+- Class: text
+  Id: derived-column-primer
+  Depth: all
+  Output: |
+    ## 补齐：新增列不是聚合
+
+    例如一行 price=3.5、quantity=2，新增 total 应为 7.0，行数不变：
+    `df.withColumn("total", f.col("price") * f.col("quantity"))`。
+    条件列使用 `f.when(条件, 满足时的值).otherwise(否则的值)`，例如价格档位。
+    先接住 withColumn 返回的新表，再引用新增列；不要用 Python 的 and/or 连接 Column 条件。
+
 - Class: cmd_question
-  KnowledgeComponents: [dataframe.with_column]
+  Id: '8'
+  KnowledgeComponents:
+  - dataframe.with_column
   Context: product_transforms
-  Depth: intermediate
+  Depth: all
   Output: |
     向 DataFrame `df` 添加一个名为 `total` 的新列，其值等于
     `price * quantity`。
   CorrectAnswer: |
     df.withColumn("total", f.col("price") * f.col("quantity"))
-  Hint: "用 withColumn，并对 f.col 列做算术表达式。"
+  Hint: 用 withColumn，并对 f.col 列做算术表达式。
+
+- Class: mult_question
+  Id: derive-before-aggregate
+  Depth: all
+  KnowledgeComponents:
+  - dataframe.with_column
+  Output: |
+    一条订单 price=3.5、quantity=2；用 withColumn 增加 total 后应该得到什么？
+  AnswerChoices: 同一行增加 total=7.0;整张表只剩一行总计;quantity 自动变成 7
+  CorrectAnswer: 同一行增加 total=7.0
+  Hint: 新增列保留原行。
+  Context: product_transforms
+
+- Class: cmd_question
+  Id: '10'
+  KnowledgeComponents:
+  - dataframe.with_column
+  Context: product_transforms
+  Depth: all
+  Output: |
+    使用 `f.when`，向 `df` 添加一个名为 `tier` 的列：当
+    `price >= 100` 时为 `'premium'`，否则为 `'standard'`。
+  CorrectAnswer: |
+    df.withColumn("tier", f.when(f.col("price") >= 100, "premium").otherwise("standard"))
+  Hint: f.when(condition, value).otherwise(default_value) 返回一个 Column 表达式。
 
 - Class: text
-  Depth: intermediate
+  Id: '9'
+  Depth: all
   Output: |
     ## 链式组合转换
 
@@ -139,18 +202,8 @@
     正是我们管道的 silver 层将要做的事情。你现在正在为它
     积累词汇。
 
-- Class: cmd_question
-  KnowledgeComponents: [dataframe.with_column]
-  Context: product_transforms
-  Depth: intermediate
-  Output: |
-    使用 `f.when`，向 `df` 添加一个名为 `tier` 的列：当
-    `price >= 100` 时为 `'premium'`，否则为 `'standard'`。
-  CorrectAnswer: |
-    df.withColumn("tier", f.when(f.col("price") >= 100, "premium").otherwise("standard"))
-  Hint: "f.when(condition, value).otherwise(default_value) 返回一个 Column 表达式。"
-
 - Class: text
+  Id: "11"
   Depth: advanced
   Output: |
     ## Arrow 优化的 UDF
@@ -178,6 +231,7 @@
     适合内置函数无法表达的自定义业务逻辑。
 
 - Class: mult_question
+  Id: "12"
   KnowledgeComponents: [spark.udf]
   Context: product_transforms
   Depth: advanced
@@ -187,6 +241,7 @@
   Hint: "关键是 Arrow 列式传输与向量化处理；实际流程并非所有环节都能零拷贝。"
 
 - Class: cmd_question
+  Id: "13"
   KnowledgeComponents: [spark.udf]
   Context: product_transforms
   Depth: advanced
@@ -204,6 +259,7 @@
   Hint: "使用 @pandas_udf('double') 装饰器。将 Series 除以 s.max()。"
 
 - Class: text
+  Id: "14"
   Depth: all
   Output: |
     ## 小结

@@ -1,32 +1,56 @@
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-build/
-.pytest_cache/
-*.db
-
-# Virtualenv
+# Local interpreters and installed dependencies
 .venv/
+venv/
+.web-runtime/
+node_modules/
 
-# VS Code extension
-sparktutor-vscode/node_modules/
-sparktutor-vscode/out/
-sparktutor-vscode/python_src/
-sparktutor-vscode/*.vsix
-
-# Editor (but keep extension's .vscode for F5 launch config)
-.vscode/
-!sparktutor-vscode/.vscode/
-*.swp
-
-# Reference materials (not public domain)
-references/
-
-# Secrets
+# Learning records, learner code, model secrets and machine-specific settings
+.sparktutor-web/
+.sparktutor/
 .env
 .env.*
+!.env.example
+!.env.sample
+*.dpapi
+*.pem
+*.key
+*.p12
+*.pfx
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.log
 
-# Generated isolated demonstration reports
+# Python and frontend build/test output
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage/
+.tox/
+.nox/
+dist/
+build/
+*.whl
+*.tar.gz
+
+# Generated demonstration/evaluation reports and local editor files
 demo-output/
+coach-evaluation-output/
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Local drafts and external reference material
+PR_DESCRIPTION.md
+references/

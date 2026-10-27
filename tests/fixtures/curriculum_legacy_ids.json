@@ -1,0 +1,1778 @@
+{
+  "learning_spark/lessons/01_getting_started": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "text"
+    },
+    {
+      "id": "5",
+      "class": "text"
+    },
+    {
+      "id": "6",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.architecture"
+      ],
+      "Context": "candy_counts"
+    },
+    {
+      "id": "7",
+      "class": "text"
+    },
+    {
+      "id": "8",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "spark.session"
+      ],
+      "Context": "candy_counts"
+    },
+    {
+      "id": "9",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.execution"
+      ],
+      "Context": "candy_counts"
+    },
+    {
+      "id": "10",
+      "class": "text"
+    },
+    {
+      "id": "11",
+      "class": "text"
+    },
+    {
+      "id": "12",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.group_by",
+        "dataframe.aggregate"
+      ],
+      "Context": "candy_counts"
+    },
+    {
+      "id": "13",
+      "class": "text"
+    },
+    {
+      "id": "14",
+      "class": "text"
+    },
+    {
+      "id": "15",
+      "class": "script",
+      "KnowledgeComponents": [
+        "dataframe.filter",
+        "dataframe.group_by",
+        "dataframe.aggregate"
+      ],
+      "Context": "candy_counts",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "16",
+      "class": "text"
+    }
+  ],
+  "learning_spark/lessons/02_dataframes_schemas": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "text"
+    },
+    {
+      "id": "5",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.with_column"
+      ],
+      "Context": "blog_records"
+    },
+    {
+      "id": "6",
+      "class": "text"
+    },
+    {
+      "id": "7",
+      "class": "text"
+    },
+    {
+      "id": "8",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.schema"
+      ],
+      "Context": "blog_records"
+    },
+    {
+      "id": "9",
+      "class": "text"
+    },
+    {
+      "id": "10",
+      "class": "text"
+    },
+    {
+      "id": "11",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.schema"
+      ],
+      "Context": "blog_records"
+    },
+    {
+      "id": "12",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.with_column"
+      ],
+      "Context": "blog_records"
+    },
+    {
+      "id": "13",
+      "class": "text"
+    },
+    {
+      "id": "14",
+      "class": "script",
+      "KnowledgeComponents": [
+        "dataframe.schema",
+        "dataframe.with_column",
+        "dataframe.array"
+      ],
+      "Context": "blog_records",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "15",
+      "class": "text"
+    }
+  ],
+  "learning_spark/lessons/03_data_sources": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "text"
+    },
+    {
+      "id": "5",
+      "class": "text"
+    },
+    {
+      "id": "6",
+      "class": "text"
+    },
+    {
+      "id": "7",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.io"
+      ],
+      "Context": "flight_delays"
+    },
+    {
+      "id": "8",
+      "class": "text"
+    },
+    {
+      "id": "9",
+      "class": "text"
+    },
+    {
+      "id": "10",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.io",
+        "dataframe.schema"
+      ],
+      "Context": "flight_delays"
+    },
+    {
+      "id": "11",
+      "class": "text"
+    },
+    {
+      "id": "12",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.io"
+      ],
+      "Context": "flight_delays"
+    },
+    {
+      "id": "13",
+      "class": "text"
+    },
+    {
+      "id": "14",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.io"
+      ],
+      "Context": "flight_delays"
+    },
+    {
+      "id": "15",
+      "class": "text"
+    },
+    {
+      "id": "16",
+      "class": "script",
+      "KnowledgeComponents": [
+        "dataframe.schema",
+        "dataframe.io",
+        "dataframe.group_by",
+        "dataframe.aggregate"
+      ],
+      "Context": "flight_delays",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "17",
+      "class": "text"
+    }
+  ],
+  "learning_spark/lessons/04_external_sources_hof": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "text"
+    },
+    {
+      "id": "5",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.array"
+      ],
+      "Context": "order_arrays"
+    },
+    {
+      "id": "6",
+      "class": "text"
+    },
+    {
+      "id": "7",
+      "class": "text"
+    },
+    {
+      "id": "8",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.hof"
+      ],
+      "Context": "order_arrays"
+    },
+    {
+      "id": "9",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.hof"
+      ],
+      "Context": "order_arrays"
+    },
+    {
+      "id": "10",
+      "class": "text"
+    },
+    {
+      "id": "11",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.hof"
+      ],
+      "Context": "order_arrays"
+    },
+    {
+      "id": "12",
+      "class": "text"
+    },
+    {
+      "id": "13",
+      "class": "text"
+    },
+    {
+      "id": "14",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.hof"
+      ],
+      "Context": "order_arrays"
+    },
+    {
+      "id": "15",
+      "class": "script",
+      "KnowledgeComponents": [
+        "dataframe.array",
+        "dataframe.hof",
+        "dataframe.window"
+      ],
+      "Context": "order_arrays",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "16",
+      "class": "text"
+    }
+  ],
+  "learning_spark/lessons/05_spark_sql_deep_dive": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.catalyst"
+      ],
+      "Context": "regional_sales_sql"
+    },
+    {
+      "id": "5",
+      "class": "text"
+    },
+    {
+      "id": "6",
+      "class": "text"
+    },
+    {
+      "id": "7",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "spark.catalyst"
+      ],
+      "Context": "regional_sales_sql"
+    },
+    {
+      "id": "8",
+      "class": "text"
+    },
+    {
+      "id": "9",
+      "class": "text"
+    },
+    {
+      "id": "10",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.udf"
+      ],
+      "Context": "regional_sales_sql"
+    },
+    {
+      "id": "11",
+      "class": "text"
+    },
+    {
+      "id": "12",
+      "class": "text"
+    },
+    {
+      "id": "13",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "spark.aqe"
+      ],
+      "Context": "regional_sales_sql"
+    },
+    {
+      "id": "14",
+      "class": "script",
+      "KnowledgeComponents": [
+        "spark.sql",
+        "dataframe.group_by",
+        "dataframe.aggregate"
+      ],
+      "Context": "regional_sales_sql",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "15",
+      "class": "text"
+    }
+  ],
+  "learning_spark/lessons/06_optimization_tuning": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.shuffle"
+      ],
+      "Context": "transaction_optimization"
+    },
+    {
+      "id": "5",
+      "class": "text"
+    },
+    {
+      "id": "6",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "spark.partition"
+      ],
+      "Context": "transaction_optimization"
+    },
+    {
+      "id": "7",
+      "class": "text"
+    },
+    {
+      "id": "8",
+      "class": "text"
+    },
+    {
+      "id": "9",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.cache"
+      ],
+      "Context": "transaction_optimization"
+    },
+    {
+      "id": "10",
+      "class": "text"
+    },
+    {
+      "id": "11",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "spark.cache"
+      ],
+      "Context": "transaction_optimization"
+    },
+    {
+      "id": "12",
+      "class": "text"
+    },
+    {
+      "id": "13",
+      "class": "text"
+    },
+    {
+      "id": "14",
+      "class": "script",
+      "KnowledgeComponents": [
+        "spark.partition",
+        "spark.cache",
+        "dataframe.aggregate"
+      ],
+      "Context": "transaction_optimization",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "15",
+      "class": "text"
+    }
+  ],
+  "learning_spark/lessons/07_join_strategies": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "text"
+    },
+    {
+      "id": "5",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.broadcast"
+      ],
+      "Context": "retail_product_join"
+    },
+    {
+      "id": "6",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.join",
+        "spark.broadcast"
+      ],
+      "Context": "retail_product_join"
+    },
+    {
+      "id": "7",
+      "class": "text"
+    },
+    {
+      "id": "8",
+      "class": "text"
+    },
+    {
+      "id": "9",
+      "class": "text"
+    },
+    {
+      "id": "10",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.bucketing"
+      ],
+      "Context": "retail_product_join"
+    },
+    {
+      "id": "11",
+      "class": "text"
+    },
+    {
+      "id": "12",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "spark.broadcast"
+      ],
+      "Context": "retail_product_join"
+    },
+    {
+      "id": "13",
+      "class": "script",
+      "KnowledgeComponents": [
+        "dataframe.join",
+        "spark.broadcast"
+      ],
+      "Context": "retail_product_join",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "14",
+      "class": "text"
+    }
+  ],
+  "learning_spark/lessons/08_structured_streaming": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "text"
+    },
+    {
+      "id": "5",
+      "class": "text"
+    },
+    {
+      "id": "6",
+      "class": "text"
+    },
+    {
+      "id": "7",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.streaming"
+      ],
+      "Context": "socket_word_counts"
+    },
+    {
+      "id": "8",
+      "class": "text"
+    },
+    {
+      "id": "9",
+      "class": "text"
+    },
+    {
+      "id": "10",
+      "class": "text"
+    },
+    {
+      "id": "11",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.watermark"
+      ],
+      "Context": "socket_word_counts"
+    },
+    {
+      "id": "12",
+      "class": "text"
+    },
+    {
+      "id": "13",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "spark.streaming"
+      ],
+      "Context": "socket_word_counts"
+    },
+    {
+      "id": "14",
+      "class": "text"
+    },
+    {
+      "id": "15",
+      "class": "text"
+    },
+    {
+      "id": "16",
+      "class": "script",
+      "KnowledgeComponents": [
+        "dataframe.filter",
+        "dataframe.group_by",
+        "dataframe.aggregate"
+      ],
+      "Context": "socket_word_counts",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "17",
+      "class": "text"
+    }
+  ],
+  "learning_spark/lessons/09_data_lakes": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "text"
+    },
+    {
+      "id": "5",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "lakehouse.transactions"
+      ],
+      "Context": "versioned_events"
+    },
+    {
+      "id": "6",
+      "class": "text"
+    },
+    {
+      "id": "7",
+      "class": "text"
+    },
+    {
+      "id": "8",
+      "class": "text"
+    },
+    {
+      "id": "9",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "lakehouse.time_travel"
+      ],
+      "Context": "versioned_events"
+    },
+    {
+      "id": "10",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "lakehouse.delta"
+      ],
+      "Context": "versioned_events"
+    },
+    {
+      "id": "11",
+      "class": "text"
+    },
+    {
+      "id": "12",
+      "class": "text"
+    },
+    {
+      "id": "13",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "lakehouse.formats"
+      ],
+      "Context": "versioned_events"
+    },
+    {
+      "id": "14",
+      "class": "script",
+      "KnowledgeComponents": [
+        "dataframe.io",
+        "lakehouse.time_travel"
+      ],
+      "Context": "versioned_events",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "15",
+      "class": "text"
+    }
+  ],
+  "learning_spark/lessons/10_mllib": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "text"
+    },
+    {
+      "id": "5",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "ml.features"
+      ],
+      "Context": "housing_prices"
+    },
+    {
+      "id": "6",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "ml.features"
+      ],
+      "Context": "housing_prices"
+    },
+    {
+      "id": "7",
+      "class": "text"
+    },
+    {
+      "id": "8",
+      "class": "text"
+    },
+    {
+      "id": "9",
+      "class": "text"
+    },
+    {
+      "id": "10",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "ml.evaluation"
+      ],
+      "Context": "housing_prices"
+    },
+    {
+      "id": "11",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "ml.evaluation"
+      ],
+      "Context": "housing_prices"
+    },
+    {
+      "id": "12",
+      "class": "text"
+    },
+    {
+      "id": "13",
+      "class": "text"
+    },
+    {
+      "id": "14",
+      "class": "text"
+    },
+    {
+      "id": "15",
+      "class": "script",
+      "KnowledgeComponents": [
+        "ml.features",
+        "ml.regression",
+        "ml.evaluation"
+      ],
+      "Context": "housing_prices",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "16",
+      "class": "text"
+    }
+  ],
+  "learning_spark/lessons/11_diagnosis_practice": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "debug_orders",
+      "class": "script",
+      "KnowledgeComponents": [
+        "dataframe.filter",
+        "dataframe.with_column"
+      ],
+      "Context": "orders_debugging",
+      "Prerequisites": [
+        {
+          "courseId": "learning_spark",
+          "lessonId": "02_dataframes_schemas",
+          "stepId": "14"
+        }
+      ],
+      "StarterCode": "debug_orders_starter.py",
+      "SolutionCode": "debug_orders_solution.py"
+    },
+    {
+      "id": "sensor_transfer",
+      "class": "script",
+      "KnowledgeComponents": [
+        "dataframe.group_by",
+        "dataframe.aggregate"
+      ],
+      "Context": "sensors",
+      "Transfer": {
+        "sources": [
+          {
+            "courseId": "learning_spark",
+            "lessonId": "01_getting_started",
+            "stepId": "15"
+          }
+        ],
+        "context": "sensors"
+      },
+      "Prerequisites": [
+        {
+          "courseId": "learning_spark",
+          "lessonId": "01_getting_started",
+          "stepId": "15"
+        }
+      ],
+      "StarterCode": "sensor_transfer_starter.py",
+      "SolutionCode": "sensor_transfer_solution.py"
+    },
+    {
+      "id": "weather_transfer",
+      "class": "script",
+      "KnowledgeComponents": [
+        "dataframe.schema",
+        "dataframe.with_column"
+      ],
+      "Context": "weather",
+      "Transfer": {
+        "sources": [
+          {
+            "courseId": "learning_spark",
+            "lessonId": "02_dataframes_schemas",
+            "stepId": "14"
+          }
+        ],
+        "context": "weather"
+      },
+      "Prerequisites": [
+        {
+          "courseId": "learning_spark",
+          "lessonId": "02_dataframes_schemas",
+          "stepId": "14"
+        }
+      ],
+      "StarterCode": "weather_transfer_starter.py",
+      "SolutionCode": "weather_transfer_solution.py"
+    },
+    {
+      "id": "5",
+      "class": "text"
+    }
+  ],
+  "spark_declarative_pipelines/lessons/01_spark_session": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "text"
+    },
+    {
+      "id": "5",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.session"
+      ],
+      "Context": "orders_session"
+    },
+    {
+      "id": "6",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "spark.session"
+      ],
+      "Context": "orders_session"
+    },
+    {
+      "id": "7",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.shuffle"
+      ],
+      "Context": "orders_session"
+    },
+    {
+      "id": "8",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "spark.session",
+        "spark.shuffle"
+      ],
+      "Context": "orders_session"
+    },
+    {
+      "id": "9",
+      "class": "text"
+    },
+    {
+      "id": "10",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.catalyst"
+      ],
+      "Context": "orders_session"
+    },
+    {
+      "id": "11",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "spark.session",
+        "lakehouse.catalog"
+      ],
+      "Context": "orders_session"
+    },
+    {
+      "id": "12",
+      "class": "text"
+    }
+  ],
+  "spark_declarative_pipelines/lessons/02_functions_and_transforms": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.column"
+      ],
+      "Context": "product_transforms"
+    },
+    {
+      "id": "5",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.select"
+      ],
+      "Context": "product_transforms"
+    },
+    {
+      "id": "6",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.filter"
+      ],
+      "Context": "product_transforms"
+    },
+    {
+      "id": "7",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.column"
+      ],
+      "Context": "product_transforms"
+    },
+    {
+      "id": "8",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.with_column"
+      ],
+      "Context": "product_transforms"
+    },
+    {
+      "id": "9",
+      "class": "text"
+    },
+    {
+      "id": "10",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.with_column"
+      ],
+      "Context": "product_transforms"
+    },
+    {
+      "id": "11",
+      "class": "text"
+    },
+    {
+      "id": "12",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.udf"
+      ],
+      "Context": "product_transforms"
+    },
+    {
+      "id": "13",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "spark.udf"
+      ],
+      "Context": "product_transforms"
+    },
+    {
+      "id": "14",
+      "class": "text"
+    }
+  ],
+  "spark_declarative_pipelines/lessons/03_reading_writing_data": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.schema"
+      ],
+      "Context": "orders_files"
+    },
+    {
+      "id": "5",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.io",
+        "dataframe.schema"
+      ],
+      "Context": "orders_files"
+    },
+    {
+      "id": "6",
+      "class": "text"
+    },
+    {
+      "id": "7",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.schema"
+      ],
+      "Context": "orders_files"
+    },
+    {
+      "id": "8",
+      "class": "text"
+    },
+    {
+      "id": "9",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.io"
+      ],
+      "Context": "orders_files"
+    },
+    {
+      "id": "10",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.io"
+      ],
+      "Context": "orders_files"
+    },
+    {
+      "id": "11",
+      "class": "text"
+    },
+    {
+      "id": "12",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.io",
+        "dataframe.filter"
+      ],
+      "Context": "orders_files"
+    },
+    {
+      "id": "13",
+      "class": "text"
+    },
+    {
+      "id": "14",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "lakehouse.time_travel"
+      ],
+      "Context": "orders_files"
+    },
+    {
+      "id": "15",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "lakehouse.catalog"
+      ],
+      "Context": "orders_files"
+    },
+    {
+      "id": "16",
+      "class": "text"
+    }
+  ],
+  "spark_declarative_pipelines/lessons/04_pipeline_framework": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "pipeline.decorator"
+      ],
+      "Context": "view_dependency_graph"
+    },
+    {
+      "id": "5",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "pipeline.framework"
+      ],
+      "Context": "view_dependency_graph"
+    },
+    {
+      "id": "6",
+      "class": "text"
+    },
+    {
+      "id": "7",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "pipeline.dependencies"
+      ],
+      "Context": "view_dependency_graph"
+    },
+    {
+      "id": "8",
+      "class": "text"
+    },
+    {
+      "id": "9",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "pipeline.dependencies"
+      ],
+      "Context": "view_dependency_graph"
+    },
+    {
+      "id": "10",
+      "class": "text"
+    },
+    {
+      "id": "11",
+      "class": "script",
+      "KnowledgeComponents": [
+        "pipeline.framework",
+        "pipeline.dependencies"
+      ],
+      "Context": "view_dependency_graph",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "12",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "pipeline.dependencies"
+      ],
+      "Context": "view_dependency_graph"
+    },
+    {
+      "id": "13",
+      "class": "text"
+    }
+  ],
+  "spark_declarative_pipelines/lessons/05_bronze_layer": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "pipeline.bronze"
+      ],
+      "Context": "raw_orders"
+    },
+    {
+      "id": "5",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.io",
+        "dataframe.schema"
+      ],
+      "Context": "raw_orders"
+    },
+    {
+      "id": "6",
+      "class": "text"
+    },
+    {
+      "id": "7",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.schema"
+      ],
+      "Context": "raw_orders"
+    },
+    {
+      "id": "8",
+      "class": "text"
+    },
+    {
+      "id": "9",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.with_column"
+      ],
+      "Context": "raw_orders"
+    },
+    {
+      "id": "10",
+      "class": "text"
+    },
+    {
+      "id": "11",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.streaming"
+      ],
+      "Context": "raw_orders"
+    },
+    {
+      "id": "12",
+      "class": "script",
+      "KnowledgeComponents": [
+        "pipeline.bronze",
+        "dataframe.schema",
+        "dataframe.io"
+      ],
+      "Context": "raw_orders",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "13",
+      "class": "text"
+    }
+  ],
+  "spark_declarative_pipelines/lessons/06_silver_layer": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.cast"
+      ],
+      "Context": "clean_orders"
+    },
+    {
+      "id": "5",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.cast"
+      ],
+      "Context": "clean_orders"
+    },
+    {
+      "id": "6",
+      "class": "text"
+    },
+    {
+      "id": "7",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.broadcast"
+      ],
+      "Context": "clean_orders"
+    },
+    {
+      "id": "8",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.join"
+      ],
+      "Context": "clean_orders"
+    },
+    {
+      "id": "9",
+      "class": "text"
+    },
+    {
+      "id": "10",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.cast"
+      ],
+      "Context": "clean_orders"
+    },
+    {
+      "id": "11",
+      "class": "text"
+    },
+    {
+      "id": "12",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.join"
+      ],
+      "Context": "clean_orders"
+    },
+    {
+      "id": "13",
+      "class": "script",
+      "KnowledgeComponents": [
+        "pipeline.silver",
+        "dataframe.cast",
+        "dataframe.filter",
+        "dataframe.join"
+      ],
+      "Context": "clean_orders",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "14",
+      "class": "text"
+    }
+  ],
+  "spark_declarative_pipelines/lessons/07_gold_layer": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "text"
+    },
+    {
+      "id": "5",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.aggregate"
+      ],
+      "Context": "sales_analytics"
+    },
+    {
+      "id": "6",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.group_by",
+        "dataframe.aggregate"
+      ],
+      "Context": "sales_analytics"
+    },
+    {
+      "id": "7",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.aggregate"
+      ],
+      "Context": "sales_analytics"
+    },
+    {
+      "id": "8",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.group_by",
+        "dataframe.aggregate"
+      ],
+      "Context": "sales_analytics"
+    },
+    {
+      "id": "9",
+      "class": "text"
+    },
+    {
+      "id": "10",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.window"
+      ],
+      "Context": "sales_analytics"
+    },
+    {
+      "id": "11",
+      "class": "text"
+    },
+    {
+      "id": "12",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.window"
+      ],
+      "Context": "sales_analytics"
+    },
+    {
+      "id": "13",
+      "class": "text"
+    },
+    {
+      "id": "14",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "spark.shuffle"
+      ],
+      "Context": "sales_analytics"
+    },
+    {
+      "id": "15",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "dataframe.group_by",
+        "dataframe.aggregate"
+      ],
+      "Context": "sales_analytics"
+    },
+    {
+      "id": "16",
+      "class": "script",
+      "KnowledgeComponents": [
+        "pipeline.gold",
+        "dataframe.group_by",
+        "dataframe.aggregate",
+        "dataframe.window"
+      ],
+      "Context": "sales_analytics",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "17",
+      "class": "text"
+    }
+  ],
+  "spark_declarative_pipelines/lessons/08_full_pipeline": [
+    {
+      "id": "0",
+      "class": "meta"
+    },
+    {
+      "id": "1",
+      "class": "text"
+    },
+    {
+      "id": "2",
+      "class": "text"
+    },
+    {
+      "id": "3",
+      "class": "text"
+    },
+    {
+      "id": "4",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "pipeline.dependencies"
+      ],
+      "Context": "end_to_end_orders"
+    },
+    {
+      "id": "5",
+      "class": "text"
+    },
+    {
+      "id": "6",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "pipeline.dependencies"
+      ],
+      "Context": "end_to_end_orders"
+    },
+    {
+      "id": "7",
+      "class": "text"
+    },
+    {
+      "id": "8",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "pipeline.dependencies"
+      ],
+      "Context": "end_to_end_orders"
+    },
+    {
+      "id": "9",
+      "class": "cmd_question",
+      "KnowledgeComponents": [
+        "pipeline.framework"
+      ],
+      "Context": "end_to_end_orders"
+    },
+    {
+      "id": "10",
+      "class": "text"
+    },
+    {
+      "id": "11",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "dataframe.io"
+      ],
+      "Context": "end_to_end_orders"
+    },
+    {
+      "id": "12",
+      "class": "text"
+    },
+    {
+      "id": "13",
+      "class": "mult_question",
+      "KnowledgeComponents": [
+        "pipeline.framework"
+      ],
+      "Context": "end_to_end_orders"
+    },
+    {
+      "id": "14",
+      "class": "script",
+      "KnowledgeComponents": [
+        "pipeline.framework",
+        "pipeline.bronze",
+        "pipeline.silver",
+        "pipeline.gold"
+      ],
+      "Context": "end_to_end_orders",
+      "StarterFile": "starter.py",
+      "SolutionFile": "solution.py"
+    },
+    {
+      "id": "15",
+      "class": "text"
+    }
+  ]
+}

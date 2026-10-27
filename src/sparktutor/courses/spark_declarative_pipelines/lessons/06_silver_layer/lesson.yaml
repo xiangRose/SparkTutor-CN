@@ -1,8 +1,10 @@
 - Class: meta
-  Lesson: "Silver 层"
-  EstimatedMinutes: 20
+  Id: '0'
+  Lesson: Silver 层
+  EstimatedMinutes: 55
 
 - Class: text
+  Id: "1"
   Depth: all
   Output: |
     ## 你将学到什么
@@ -20,6 +22,23 @@
     - 为历史维度实现 SCD Type 2 关联（高级）
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：理解 Bronze 保留字符串，能用 withColumn 创建新表。
+
+    **完成后能做什么**：安全解析价格与数量，明确无效值规则，再计算金额与小时。
+
+    先解析类型 → 区分无效值和零 → 筛选规则 → 派生列 → Silver 综合题。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: "2"
   Depth: all
   Output: |
     ## Silver 层的职责
@@ -34,6 +53,7 @@
     每一步都让数据对 gold 层的聚合和分析更有用。
 
 - Class: text
+  Id: "3"
   Depth: all
   Output: |
     最常见的 silver 操作是转换 bronze 字符串列：
@@ -63,6 +83,7 @@
     [f.from_json](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.from_json.html) —— 解析 JSON 字符串的 `schema` 参数
 
 - Class: mult_question
+  Id: "4"
   KnowledgeComponents: [dataframe.cast]
   Context: clean_orders
   Depth: all
@@ -72,6 +93,7 @@
   Hint: "try_cast 对解析失败返回 null；默认 ANSI 模式下普通 cast 会在执行时抛异常。"
 
 - Class: cmd_question
+  Id: "5"
   KnowledgeComponents: [dataframe.cast]
   Context: clean_orders
   Depth: all
@@ -88,6 +110,7 @@
   Hint: "用 .withColumn 配合 f.col(...).try_cast('double') 和 .try_cast('int')。"
 
 - Class: text
+  Id: "6"
   Depth: intermediate
   Output: |
     ## 通过关联补充字段
@@ -112,6 +135,7 @@
     [DataFrame.join](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html) —— `on`、`how` 参数
 
 - Class: mult_question
+  Id: "7"
   KnowledgeComponents: [spark.broadcast]
   Context: clean_orders
   Depth: intermediate
@@ -121,6 +145,7 @@
   Hint: "广播会把整张小表发送到每个 executor，消除了 shuffle。"
 
 - Class: cmd_question
+  Id: "8"
   KnowledgeComponents: [dataframe.join]
   Context: clean_orders
   Depth: intermediate
@@ -133,6 +158,7 @@
   Hint: "在 join 调用内部用 f.broadcast() 包装小 DataFrame。"
 
 - Class: text
+  Id: "9"
   Depth: intermediate
   Output: |
     ## 解析 JSON 列
@@ -158,6 +184,7 @@
     用点号访问各个字段（`parsed.action`）。
 
 - Class: cmd_question
+  Id: "10"
   KnowledgeComponents: [dataframe.cast]
   Context: clean_orders
   Depth: intermediate
@@ -182,6 +209,7 @@
   Hint: "为 JSON 定义一个 StructType，用 f.from_json，然后 select 嵌套字段。"
 
 - Class: text
+  Id: "11"
   Depth: advanced
   Output: |
     ## SCD Type 2 关联
@@ -208,6 +236,7 @@
     ```
 
 - Class: mult_question
+  Id: "12"
   KnowledgeComponents: [dataframe.join]
   Context: clean_orders
   Depth: advanced
@@ -216,7 +245,31 @@
   CorrectAnswer: "事实日期必须落在维度的 valid_from 和 valid_to 范围内"
   Hint: "SCD-2 行有生效时间窗口。你把事实匹配到当时生效的维度版本。"
 
+- Class: text
+  Id: silver-cleaning-example
+  Depth: all
+  Output: |
+    ## 综合题前：逐行走过清洗流程
+
+    price="9.99"、quantity="2" 解析后应得到 double 9.99、int 2，再计算 total=19.98。
+    price="N/A" 用 try_cast 得到 null，按本题规则过滤；不要先乘字符串或把坏值填成零冒充正常订单。
+    `f.hour(f.to_timestamp("order_ts"))` 可从题目给定的有效时间文本提取小时。
+    本题保证 quantity 与 order_ts 有效，只检查坏价格规则；更广泛的数据质量策略应另行定义。
+
+- Class: mult_question
+  Id: silver-cleaning-check
+  Depth: all
+  KnowledgeComponents:
+  - pipeline.silver
+  Output: |
+    price='N/A' 安全转换得到 null 后，为什么不能直接填 0 当作正常价格？
+  AnswerChoices: 这样混淆无效输入与真实零价格;null 本来就等于数值 0;零价格能自动修复全部业务数据
+  CorrectAnswer: 这样混淆无效输入与真实零价格
+  Hint: 清洗规则需要保留业务含义。
+  Context: clean_orders
+
 - Class: script
+  Id: "13"
   KnowledgeComponents: [pipeline.silver, dataframe.cast, dataframe.filter, dataframe.join]
   Context: clean_orders
   Depth: all
@@ -249,6 +302,7 @@
   Hint: "用 try_cast 转换列类型，用乘法计算 total，过滤 price 不为 null 的行，用 f.hour(f.to_timestamp(...)) 提取小时。"
 
 - Class: text
+  Id: "14"
   Depth: all
   Output: |
     ## 小结

@@ -41,6 +41,13 @@ class TestListCourses:
         assert courses[0]["id"] == "test_course"
         assert courses[0]["title"] == "Test Course"
         assert courses[0]["lessonCount"] == 1
+        assert courses[0]["lessonTitles"] == {"01_test_lesson": "Test Lesson"}
+
+    @pytest.mark.asyncio
+    async def test_missing_lesson_title_does_not_hide_catalogue(self, handler, sample_lesson_dir):
+        (sample_lesson_dir / "lesson.yaml").unlink()
+        result = await handler.dispatch({"method": "listCourses", "params": {}})
+        assert result["courses"][0]["lessonTitles"] == {"01_test_lesson": "课节 1（标题暂不可用）"}
 
     @pytest.mark.asyncio
     async def test_unknown_method(self, handler):
@@ -223,10 +230,17 @@ class TestSubmit:
         review = await handler.dispatch({"method": "buildReviewPrompt", "params": {"code": "x = 6 * 7"}})
         result = await handler.dispatch({"method": "completeReviewFailure", "params": {"reviewId": review["reviewId"], "message": "连接失败"}})
         assert result["passed"] is False
+        assert result["assessmentSource"] == "ai_review"
+        assert result["assessmentEligible"] is False
+        assert result["failureKind"] == "infrastructure"
         assert handler._runner.pending_review_id is None
         assert handler._runner.profile.total_attempts == 1
         assert handler.progress.get("test_course", "01_test_lesson").last_code == "x = 6 * 7"
         assert any(e.event_type == "code_submit" and not e.data["passed"] for e in handler.events.list_events())
+        assert not any(e.event_type == "error" and e.data.get("source") == "ai_review"
+                       for e in handler.events.list_events())
+        with pytest.raises(ValueError, match="已失效"):
+            await handler.dispatch({"method": "completeReviewFailure", "params": {"reviewId": review["reviewId"]}})
 
     @pytest.mark.asyncio
     async def test_malformed_ai_response_finishes_as_failure(self, handler):
