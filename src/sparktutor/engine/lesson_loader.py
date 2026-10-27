@@ -22,7 +22,7 @@ class CourseMeta:
 
 @dataclass
 class ValidationRule:
-    type: str  # "ast_contains", "claude_review", "omnitest"
+    type: str  # "ast_contains", "spark_session", "claude_review", "omnitest"
     params: dict = field(default_factory=dict)
 
 

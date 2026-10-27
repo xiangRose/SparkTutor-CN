@@ -1,8 +1,10 @@
 - Class: meta
+  Id: '0'
   Lesson: 数据源与格式
-  EstimatedMinutes: 25
+  EstimatedMinutes: 50
 
 - Class: text
+  Id: "1"
   Depth: all
   Output: |
     ## 你将学到什么
@@ -21,6 +23,23 @@
     - 按列值对输出文件进行分区
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：能够创建 DataFrame、读 CSV、看懂列类型。
+
+    **完成后能做什么**：把小表写成 Parquet，读回并通过临时视图完成一次汇总查询。
+
+    读 CSV 与检查类型 → 写入模式 → Parquet 往返 → 临时视图与 SQL → 综合练习。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: "2"
   Depth: all
   Output: |
     ## DataFrameReader API
@@ -46,6 +65,7 @@
     [.parquet](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.parquet.html)
 
 - Class: text
+  Id: "3"
   Depth: beginner
   Output: |
     把 DataFrameReader 想象成一个通用的文件打开器。你告诉它格式
@@ -57,6 +77,31 @@
     任意格式保存。
 
 - Class: text
+  Id: "5"
+  Depth: all
+  Output: |
+    ## CSV：人类可读但效率低
+
+    CSV 是最常见的交换格式，但它有缺点：没有类型信息、默认不压缩，
+    而且即使你只需要一列，Spark 也必须读取所有列。
+
+    读取 CSV 时的关键选项：
+
+    ```python
+    df = (spark.read
+        .option("header", "true")       # 第一行是列名
+        .option("inferSchema", "true")   # 自动检测类型（慢！）
+        .option("sep", ",")              # 字段分隔符
+        .option("nullValue", "NA")       # 将 "NA" 视为 null
+        .option("quote", '"')            # 引号字符
+        .csv("/data/orders.csv"))
+    ```
+
+    对于生产环境，用你用 `StructType` 定义的显式 schema 替换
+    `inferSchema`（来自上一课）。
+
+- Class: text
+  Id: "4"
   Depth: all
   Output: |
     ## Parquet：Spark 的首选格式
@@ -82,29 +127,7 @@
     ```
 
 - Class: text
-  Depth: all
-  Output: |
-    ## CSV：人类可读但效率低
-
-    CSV 是最常见的交换格式，但它有缺点：没有类型信息、默认不压缩，
-    而且即使你只需要一列，Spark 也必须读取所有列。
-
-    读取 CSV 时的关键选项：
-
-    ```python
-    df = (spark.read
-        .option("header", "true")       # 第一行是列名
-        .option("inferSchema", "true")   # 自动检测类型（慢！）
-        .option("sep", ",")              # 字段分隔符
-        .option("nullValue", "NA")       # 将 "NA" 视为 null
-        .option("quote", '"')            # 引号字符
-        .csv("/data/orders.csv"))
-    ```
-
-    对于生产环境，用你用 `StructType` 定义的显式 schema 替换
-    `inferSchema`（来自上一课）。
-
-- Class: text
+  Id: "6"
   Depth: all
   Output: |
     ## JSON：半结构化数据
@@ -127,6 +150,7 @@
     `StructType`，将数组映射为 `ArrayType`。
 
 - Class: mult_question
+  Id: "7"
   KnowledgeComponents: [dataframe.io]
   Context: flight_delays
   Depth: all
@@ -136,6 +160,7 @@
   Hint: "这种格式按列存储数据，内嵌 schema，并支持谓词下推。"
 
 - Class: text
+  Id: "8"
   Depth: intermediate
   Output: |
     ## ORC 与 Avro
@@ -155,6 +180,7 @@
     schema 演进）用 Avro。
 
 - Class: text
+  Id: "9"
   Depth: all
   Output: |
     ## DataFrameWriter API
@@ -179,23 +205,8 @@
     全量重建可用 `overwrite`，增量追加可用 `append`；
     根据数据保留和重试去重策略选择，写入模式不由开发/生产环境单独决定。
 
-- Class: cmd_question
-  KnowledgeComponents: [dataframe.io, dataframe.schema]
-  Context: flight_delays
-  Depth: all
-  Output: |
-    读取 `'/data/flights.csv'` 处的 CSV 文件，设置 `header=true` 和
-    `inferSchema=true`，然后创建一个名为 `'flights'` 的临时视图。
-  CorrectAnswer: |
-    flights_df = (spark.read
-        .option("header", "true")
-        .option("inferSchema", "true")
-        .csv("/data/flights.csv"))
-
-    flights_df.createOrReplaceTempView("flights")
-  Hint: "用 spark.read 配合 csv 和选项，然后对结果调用 createOrReplaceTempView。"
-
 - Class: text
+  Id: '11'
   Depth: all
   Output: |
     ## SQL 视图：用 SQL 查询 DataFrame
@@ -217,10 +228,31 @@
     如需应用级可见性，使用 `createOrReplaceGlobalTempView` 并通过
     `global_temp.view_name` 访问。
 
-    SQL 和 DataFrame API 产生**相同的执行计划** —— Catalyst 优化器
-    对它们一视同仁。根据你的用例选择更易读的那个。
+    语义等价的 SQL 与 DataFrame 查询可以交给同一个 Catalyst 引擎优化。
+    先核对结果，再比较计划结构；不要求计划文本逐字相同。
+
+- Class: cmd_question
+  Id: '10'
+  KnowledgeComponents:
+  - dataframe.io
+  - dataframe.schema
+  Context: flight_delays
+  Depth: all
+  Output: |
+    读取 `/data/flights.csv`，启用 header 和 inferSchema，赋给 flights_df；
+    再注册名为 flights 的临时视图。视图注册语法是 `flights_df.createOrReplaceTempView("flights")`。
+    这是代码表达式练习，示例路径不是平台自带文件；实际运行时必须换成存在的路径。
+  CorrectAnswer: |
+    flights_df = (spark.read
+        .option("header", "true")
+        .option("inferSchema", "true")
+        .csv("/data/flights.csv"))
+
+    flights_df.createOrReplaceTempView("flights")
+  Hint: 用 spark.read 配合 csv 和选项，然后对结果调用 createOrReplaceTempView。
 
 - Class: mult_question
+  Id: "12"
   KnowledgeComponents: [dataframe.io]
   Context: flight_delays
   Depth: intermediate
@@ -230,6 +262,7 @@
   Hint: "想想当你只 SELECT 50 列中的 3 列，或 WHERE 某列匹配某个值时会发生什么。"
 
 - Class: text
+  Id: "13"
   Depth: intermediate
   Output: |
     ## 写入分区
@@ -255,6 +288,7 @@
     小文件，这对性能的伤害大于帮助。
 
 - Class: cmd_question
+  Id: "14"
   KnowledgeComponents: [dataframe.io]
   Context: flight_delays
   Depth: intermediate
@@ -266,6 +300,7 @@
   Hint: "在 df.write 上链式调用 .mode()、.partitionBy() 和 .parquet()。"
 
 - Class: text
+  Id: "15"
   Depth: advanced
   Output: |
     ## 格式对比：何时用什么
@@ -278,13 +313,45 @@
     | JSON | 行式 | 自描述 | 中等 | API、半结构化 |
     | Avro | 行式 | 内嵌 | 良好 | 流式、Kafka |
 
-    对于 Spark 工作负载，默认用 **Parquet**。CSV/JSON 仅用于从外部系统
-    摄入数据。与 Kafka 集成或 schema 演进很关键时用 Avro。
+    对于分析型文件存储，可优先考虑 **Parquet**；CSV/JSON 常用于数据交换和
+    摄入。格式选择还取决于下游系统；使用 Kafka 不代表必须选择 Avro。
 
-    **谓词下推支持**：Parquet 和 ORC 将过滤下推到文件读取器中
-    （跳过行组）。CSV 和 JSON 做不到 —— Spark 必须读取并过滤所有行。
+    **过滤下推与数据跳读是两回事**：Parquet/ORC 可利用文件内部统计信息，
+    在适用条件下跳过不可能匹配的行组或条带，减少读取量。
+    Spark 4.1.1 的 CSV/JSON 读取器也支持部分过滤条件下推，默认启用；
+    但这不等于拥有相同的行组统计跳读能力，通常仍需扫描文本输入。
+    是否下推及跳读多少，取决于谓词、数据布局与配置，不能仅凭格式名称判断。
+    可对照 [官方配置](https://spark.apache.org/docs/4.1.1/configuration.html) 中的
+    `spark.sql.csv.filterPushdown.enabled` 和 `spark.sql.json.filterPushdown.enabled`。
+
+- Class: text
+  Id: io-roundtrip-example
+  Depth: all
+  Output: |
+    ## 把读写过程拆成四步
+
+    1. `df.write.mode("overwrite").parquet(output_path)`：写出题目指定的小表。
+    2. `loaded = spark.read.parquet(output_path)`：从磁盘重新读回，确认文件真的存在。
+    3. `loaded.createOrReplaceTempView("flights")`：给当前会话中的查询起名，不会再复制一份数据文件。
+    4. 用 SQL 的 `GROUP BY destination`、`SUM(delay)`、`ORDER BY total_delay DESC LIMIT 3` 回答问题。
+
+    每步先查看少量行，再串联。临时视图与磁盘目录是两种不同对象。
+    同一个输出路径重跑时，练习使用 overwrite；真实业务应先确认覆盖范围。
+
+- Class: mult_question
+  Id: io-roundtrip-check
+  Depth: all
+  KnowledgeComponents:
+  - dataframe.io
+  Output: |
+    相同小表向同一路径追加两次，随后直接求和，最可能有什么问题？
+  AnswerChoices: 重复计入同一批数据;自动删除重复数据;临时视图自动修复重复值
+  CorrectAnswer: 重复计入同一批数据
+  Hint: append 不负责业务去重。
+  Context: flight_delays
 
 - Class: script
+  Id: "16"
   KnowledgeComponents: [dataframe.schema, dataframe.io, dataframe.group_by, dataframe.aggregate]
   Context: flight_delays
   Depth: all
@@ -315,6 +382,7 @@
   Hint: "用 spark.createDataFrame 配合 SCHEMA，df.write.mode('overwrite').parquet()，spark.read.parquet()，createOrReplaceTempView 和 spark.sql()。"
 
 - Class: text
+  Id: "17"
   Depth: all
   Output: |
     ## 小结

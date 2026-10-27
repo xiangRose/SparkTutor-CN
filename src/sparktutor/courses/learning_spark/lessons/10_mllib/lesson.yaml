@@ -1,14 +1,16 @@
 - Class: meta
+  Id: '0'
   Lesson: 用 MLlib 进行机器学习
-  EstimatedMinutes: 30
+  EstimatedMinutes: 75
 
 - Class: text
+  Id: '1'
   Depth: all
   Output: |
     ## 你将学到什么
 
-    这是本课程的最后一课。你已经学会了读取数据、转换数据、
-    优化查询、处理流数据，以及将结果存储在可靠的湖仓表中。
+    这是机器学习拓展课；之后还有独立的调试与迁移练习。你已经学会了读取数据、转换数据、
+    优化查询、处理流数据，以及用目录快照模拟部分湖仓概念。
     现在你将运用这些技能，用 Spark MLlib 构建**机器学习管道**。
 
     学完本课后，你将能够：
@@ -20,6 +22,23 @@
     - 保存和加载模型用于生产
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：能创建类型明确的 DataFrame；先认识特征、标签和训练/测试的含义。
+
+    **完成后能做什么**：在训练集拟合特征处理与模型，在测试集生成预测并核对评估指标。
+
+    预测任务与数据拆分 → 特征向量 → fit/transform → Pipeline → 独立评估 → 房价练习。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: "2"
   Depth: beginner
   Output: |
     把 ML 管道想象成一条工厂装配线。原材料（数据）从一端进入，
@@ -30,6 +49,23 @@
     Spark 的 Pipeline API 自动化了整个流程，让你能够可靠地复现它。
 
 - Class: text
+  Id: ml-task-and-split
+  Depth: all
+  Output: |
+    ## 先认识任务，不急着训练模型
+
+    用面积、房龄、街区等输入预测房价，这是回归任务。输入称为**特征**，已知房价称为**标签**。
+    训练集用于拟合规则，测试集用于检查这些规则在未参与训练的数据上表现如何。
+    不在测试集上 fit 模型或特征处理器，也不根据测试结果反复选模型后把它当作独立验证。
+
+    ```python
+    train, test = df.randomSplit([0.8, 0.2], seed=42)
+    ```
+
+    比例是近似的；seed 方便在固定环境复现拆分。小数据练习不能证明真实房价预测能力。
+
+- Class: text
+  Id: "3"
   Depth: all
   Output: |
     ## ML 管道抽象
@@ -59,6 +95,7 @@
     `PipelineModel.transform()` 以及阶段链接。
 
 - Class: text
+  Id: "4"
   Depth: all
   Output: |
     ## 特征准备
@@ -98,6 +135,7 @@
     —— `inputCol`、`outputCol`、`inputCols`、`handleInvalid` 参数。
 
 - Class: mult_question
+  Id: "5"
   KnowledgeComponents: [ml.features]
   Context: housing_prices
   Depth: all
@@ -107,6 +145,7 @@
   Hint: "MLlib 模型需要一个向量列作为输入。VectorAssembler 从多个列创建它。"
 
 - Class: cmd_question
+  Id: "6"
   KnowledgeComponents: [ml.features]
   Context: housing_prices
   Depth: all
@@ -120,6 +159,7 @@
   Hint: "使用 VectorAssembler，inputCols 传列表，outputCol 设为 'features'。"
 
 - Class: text
+  Id: "7"
   Depth: all
   Output: |
     ## 构建管道
@@ -155,6 +195,7 @@
     手动操作时这是常见的 bug 来源。
 
 - Class: text
+  Id: "8"
   Depth: all
   Output: |
     ## 回归模型
@@ -174,6 +215,7 @@
     相同的 API，相同的 Pipeline。
 
 - Class: text
+  Id: "9"
   Depth: all
   Output: |
     ## 评估模型
@@ -198,6 +240,7 @@
     - **MAE**（平均绝对误差）—— 平均误差幅度；越低越好
 
 - Class: mult_question
+  Id: "10"
   KnowledgeComponents: [ml.evaluation]
   Context: housing_prices
   Depth: intermediate
@@ -207,9 +250,11 @@
   Hint: "决定系数可以为负；标签恒定时还需要关注定义和实现对退化情况的处理。"
 
 - Class: cmd_question
-  KnowledgeComponents: [ml.evaluation]
+  Id: '11'
+  KnowledgeComponents:
+  - ml.evaluation
   Context: housing_prices
-  Depth: intermediate
+  Depth: all
   Output: |
     为标签列 `'price'` 和预测列 `'prediction'` 创建一个
     RegressionEvaluator，然后在名为 `predictions` 的 DataFrame 上
@@ -219,9 +264,10 @@
 
     evaluator = RegressionEvaluator(labelCol="price", predictionCol="prediction")
     rmse = evaluator.setMetricName("rmse").evaluate(predictions)
-  Hint: "用 labelCol 和 predictionCol 创建 RegressionEvaluator，然后 .setMetricName('rmse').evaluate()。"
+  Hint: 用 labelCol 和 predictionCol 创建 RegressionEvaluator，然后 .setMetricName('rmse').evaluate()。
 
 - Class: text
+  Id: "12"
   Depth: advanced
   Output: |
     ## 交叉验证与超参数调优
@@ -252,6 +298,7 @@
     但比猜测找到更好的超参数。
 
 - Class: text
+  Id: "13"
   Depth: intermediate
   Output: |
     ## 保存与加载模型
@@ -272,6 +319,7 @@
     因此加载它就能得到完整的预测管道。
 
 - Class: text
+  Id: "14"
   Depth: advanced
   Output: |
     ## MLflow 集成
@@ -294,7 +342,31 @@
     MLflow 提供 UI 来对比运行、用于部署的模型注册表，
     以及可复现的实验跟踪。它与 Spark MLlib 管道原生集成。
 
+- Class: text
+  Id: ml-evaluation-check-example
+  Depth: all
+  Output: |
+    ## 综合题前：从输入一路核对到指标
+
+    先检查训练和测试都非空，总数等于原数据量；StringIndexer 与模型一同放入 Pipeline。
+    用 `pipeline.fit(train)` 得到模型，再用 `model.transform(test)` 产生预测。
+    用测试集的 price 和 prediction 评估 RMSE、R²，不用训练集拟合优度代替测试表现。
+    RMSE 非负且与标签同单位，越小通常越好；R² 可以为负，不要把负数硬改成零。
+
+- Class: mult_question
+  Id: ml-evaluation-check-check
+  Depth: all
+  KnowledgeComponents:
+  - ml.evaluation
+  Output: |
+    完整的特征处理与模型 Pipeline 应在哪里 fit，随后在哪里评估？
+  AnswerChoices: 训练集 fit，测试集评估;全部数据 fit，再在相同数据评估;测试集 fit，训练集不使用
+  CorrectAnswer: 训练集 fit，测试集评估
+  Hint: 先划分数据，再让完整学习流程只接触训练数据进行拟合。
+  Context: housing_prices
+
 - Class: script
+  Id: "15"
   KnowledgeComponents: [ml.features, ml.regression, ml.evaluation]
   Context: housing_prices
   Depth: all
@@ -331,11 +403,12 @@
   Hint: "类别列用 StringIndexer，VectorAssembler 合并所有特征，模型用 RandomForestRegressor，指标用 RegressionEvaluator。"
 
 - Class: text
+  Id: '16'
   Depth: all
   Output: |
     ## 课程总结
 
-    恭喜 —— 你已完成 Learning Spark 课程！以下是你学到的全部内容：
+    你已完成核心主题与机器学习拓展；接下来还有调试与新场景迁移练习。以下是你学到的全部内容：
 
     1. **入门** —— SparkSession、架构、你的第一个分析
     2. **DataFrame 与 Schema** —— 不可变表、StructType、列表达式
@@ -350,4 +423,4 @@
 
     你现在已具备用 Apache Spark 构建完整数据应用的能力 ——
     从摄入到转换、优化和机器学习。Spark Declarative Pipelines
-    课程是将这些技能应用于生产级数据工程的自然下一步。
+    课程是组合基础转换与分层处理的下一步；生产部署还需要另行学习与验证。

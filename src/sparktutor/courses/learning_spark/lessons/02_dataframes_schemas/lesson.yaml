@@ -1,8 +1,10 @@
 - Class: meta
+  Id: '0'
   Lesson: DataFrame 与 Schema
-  EstimatedMinutes: 25
+  EstimatedMinutes: 55
 
 - Class: text
+  Id: "1"
   Depth: all
   Output: |
     ## 你将学到什么
@@ -21,6 +23,23 @@
     - 处理复杂类型：数组、映射和嵌套结构体
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：完成第一课的筛选与分组求和，能解释行和列。
+
+    **完成后能做什么**：从 Python 数据创建类型明确的表，并正确增加布尔列。
+
+    先选列与筛选 → 再写列表达式 → 定义 Schema → 从数据建表 → 增加布尔列 → 博客综合题。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: "2"
   Depth: all
   Output: |
     ## DataFrame：分布式表
@@ -37,6 +56,7 @@
     **逻辑计划**（产生它的转换链）。
 
 - Class: text
+  Id: "3"
   Depth: beginner
   Output: |
     ## 类比：把 DataFrame 想象成电子表格
@@ -53,6 +73,7 @@
     Spark 能同时在数百台机器上安全运行的原因。
 
 - Class: text
+  Id: "4"
   Depth: all
   Output: |
     ## 常用 DataFrame 操作
@@ -94,7 +115,20 @@
     [withColumn](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.withColumn.html) |
     [drop](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.drop.html)
 
+- Class: cmd_question
+  Id: select-columns-practice
+  Depth: all
+  KnowledgeComponents:
+  - dataframe.select
+  Output: |
+    已给出 DataFrame df，只选取 First 和 Hits 两列，赋给 result。此处练习表达式，不需要另建会话。
+  CorrectAnswer: |
+    result = df.select("First", "Hits")
+  Hint: 选列不会筛选行。
+  Context: blog_records
+
 - Class: mult_question
+  Id: "5"
   KnowledgeComponents: [dataframe.with_column]
   Context: blog_records
   Depth: all
@@ -104,6 +138,7 @@
   Hint: "它以 'with' 开头，以 'Column' 结尾。"
 
 - Class: text
+  Id: "6"
   Depth: all
   Output: |
     ## 列表达式
@@ -130,6 +165,29 @@
     而不是*何时计算*。Spark 只在 action 触发执行时才对它们求值。
 
 - Class: text
+  Id: schema-shape-example
+  Depth: all
+  Output: |
+    ## 从一条数据反推列类型
+
+    `(1, "Lin", 12000)` 中，Id 是整数，First 是字符串，Hits 是整数。
+    `StructType` 包含若干 `StructField`，每个字段声明列名、数据类型和是否允许空值。
+    数据值和 Schema 的顺序必须对应；把字符串 "12000" 与整数类型混用，不能靠列名自动纠正。
+
+- Class: mult_question
+  Id: schema-shape-check
+  Depth: all
+  KnowledgeComponents:
+  - dataframe.schema
+  Output: |
+    若 Hits 声明为整数列，哪一个 Python 值符合这个非空示例？
+  AnswerChoices: 12000;字符串 '12000';列表 [12000]
+  CorrectAnswer: '12000'
+  Hint: 区分数值与看起来像数值的文本。
+  Context: blog_records
+
+- Class: text
+  Id: "7"
   Depth: all
   Output: |
     ## 用 StructType 定义 Schema
@@ -164,6 +222,7 @@
     —— 用 `StructField(name, type, nullable)` 定义 schema。
 
 - Class: cmd_question
+  Id: "8"
   KnowledgeComponents: [dataframe.schema]
   Context: blog_records
   Depth: all
@@ -181,70 +240,72 @@
   Hint: "用 StructType 传入一个 StructField(name, type, nullable) 列表。False = 不可为空，True = 可空。"
 
 - Class: text
+  Id: '9'
   Depth: all
   Output: |
-    ## Schema 推断 vs. 显式 Schema
+    ## Schema 推断与显式声明
 
-    读取 CSV 或 JSON 时，Spark 可以推断 schema：
-
-    ```python
-    df = spark.read.option("inferSchema", "true").csv("data.csv")
-    ```
-
-    然而，**inferSchema 会读取数据两次** —— 一次采样行并确定类型，
-    一次实际加载。对于生产工作负载，始终显式定义 schema：
-
-    - **更快** —— 避免额外的扫描
-    - **更可靠** —— 类型由你控制，而非 Spark 的猜测
-    - **尽早发现问题** —— 格式错误的数据在加载时就报错，
-      而不是静默产生 null
-
-    Parquet 和 ORC 将 schema 嵌入文件元数据中，因此对这些格式而言
-    推断是免费的。这是 Parquet 成为 Spark 首选格式的原因之一。
+    读取 CSV、JSON 时，inferSchema 要检查数据内容以推断类型，可能增加读取与解析工作。
+    稳定的数据接口优先显式定义 Schema，避免某批数据改变推断结果；探索阶段可以先推断，再检查。
+    显式声明类型不等于所有坏数据都立即报错：解析失败如何处理，还取决于读取模式、格式和后续转换设置。
+    如果读取后出现 null，要回查原始值，而不是把“有 Schema”当成数据质量已经合格。
+    Parquet、ORC 的文件元数据保存 Schema，不需要像 CSV 那样按文本内容推断，但读取元数据仍有成本。
 
 - Class: text
+  Id: '10'
   Depth: all
   Output: |
     ## 从 Python 数据创建 DataFrame
 
-    你可以从 Python 列表构建 DataFrame：
+    先用完整的三列小例子，将 Schema 与每行的字段顺序对应起来：
 
     ```python
-    data = [
-        [1, "Alice", 30],
-        [2, "Bob", 25],
-    ]
-    df = spark.createDataFrame(data, schema)
+    from pyspark.sql.types import StructType, StructField, IntegerType, StringType
+
+    schema = StructType([
+        StructField("id", IntegerType(), False),
+        StructField("name", StringType(), False),
+        StructField("age", IntegerType(), True),
+    ])
+    data = [(1, "Alice", 30), (2, "Bob", 25)]
+    people = spark.createDataFrame(data, schema)
+    people.printSchema()
+    people.show()
     ```
 
-    或者使用 **Row 对象**（列名来自关键字参数）：
-
-    ```python
-    from pyspark.sql import Row
-
-    rows = [
-        Row(id=1, name="Alice", age=30),
-        Row(id=2, name="Bob", age=25),
-    ]
-    df = spark.createDataFrame(rows)
-    ```
-
-    Row 对象适合快速原型开发。对于生产代码，优先使用显式 schema ——
-    它们没有歧义且自带文档。
+    每行第一项对应 id，第二项对应 name，第三项对应 age。不要复用上一题 name、age、email 的 Schema 来装这份数据。
+    接下来博客综合题会换成七列 DATA：仍然先核对字段顺序与类型，再创建 DataFrame，最后增加布尔列。
 
 - Class: mult_question
-  KnowledgeComponents: [dataframe.schema]
+  Id: '11'
+  KnowledgeComponents:
+  - dataframe.schema
   Context: blog_records
   Depth: intermediate
-  Output: "对 CSV 文件使用 inferSchema=True 时会发生什么？"
-  AnswerChoices: "Spark 读取数据两次 —— 一次推断类型，一次加载;Spark 仅凭列名猜测类型;Schema 推断即时完成且无额外开销;Spark 只读取第一行来检测类型"
-  CorrectAnswer: "Spark 读取数据两次 —— 一次推断类型，一次加载"
-  Hint: "CSV 把所有内容都存为文本，所以 Spark 必须采样数据来弄清楚哪些列是数字、日期等。"
+  Output: 对 CSV 文件使用 inferSchema=True 时会发生什么？
+  AnswerChoices: Spark 检查 CSV 内容来推断列类型，可能增加读取和解析工作;Spark 仅凭列名猜测类型;推断无需检查数据且没有成本;Spark 自动把所有列设为整数
+  CorrectAnswer: Spark 检查 CSV 内容来推断列类型，可能增加读取和解析工作
+  Hint: CSV 把所有内容都存为文本，所以 Spark 必须采样数据来弄清楚哪些列是数字、日期等。
+
+- Class: text
+  Id: array-field-primer
+  Depth: all
+  Output: |
+    ## 综合题前补齐：列表列与判断边界
+
+    博客的 Campaigns 是一列字符串列表，需要 `ArrayType(StringType())`，不是单个 StringType。
+    在导入 `ArrayType` 后，可以写 `StructField("Campaigns", ArrayType(StringType()), True)`。
+    这里先会声明列表列，展开数组和高阶函数留到第四课。
+
+    `blogs_df.withColumn("Big_Hitter", f.col("Hits") > 10000)` 得到布尔列。
+    Hits=10000 时是 False，Hits=10001 时才是 True；`withColumn` 返回新表，需要接住返回值。
 
 - Class: cmd_question
-  KnowledgeComponents: [dataframe.with_column]
+  Id: '12'
+  KnowledgeComponents:
+  - dataframe.with_column
   Context: blog_records
-  Depth: intermediate
+  Depth: all
   Output: |
     给定一个包含整数列 `Hits` 的 DataFrame `blogs_df`，添加一个新的
     布尔列 `Big_Hitter`，当 Hits > 10000 时为 `True`。
@@ -252,9 +313,10 @@
     from pyspark.sql import functions as f
 
     result = blogs_df.withColumn("Big_Hitter", f.col("Hits") > 10000)
-  Hint: "用 withColumn 传入一个布尔表达式：f.col('Hits') > 10000。"
+  Hint: 用 withColumn 传入一个布尔表达式：f.col('Hits') > 10000。
 
 - Class: text
+  Id: "13"
   Depth: advanced
   Output: |
     ## 列表达式的底层原理
@@ -277,7 +339,30 @@
     显式定义 schema 有助于优化器：它知道精确的类型，
     可以选择更高效的操作（整数比较 vs. 字符串比较）。
 
+- Class: text
+  Id: blogs-rehearsal-example
+  Depth: all
+  Output: |
+    ## 综合题前：先在纸上检查一行
+
+    先按 DATA 的字段顺序写 Schema，Campaigns 用字符串数组；再调用 `spark.createDataFrame(DATA, schema)`。
+    为新表增加 Big_Hitter，最后 `return` 新表。不要在函数内覆盖题目给定的 DATA。
+    例如 Hits=9000 的博客应为 False，Hits=15000 的博客应为 True，原来的行数不变。
+
+- Class: mult_question
+  Id: blogs-rehearsal-check
+  Depth: all
+  KnowledgeComponents:
+  - dataframe.with_column
+  Output: |
+    新增布尔列 Big_Hitter 后，原来 6 行、7 列的表通常变成什么？
+  AnswerChoices: 6 行、8 列;只保留 Hits 大于 10000 的行;7 行、7 列
+  CorrectAnswer: 6 行、8 列
+  Hint: 增加列与筛选行是不同操作。
+  Context: blog_records
+
 - Class: script
+  Id: "14"
   KnowledgeComponents: [dataframe.schema, dataframe.with_column, dataframe.array]
   Context: blog_records
   Depth: all
@@ -309,6 +394,7 @@
   Hint: "Campaigns 是 ArrayType(StringType())。用 spark.createDataFrame(DATA, schema)，然后用 withColumn 添加布尔列。"
 
 - Class: text
+  Id: "15"
   Depth: all
   Output: |
     ## 小结

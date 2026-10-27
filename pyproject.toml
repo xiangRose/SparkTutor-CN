@@ -5,7 +5,8 @@ build-backend = "hatchling.build"
 [project]
 name = "sparktutor"
 version = "0.1.0"
-description = "Chinese Spark 4.1 learning environment with executable exercises and AI tutoring"
+description = "Browser-based Chinese Spark 4.1 learning environment with executable exercises and AI tutoring"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.1",
@@ -32,8 +33,47 @@ dev = [
 [project.scripts]
 sparktutor = "sparktutor.cli:main"
 
+[project.urls]
+Repository = "https://github.com/xiangRose/SparkTutor-CN"
+Issues = "https://github.com/xiangRose/SparkTutor-CN/issues"
+
+[tool.hatch.build]
+exclude = [
+    "/.sparktutor-web",
+    "/.sparktutor",
+    "/.web-runtime",
+    "/.venv",
+    "**/__pycache__",
+    "**/*.py[cod]",
+    "**/node_modules",
+    "**/.env",
+    "**/.env.*",
+    "**/*.dpapi",
+    "**/*.log",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/sparktutor"]
+
+[tool.hatch.build.targets.sdist]
+only-include = [
+    "src/sparktutor",
+    "tests",
+    "tools",
+    "docs",
+    ".github",
+    ".gitattributes",
+    ".gitignore",
+    "pyproject.toml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "start-web.ps1",
+    "enable-lan.ps1",
+    "启动网站.cmd",
+    "使用说明.txt",
+    "requirements-portable.txt",
+]
 
 [tool.pytest.ini_options]
 markers = ["spark: real Spark 4.1 course execution (set SPARKTUTOR_TEST_SPARK=1)"]

@@ -1,14 +1,93 @@
-> 此分支归档最终 VS Code 扩展版；比赛正式版本请查看 [master 分支中的独立网页版](https://github.com/xiangRose/SparkTutor-CN/tree/master)。
+# SparkTutor-CN · Web
 
-# SparkTutor-CN
+在浏览器中学习 PySpark：阅读中文讲解、动手编程、运行课程测试，再根据学习证据获得诊断、推荐和 AI 调试帮助。
 
-在 VS Code 中学习 PySpark：阅读中文讲解、动手编程、运行课程测试，并向 AI 导师提问。
+本仓库默认分支 `master` 为正式网页版及比赛提交版本。原 VS Code 扩展保存在 [vscode-legacy 分支](https://github.com/xiangRose/SparkTutor-CN/tree/vscode-legacy)，供历史版本查阅；使用当前版本无需安装 VS Code。
 
-基于 [lisancao/sparktutor](https://github.com/lisancao/sparktutor) 改造，遵循 MIT 协议。项目仓库：[xiangRose/SparkTutor-CN](https://github.com/xiangRose/SparkTutor-CN)。
+## 项目特色
+
+- **循序渐进的中文课程**：两套课程共 19 课，教材 1.2.0，包含 24 道可执行编程练习和三档阅读难度。
+- **浏览器学习工作区**：离线 CodeMirror 编辑器提供 Python 高亮、基础补全、搜索替换和错误行提示；代码逐题保存，支持刷新恢复、参考答案对比及实时运行输出。
+- **课程测试与 AI 分工明确**：综合练习通过真实 Spark 执行课程原始断言；运行和这些测试不需要模型密钥。导师问答、调试教练及部分开放式短题评审可配置 AI。
+- **可追溯的学习诊断**：从提交、调试、求助和迁移记录形成四维画像，展示样本依据、知识点证据、练习推荐、历史趋势与前后复盘。
+- **分层调试帮助**：在已支持的两道练习中，AI 选择错误假设和证据，系统核验后展示作者维护的中文提示，保留分级解锁及答案影响记录。
+- **可复现演示与数据管理**：隔离诊断演示不改正常学习成绩，提供环境检查、课程重置、学习摘要和含代码备份。
+
+![SparkTutor 网页课程页：中文学习路线与导师问答入口](docs/screenshots/learning-workspace.png)
+
+课程页截图来自隔离验收环境，展示实际页面，不代表真实学生的学习效果。
+
+比赛介绍与演示顺序见 [比赛提交与演示说明](docs/competition-submission.md)。课程与判题边界见下方详细说明。
+
+## 新电脑首次安装与启动
+
+源码仓库包含网页、教学引擎、课程、测试和已构建的编辑器资源，**不附带 Python、Java 或 PySpark 运行环境**。初次安装依赖需要联网；日常打开编辑器无需 Node.js 或 CDN。真实 Spark 练习建议使用 Python 3.12、Java 17 与项目锁定的 PySpark 4.1.1；项目 Python 最低版本为 3.10。
+
+先安装 Python、Git 和 Java JDK 17+，确认 `java -version` 可用，并将 `JAVA_HOME` 设置为 JDK 安装目录。准备好环境后重新打开终端。
+
+### Windows PowerShell
+
+```powershell
+git clone https://github.com/xiangRose/SparkTutor-CN.git
+cd SparkTutor-CN
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -e ".[spark]"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-web.ps1 -PythonPath .\.venv\Scripts\python.exe -ListenAddress 127.0.0.1
+```
+
+如果没有 `py` 命令，可用已安装的 Python 3.12 对应的 `python` 命令创建虚拟环境。首次安装完成后，可双击 `启动网站.cmd` 启动；启动器优先使用本项目 `.venv`，运行窗口需要保持打开。停止服务可在启动窗口按 Ctrl+C。
+
+### Linux / WSL2
+
+在 Linux 或 WSL2 内安装 Python 3.10+（推荐 3.12）、Git、Java JDK 17+ 及对应的 Python venv 组件，再在该系统的终端中运行：
+
+```bash
+git clone https://github.com/xiangRose/SparkTutor-CN.git
+cd SparkTutor-CN
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[spark]'
+python -m sparktutor web --host 127.0.0.1 --port 8888
+```
+
+WSL 中需要单独安装 Linux 版 Python、Java 和项目依赖；Windows 虚拟环境不能直接用于 WSL。建议在 WSL 的 Linux 文件系统中克隆并运行项目。
+
+### 打开与验证
+
+浏览器打开 **[http://localhost:8888](http://localhost:8888)**。进入“环境与 AI 设置”，核对实际 Python、Java、PySpark 和 spark-submit，选择“自动检测”或“本机 Spark”，然后点击 **“保存设置”**。下拉选项的未保存修改不会生效，切换执行方式也不会替换网站正在使用的 Python。
+
+运行代码后应查看实际模式及退出结果；`[dry-run] Syntax OK` 只说明语法通过，代码和课程测试均未执行。真实运行和综合题判题需要完成 Spark 配置，不能用 AI 回复或语法检查代替。
+
+若只想阅读课程、做选择题或体验合成诊断演示，可将安装命令改为 `python -m pip install -e .`，并以 `python -m sparktutor --dry-run web --host 127.0.0.1 --port 8888` 启动。该方式不能通过必须真实执行的编程题。
+
+### 局域网演示与独立试用
+
+启动参数默认监听 `0.0.0.0:8888`；上述首次启动示例使用 `127.0.0.1`，只允许本机访问。局域网演示可用 `python -m sparktutor web --host 0.0.0.0 --port 8888`，或在 Windows 启动命令中省略 `-ListenAddress 127.0.0.1`。同一网络设备访问 `http://运行网站的电脑IPv4地址:8888`，只需浏览器，Spark 在服务端执行。
+
+Windows 如需放行局域网访问，可在管理员 PowerShell 中运行 `.\enable-lan.ps1`；默认针对 WLAN 网卡同一子网开放 TCP 8888，有线网络可加 `-InterfaceAlias '以太网'`。端口已占用时先停止旧实例，或通过 `-Port 8889` / `--port 8889` 使用其他端口。
+
+当前为**单人学习工作区**：各标签页的位置独立，但进度、历史和代码共用，没有用户账户隔离。不同试用者应使用独立的数据目录或服务实例；例如 Windows 可加 `-DataDir .\.sparktutor-web\trial-01 -Port 8889`，Linux 可加 `--data-dir .sparktutor-web/trial-01 --port 8889`。
+
+### 已有环境与本机配置
+
+已有 Spark Python 时，可通过 `-PythonPath '你的环境\Scripts\python.exe'` 指定解释器。启动器也可读取本机 `.sparktutor-web/runtime.json` 中的 `pythonPath`；显式 `-PythonPath` 优先。该文件使用当前电脑的路径，不随源码分发，不属于新电脑安装的必要文件。若旧路径失效，应更新本机配置或显式指定有效解释器。
+
+环境或后端代码更新后，应停止旧服务、重新启动并刷新浏览器；网页设置无法替换正在运行的 Python/Java 环境。
+
+## 当前边界
+
+- 原生 Windows 下部分 Spark Python worker 作业仍存在兼容问题；检测到依赖或一次会话运行成功，不代表全部课程已在该系统验收通过。完整真实课程验证以 Linux 环境为基线。
+- 目前的学习比例和趋势用于解释已有证据，尚未通过真人教学效果实验验证；不自动按画像调整难度。
+- 编辑器不包含完整 Python 语言服务或 VS Code 调试器。Copilot 原接入依赖 `vscode.lm`，网页端使用 Anthropic 或兼容接口。
+- 本地执行器面向可信的个人练习，不是运行不可信 Python 的安全沙箱；当前版本没有公开多用户代码执行平台所需的账户与任务隔离。
+
+项目基于 [lisancao/sparktutor](https://github.com/lisancao/sparktutor) 改造，保留原作者版权与 [MIT 许可](LICENSE)。
 
 ## 学习内容
 
-课程以 **Apache Spark / PySpark 4.1.1** 为验证基线，共 19 课、18 道综合编程练习。需要基础 Python 知识；SQL、装饰器和机器学习基础有助于学习后续章节。
+课程以 **Apache Spark / PySpark 4.1.1** 为验证基线，教材版本 **1.2.0**，共 19 课、24 道可执行编程练习（6 道分步练习和 18 道综合练习）。面向会基础 Python、第一次系统学习 Spark 的中文学习者；核心 SQL、装饰器、拓扑排序和机器学习术语会在对应课中铺垫。
 
 - **Learning Spark（11 课）**：Spark 架构与入门、DataFrame/Schema、数据源与文件格式、复杂类型与高阶函数、SQL/Catalyst、性能优化、Join 策略、Structured Streaming、数据湖与湖仓、MLlib，以及调试与迁移诊断练习。
 - **Spark 4.1 教学管道（8 课）**：SparkSession、数据转换、数据读写、教学用 Pipeline 框架、Bronze 原始层、Silver 清洗层、Gold 聚合层、完整管道。
@@ -17,82 +96,59 @@
 
 流处理综合练习使用批处理 DataFrame 模拟核心变换；湖仓练习用版本化 Parquet 目录模拟历史查询。它们需要真实 Spark，但不需要 Kafka、Delta 或 Iceberg 服务，不能据此验证真实流处理容错或湖仓事务能力。
 
-## 安装
+### 建议学习路线
 
-需要 VS Code 1.93+、Python 3.10+、Java 17+；构建扩展需要 Node.js 20+。Java 需独立安装并设置 `JAVA_HOME`，安装 PySpark 不会代替安装 JDK。
+课程采用“业务问题 → 小样例与预期结果 → 单项练习 → 综合应用 → 复盘”的组织方式，参考 [DataCamp PySpark 课程的渐进安排](https://www.datacamp.com/courses/introduction-to-pyspark)和[分层练习设计说明](https://instructor-support.datacamp.com/en/articles/2316393-exercise-sections)，讲解、样例和题目根据本项目重新编写。
 
-推荐在 Linux、WSL2 或仓库的 Dev Container 中运行真实 Spark。原生 Windows 的 Spark/Hadoop 运行环境需单独验证。4.1.1 修复了 4.1.0 的 Windows 导入问题，详见 [SPARK-54745](https://issues.apache.org/jira/browse/SPARK-54745)；修复启动器兼容性不代表所有外部 Spark/Java/Hadoop 组合都已受测。
+1. **先入门：Learning Spark 第 1–3 课。** 第一课分成认识工具、逐项操作、CSV 综合应用三段。先用四行数据区分行数与数量，分别完成“只筛选”和“只分组求和”的可执行小练习，再组合排序和 CSV 读取。第二、三课补齐 Schema、布尔列、数组列、文件读写与临时视图。
+2. **再分析：第 4–7 课。** 数组操作前区分行筛选和数组筛选；先独立完成含并列值的窗口排名，再组合数组转换。SQL 从 SELECT/WHERE 开始，以小表练习筛选、分组与聚合，再进入综合分析；Join 先确定保留哪些行，再讨论执行策略。调优强调相同结果与测量条件，不把小样例耗时当作性能结论。
+3. **巩固与拓展：第 11 课及第 8–10 课。** 第 11 课对应的调试与迁移任务在完成来源题后即可练习，不必等学完流处理和机器学习。流处理、湖仓和机器学习是后续主题；开始前会说明模拟范围、先修知识和测试边界。
+4. **组合项目：教学管道 8 课。** 先完成基础课程前三课或具备等效技能，先独立完成函数注册和依赖排序两个小练习，再组合成框架，逐层检查 Bronze → Silver → Gold 的输入输出，最后完成本地教学管道。
 
-```bash
-git clone https://github.com/xiangRose/SparkTutor-CN.git
-cd SparkTutor-CN
-python -m venv .venv
-# Linux / WSL / macOS
-source .venv/bin/activate
-pip install -e '.[spark,dev]'
+每课开头说明先修知识、可观察的学习目标与路线；综合题前提供小样例或检查点。三档难度共享综合题必需的知识与核心练习，专属内容提供类比或拓展，不自动按画像调整难度。预计时长包含阅读、编码和调试，尚未用真人试学校准，可分次完成。
 
-cd sparktutor-vscode
-npm ci
-npm run lint
-npm test
-bash package-vsix.sh
-code --install-extension sparktutor-0.3.0.vsix
-```
+分步题使用独立起始代码和课程断言，不能用上一步的变量代替题目输入。函数注册和依赖排序练习先验证普通 Python 行为，其余分步题使用真实 Spark 小表。进入第一道实操前，须在服务端准备可执行的 Spark 环境。仅语法检查不能代替课程测试，也不会放行编程题。
 
-Windows PowerShell 中可用 `.venv\Scripts\python.exe -m pip install -e ".[spark,dev]"` 安装依赖。打包脚本需要 Bash 和 zip，可使用 WSL 或已准备相应工具的 Git Bash。
-
-将 VS Code 设置 `sparktutor.pythonPath` 指向项目虚拟环境解释器的完整路径，例如 `/path/SparkTutor-CN/.venv/bin/python` 或 `D:\project\SparkTutor-CN\.venv\Scripts\python.exe`。开发模式可打开 `sparktutor-vscode` 文件夹，选择 `Run Extension` 后按 F5。若新窗口立即关闭，选择“SparkTutor：诊断启动（禁用其他扩展）”重试，见 [启动排查](docs/coach-acceptance.md#6-f5-打开的开发窗口立即关闭)。
-
-只阅读、做选择题和语法检查时，可以安装 `pip install -e .` 而不装 Spark；这种环境不能通过需要执行的综合题。终端界面另需 `pip install -e '.[tui]'`。
+本轮保留原课节顺序和已有步骤标识，兼容已有题目引用及按步骤标识保存的进度；已完成课节不会自动重置。新学习者按更新后的顺序进入分步题；已有学习者重新打开课节仍会恢复旧位置，可用“上一步”回看新增练习，或在备份代码后使用“重置当前课节”重新开始。
 
 ## 使用与判题
 
-首次使用可从学习首页点击“检查我的环境”，或执行“SparkTutor：检查学习环境”。页面显示实际 Python 与教材位置、Java/JAVA_HOME、PySpark 和 spark-submit、当前执行模式及 AI 配置摘要，并针对缺项给出下一步操作。即使 Python 后端未能启动，命令入口仍可打开，用来选择解释器、查看启动诊断和重载窗口。
+1. 从“学习工作台”选择开始或继续学习，也可从课程目录选择课节和难度。
+2. 阅读题目，在网页编辑器修改当前题目的独立起始代码；代码会保存到服务端。切题前会提交待保存修改，冲突时保留本地恢复副本并要求重新加载。
+3. 点击“运行代码”查看实时输出或错误；dry-run 仅检查 Python 语法。
+4. 点击“提交判题”。选择题按内容判断；短代码题进行本地检查，必要时使用模型评审；综合题使用课程原始测试，学生改动的测试区不能代替它。
+5. 根据反馈修改，通过后进入下一步。阅读步骤可直接继续；参考答案可与当前作答并排比较，查看答案会记入学习记录。
+6. 需要重新开始本课时使用“重置当前课节”；它清除该课进度和受管代码，保留学习历史、其他课节和旧版辅助稿。
 
-环境检查只读依赖与配置，最多执行有超时的 Java 版本探测；不启动 Spark、不连接 Docker/Databricks、不调用模型。找到安装项不等于真实作业已通过，AI 配置完整也不等于连接与回复质量已验证。修改 Python/Java 配置后请重载窗口，再刷新检查。
+真实执行成功且原始课程测试完成后才通过，无需 AI 密钥。课程断言覆盖题目声明的检查项，不是完整正确性证明；执行器适用于可信的个人练习，不是运行不可信 Python 的安全沙箱。
 
-1. 点击 SparkTutor 侧边栏顶部的“学习首页”，选择“从这一课开始”或“继续学习”；也可展开目录选择课节和难度。首次进入会打开首页，明确选择恢复课程时优先进入课程。
-2. 阅读题面。短代码题保存在当前课节的练习文件中，综合练习打开独立文件。
-3. **运行代码**：查看程序输出或错误；dry-run 只检查 Python 语法。
-4. **提交判题**：选择题按选项内容判定；短代码题先做本地检查，必要时交由 AI 评审。
-5. 综合题提交时，将学生实现交给**仓库原始 starter 中的测试入口**运行，不以学生编辑过的测试断言作为通过依据。真实执行成功且课程测试完成后才通过，无需 AI 密钥。
-6. 根据反馈修改；通过当前题后进入下一步。阅读步骤可以直接继续。
+`[dry-run] Syntax OK` 表示只解析了 Python 语法，代码并未执行；变量未定义、参数不符和结果错误都可能通过语法检查。请在设置中选择“自动检测”或“本机 Spark”，并确认服务使用的 Python 已安装 PySpark、Java 可用。配置模型不能替代执行环境。
 
-综合题测试覆盖题面声明的样例与检查项，并非完整正确性证明。代码在选定环境执行，执行器不提供面向不可信 Python 的安全沙箱。
+第一课创建 SparkSession 的短题使用本地结构检查，检查导入、`spark` 赋值、应用名 `MnMCount` 和 `local[*]`，不需要模型，支持常见的等价链式写法。本题结构检查通过不代表 Spark 已实际运行。其他没有充分本地规则的开放式短题仍可能需要 AI 辅助评审；模型未配置或连接失败时显示“尚未完成判题”，不据此认定代码有误。
 
-选择题稳定洗牌：不同题目答案位置不同，返回同一题时顺序保持稳定。中文答案和 API 符号不会在匹配时被删除。
+选择题稳定洗牌，返回同一题保持顺序。课程提示用于当前题；导师问答可讨论概念与代码；调试教练目前仅支持 M&M 与传感器两题，提供分层提示及可追溯依据，不能改分或放行。
 
-快捷键：`Ctrl+Shift+R` 运行、`Ctrl+Shift+S` 提交、`Ctrl+Shift+N` 下一步、`Ctrl+Shift+B` 上一步、`Ctrl+Shift+H` 提示。
-
-不确定该用哪个功能时，可以从学习首页查看用途说明：
-
-- **课程提示**：查看当前题目预设的提示；**导师问答**：自由询问概念和题意。
-- **AI 调试教练**：写代码卡住时，结合当前代码和已有运行记录，依次提供概念提问、检查方法和局部示例。目前支持 M&M 糖果计数与传感器聚合两题，需要先配置模型；不会自动改代码，是否通过仍由提交判题确认。
-- **学习画像与推荐**：从已有学习记录生成四维指标、中文诊断和推荐练习；**学习历史与复盘**：回看每道题的运行、提交和求助过程。
-
-首页优先展示学习流程与继续学习，课节目录、四维计算依据和演示工具按需展开。课程页和教练页均可返回学习首页。命令入口为“SparkTutor：打开学习首页”；原命令 ID 保持兼容。
+快捷键：`Ctrl+Shift+R` 运行、`Ctrl+Shift+S` 提交、`Ctrl+Shift+N` 下一步、`Ctrl+Shift+B` 上一步、`Ctrl+Shift+H` 提示；编辑器支持搜索替换。
 
 ## AI 配置
 
-首次接入请阅读 [API 配置与使用指南](docs/api.md)，按步骤填写接口、保存密钥、检查连接并测试导师问答与 AI 调试教练。文档同时说明 Anthropic、Copilot、Ollama 的可选配置和常见报错。
+打开“环境与 AI 设置”：
 
-支持 Anthropic Claude、GitHub Copilot 和 OpenAI 兼容接口（支持该协议的国内模型或 Ollama）。在设置中搜索 SparkTutor：
+- 主提供方可选自动、Anthropic 或 OpenAI 兼容接口；兼容接口需要基础地址和模型名称，可按服务商要求填写密钥和额外请求头。
+- Anthropic 可单独填写模型与密钥；也可使用 `ANTHROPIC_API_KEY` 和 `SPARKTUTOR_CLAUDE_MODEL`。
+- 兼容接口可使用 `SPARKTUTOR_OPENAI_BASE_URL`、`SPARKTUTOR_OPENAI_MODEL`、`SPARKTUTOR_OPENAI_API_KEY` 或 `OPENAI_API_KEY`。
+- 调试教练固定使用兼容接口配置；导师可同时选择 Anthropic。两种连接检查独立，不需要先打开课程，也不制造评估或求助证据。
+- 默认仅本标签页生效。“记住本机”保存非敏感参数及执行方式；Windows 的密钥和请求头使用 DPAPI 加密。取消记住后，后续新会话不再沿用这些保存项。
 
-- `sparktutor.aiProvider`：auto、anthropic、copilot、openai-compatible。
-- `sparktutor.anthropicApiKey` / `ANTHROPIC_API_KEY`：Claude 密钥。
-- `sparktutor.openaiBaseUrl`、`sparktutor.openaiApiKey`、`sparktutor.openaiModel`：兼容接口地址、密钥和模型名称。
-- 兼容接口密钥也可由 `SPARKTUTOR_OPENAI_API_KEY` / `OPENAI_API_KEY` 环境变量提供。
-- `sparktutor.openaiExtraHeaders`：额外请求头；`sparktutor.copilotModel`：可选 Copilot 模型标识。
+修改后点击“保存设置”，再分别检查导师或教练连接。也可在启动前通过 `SPARKTUTOR_OPENAI_BASE_URL`、`SPARKTUTOR_OPENAI_MODEL`、`SPARKTUTOR_OPENAI_API_KEY`、`OPENAI_API_KEY` 或 `ANTHROPIC_API_KEY` 配置对应服务。无安全密钥存储的系统仅保存非敏感参数，密钥保留在服务内存或由环境变量提供；凭据值不会写入浏览器存储、源码或学习备份。
 
-使用用户级设置或环境变量配置密钥，不要写入仓库。运行“SparkTutor：检查 AI 连接”确认可用性。自动模式依次尝试已配置的 Anthropic、兼容接口、Copilot，均不可用时仅使用本地检查。
+自动模式按配置与健康状态尝试 Anthropic、兼容接口；显式选择不会悄悄换供应商。界面区分认证、限流、超时、空正文、仅思考、截断和格式异常；连接成功不代表教练结构化回复或教学质量已经验证。Copilot 的原扩展接口不能直接在独立网页使用。
 
-AI 使用课程、代码及固定的 Spark 知识提示，输出简体中文；没有自动检索官方文档或训练专有模型。学习诊断通过下面的本地规则计算，无需 AI 密钥。难度仍由学习者选择，不会被诊断结果自动修改。
-
-新增的 AI 调试教练使用独立的自定义兼容接口入口，运行“SparkTutor：配置 AI 调试教练模型”后填写地址、模型名称并保存密钥。教练不会自动切换至原有模型；原聊天与评审路由保持独立。配置与验收见 [AI 调试教练说明](docs/coach-acceptance.md)。
+AI 使用题面、当前代码、问题和必要学习证据，输出简体中文；没有自动检索官方文档或训练专有模型。学习诊断使用本地规则，不需要密钥，也不自动改变学习者选择的难度。教练边界及评估依据见 [AI 调试教练说明](docs/coach-acceptance.md)。
 
 ## 学习画像、诊断与推荐（Issue #5）
 
-点击课程侧栏的诊断图标，或运行“SparkTutor：查看学习诊断”，即可从本地 Tracker 记录得到四维画像、一句中文诊断和一道推荐练习：
+打开“学习画像”，即可从本地行为记录得到四维画像、中文诊断和推荐练习：
 
 - **Knowledge**：每道题最近一次有效评估的通过率，一题只占一个样本；提示辅助的合理学习不扣分。
 - **Debugging**：错误发生后，经过后续有效评估确认修复的过程比例；仅运行成功不能证明已经完成题目。
@@ -107,7 +163,7 @@ AI 使用课程、代码及固定的 Spark 知识提示，输出简体中文；�
 
 ## 学习证据驱动的 AI 调试教练
 
-运行“SparkTutor：打开 AI 调试教练”，可在 M&M 综合题和传感器迁移题中，将当前代码、四维指标与可追溯历史交给自定义模型分析。模型选择待验证错误假设和证据，系统核验引用后展示作者维护的概念追问、检查方法和局部示例，逐级提供帮助；没有证据时保留不确定性。
+在课程页选择“调试教练”，可在 M&M 综合题和传感器迁移题中，将当前代码、四维指标与可追溯历史交给自定义模型分析。模型选择待验证错误假设和证据，系统核验引用后展示作者维护的概念追问、检查方法和局部示例，逐级提供帮助；没有证据时保留不确定性。
 
 模型还可提供小规模数字样例，系统用固定 Python 参考模板核验“记录条数与数量总和”的区别。它不是 Spark 或学生代码测试，不产生课程通过或新的迁移样本。提示真正展示后才记录一次求助，失败和过期回复不记为已用帮助。教练不能改分、放行题目或绕过答案查看规则。
 
@@ -115,7 +171,7 @@ AI 使用课程、代码及固定的 Spark 知识提示，输出简体中文；�
 
 ## 学习首页（Issue #6）
 
-点击侧栏顶部的“学习首页”，或运行“SparkTutor：打开学习首页”，可以在一页找到继续学习、全部课程与逐课进度、四维诊断、知识点证据和推荐练习。首页先展示操作流程与工具用途；课节目录和详细画像按需展开。
+打开侧栏的“学习工作台”，可以在一页找到继续学习、全部课程与逐课进度、四维诊断、知识点证据和推荐练习。首页先展示操作流程与工具用途；课节目录和详细画像按需展开。
 
 继续学习优先打开最近更新的有效未完成课节，恢复保存的难度、题目位置和练习代码；没有历史时从首课开始。课节状态逐课读取，跳课不会把前面的课节误标为完成。回看保留已完成记录，主动重置该课后重新计进度；完成记录不代表每个难度都完成。课程完成率仅描述已完成课节的比例，不代表知识掌握度。
 
@@ -125,15 +181,15 @@ AI 使用课程、代码及固定的 Spark 知识提示，输出简体中文；�
 
 ## 学习历史与复盘
 
-运行“SparkTutor：查看学习历史与复盘”，或从学习工作台进入，可以按题目回看提交、运行、提示、答案查看与编辑记录，筛选课程及全部历史、近 7 天、近 30 天。题目与事件分别分页，显示范围不截断诊断使用的完整历史。
+打开“学习历史”，可以按题目回看提交、运行、提示、答案查看与编辑记录，筛选课程及全部历史、近 7 天、近 30 天。题目与事件分别分页，显示范围不截断诊断使用的完整历史。
 
 选择一条记录，可以查看该记录前后四维比例、样本量与分子分母，理解哪些可观察证据改变了指标。最近证据点的四维趋势使用完整历史前缀重建，不把未来结果倒灌到过去，也不因时间筛选丢失跨课程来源。缺少证据仍显示空值，变化以百分点描述，提示覆盖不作为能力排名。
 
-历史结果按当前规则与课程标注重建，不是经过验证的能力成长曲线。题目难度、样本组成、答案影响及日志缺失会改变比例；旧记录缺少评估资格时不被追认。页面仅展示必要元数据，不保存或展示代码和聊天原文。基本验收无需 Spark 作业，操作见 [第三阶段验收说明](docs/history-acceptance.md)。
+历史结果按当前规则与课程标注重建，不是经过验证的能力成长曲线。题目难度、样本组成、答案影响及日志缺失会改变比例；旧记录缺少评估资格时不被追认。历史页仅展示必要元数据，行为事件不保存代码或聊天原文；练习代码作为工作区文件单独保存。基本验收无需 Spark 作业，操作见 [第三阶段验收说明](docs/history-acceptance.md)。
 
 ## 可复现诊断演示（Issue #7）
 
-运行“SparkTutor：打开诊断演示”，选择模式与场景，再点击运行。默认的合成轨迹模式无需 Spark，逐阶段调用实际事件、诊断、推荐和复盘链，仅预设执行结果；真实 Spark 模式使用预设代码执行原课程测试，需要本机 PySpark 4.1.1、Java 17+ 与可用的 spark-submit，不调用 AI。
+打开“诊断演示”，选择模式与场景，再点击运行。默认的合成轨迹模式无需 Spark，逐阶段调用实际事件、诊断、推荐和复盘链，仅预设执行结果；真实 Spark 模式使用预设代码执行原课程测试，需要本机 PySpark 4.1.1、Java 17+ 与可用的 spark-submit，不调用 AI。
 
 任务 A 是 M&M 数量聚合，任务 B 是传感器上报聚合，后者声明前者为来源并增加站点参数、并列排序及空输入约束。一条轨迹展示 B 首次通过；另一条展示 B 首次失败、修复后通过：K 的最近结果与 D 的修复过程可以更新，T 仍保留首次失败。两个场景每次使用各自的新临时数据库，不影响真实学习记录，也不把重试当作新的迁移样本。
 
@@ -154,64 +210,45 @@ AI 使用课程、代码及固定的 Spark 知识提示，输出简体中文；�
 - `lakehouse`：Docker 中的 Spark，需要自行准备服务和连接器。
 - `databricks`：Spark Connect，需要配置远端环境。部分练习使用本地路径或 JVM 计划接口，不能保证直接适用于 Connect。
 - `dry_run`：只检查语法，不计算结果，不记为综合题通过。
-- `auto`：检测可用环境。切换模式会立即通知后端，无需重启扩展。
+- `auto`：运行时检测可用环境。页面修改执行模式后点击“保存设置”才对当前标签页生效；替换 Python/Java 环境需要重新启动服务。
 
-进度和事件在 `~/.sparktutor/progress.db`，代码在 `~/.sparktutor/workspace/<course>/<lesson>/`。短题用 exercise.py，综合题用 script_<题目标识>.py。旧版课程级作业保留；无法绑定题目的旧恢复代码单独备份，避免覆盖新题。
+网页默认进度和事件在 `.sparktutor-web/progress.db`，代码在 `.sparktutor-web/workspace/<course>/<lesson>/exercise_<stepId>.py`。旧版无法绑定题目的代码保存为独立 legacy_restored 辅助稿，重置课节不会删除它。浏览器缓存不会自动覆盖已有服务端文件；并发旧稿会被版本检查拒绝。
 
 重置只清除当前课节进度和受管练习文件，保留其他课节、旧版作业与辅助数据。运行超时会结束本地进程树；终止 Docker CLI 不保证远端容器作业同时终止，远端资源需由运行环境管理。
 
-### 学习数据管理与迁移
+## 学习数据与备份
 
-运行“SparkTutor：管理学习数据”，或在学习首页的“更多工具”中点击“学习数据与备份”：
+“数据与备份”提供本机数据位置、学习摘要、SQLite 数据库下载，以及包含练习代码和旧稿的 ZIP 备份。摘要只含课程完成状态与事件计数；数据库可能包含历史 last_code，ZIP 额外包含受管代码，不打包应用保存的模型配置和密钥文件。
 
-- **查看数据位置与使用说明**：显示实际数据库和练习目录、进度与事件数量，以及模型发送范围。
-- **导出学习摘要**：只导出课节标识、完成状态和事件数量，不导出代码、聊天、事件原始内容、凭据或本机路径。
-- **备份完整学习数据库**：用户选择新文件后使用 SQLite 一致快照；数据库可能包含旧进度中的 `last_code` 和全部事件，练习文件需单独复制。导出与备份均不覆盖现有文件。
-- **清除学习记录**：明确确认后，事务删除全部课程进度和行为事件，保留练习文件与模型配置。成功后关闭旧学习面板并重载，旧会话不能回写已清除记录。清除属于逻辑删除，不是磁盘安全擦除；其他正在运行的扩展窗口可能继续产生新记录，应先关闭。
-
-迁移时先关闭所有 SparkTutor 窗口和后端，备份原数据库与练习目录，再用一致备份替换目标 `progress.db`，另行复制练习文件。扩展不自动迁移模型密钥，应在新设备重新配置。AI 问答、评审和教练会将相关题面、当前代码、问题或学习证据发送至所选模型服务；摘要、备份和清除均不调用模型。
-
-### 运行边界与发布条件
-
-当前执行器适用于可信的个人本地练习。课程页和环境检查均明确提示代码会在所选环境执行，不能作为运行不可信 Python 的安全沙箱。
-
-面向课堂、多人或共享机器开放执行前，以下事项应作为单独的发布验收条件，当前版本尚未实现完整隔离：
-
-- 每位学习者、每次执行的文件与进程隔离，限制可访问的目录和凭据。
-- CPU、内存、进程数、磁盘、运行时长及网络访问的配额与限制。
-- 成功、报错、超时、取消及宿主退出后的进程树、临时文件和远端作业清理。
-- 跨用户数据不可读写、并发任务互不影响，以及隔离环境的更新与恢复验证。
-
-本地超时控制或课程测试通过，均不能代替这些发布条件的验证。
+清除记录需要输入“清除学习记录”并确认。它删除课程进度、行为记录及画像依据，保留代码和模型配置；其他页面及服务重启后出现的旧会话不能把已删记录写回。清除不是磁盘安全擦除。迁移备份前后应关闭旧服务，避免两个实例同时写同一数据目录。
 
 ## 开发与验证
 
 ### Tracker 行为记录验收
 
-运行“SparkTutor：查看学习行为记录”，可查看最近 200 条学习事件，包括运行、提交、提示、答案查看、代码编辑和正常会话结束。编辑记录按短时间输入聚合，只保存修改次数、增删字符数等元数据，并绑定当前题目；这些过程记录本身不增加四维分数。界面自动准备起始代码、其他文件和参考答案文件的编辑不算学生作答。
+打开“行为记录”，可查看最近 200 条学习事件，包括运行、提交、提示、答案查看、代码编辑和正常会话结束。编辑记录按短时间输入聚合，只保存修改次数、增删字符数等元数据，并绑定当前题目；这些过程记录本身不增加四维分数。界面自动准备起始代码、其他文件和参考答案文件的编辑不算学生作答。
 
-Tracker 的操作步骤见 [第一阶段验收说明](docs/tracker-acceptance.md)，学习工作台见 [第二阶段验收说明](docs/dashboard-acceptance.md)，学习历史与复盘见 [第三阶段验收说明](docs/history-acceptance.md)，诊断演示见 [第四阶段验收说明](docs/demo-acceptance.md)，新增 AI 调试教练见 [本阶段验收说明](docs/coach-acceptance.md)。各阶段分别验收，后续模块等待用户指令。
+Tracker 的操作步骤见 [第一阶段验收说明](docs/tracker-acceptance.md)，学习工作台见 [第二阶段验收说明](docs/dashboard-acceptance.md)，学习历史与复盘见 [第三阶段验收说明](docs/history-acceptance.md)，诊断演示见 [第四阶段验收说明](docs/demo-acceptance.md)，AI 调试教练见 [教练验收说明](docs/coach-acceptance.md)。历史文档中的 VS Code 命令仅适用于归档扩展；当前网页操作见本 README 和 [比赛演示说明](docs/competition-submission.md)。
 
 ```bash
 pip install -e '.[dev]'
 pytest tests -q
-cd sparktutor-vscode
-npm ci
-npm run lint
-npm test
-npm run build
+# Node 可用时，完整 pytest 也会执行浏览器行为回归
+node --test tests/web_frontend.test.cjs
 ```
 
 默认测试不启动 Spark。完整课程验证使用每道题的原始测试入口执行参考答案：
 
 ```bash
 pip install -e '.[spark,dev]'
-SPARKTUTOR_TEST_SPARK=1 pytest tests/test_course_execution.py -q
+SPARKTUTOR_TEST_SPARK=1 pytest tests/test_course_execution.py tests/test_web_execution.py -q
 ```
 
-GitHub Actions 包含 Python 3.10/3.12 测试、扩展类型检查/测试/构建，以及 Linux + Java 17 + PySpark 4.1.1 的 18 道综合练习验证。课程检查还验证中文题面、引用文件、答案语法、执行要求和选择题干扰项。诊断测试覆盖历史重建、重复/乱序事件、跨课程隔离、缺数据、答案污染、迁移前置条件和推荐导航。
+课程执行测试按实际教材收集全部可执行题目（当前为 24 道，其中 6 道为分步练习），需显式开启 `SPARKTUTOR_TEST_SPARK=1` 并准备 Java 17+ 与 PySpark 4.1.1。未开启时跳过真实 Spark 执行，不能把静态测试通过等同于运行验证。除了参考答案，还应运行错误去重、错误排名、错误聚合和训练数据泄漏等反例，确认它们被对应的课程断言拒绝；环境异常不能作为反例测试通过的依据。课程检查还覆盖题目契约、已有标识兼容、三档难度的必需铺垫及 SQL/水位线等先讲后问的顺序。诊断测试覆盖历史重建、重复/乱序事件、跨课程隔离、缺数据、答案污染、迁移前置条件和推荐导航。
 
-结构：courses/ 存课程；engine/ 管教学、判题、执行；server/ 提供逐行 JSON 通信；state/ 管 SQLite；config/ 管设置；app/ 提供终端界面；sparktutor-vscode/ 为扩展。更新内容见 [CHANGELOG.md](CHANGELOG.md)。
+源码位于 `src/sparktutor/`：`courses/` 存课程，`engine/` 管教学、判题与执行，`server/` 提供共享教学协议，`web/` 提供 HTTP、网页会话、代码工作区和离线页面，`state/` 管 SQLite，`config/` 管设置，`app/` 提供可选终端界面（需安装 `.[tui]`）。编辑器源码及锁定依赖位于 `src/sparktutor/web/static/editor-src/`，构建资源和许可证随源码提交。更新内容见 [CHANGELOG.md](CHANGELOG.md)。
+
+安装后，`python -m sparktutor` 和 `sparktutor` 无子命令时默认启动网页服务；显式 `web` 子命令便于传入端口、监听地址和数据目录。可选终端界面使用 `python -m sparktutor launch` 启动，需先安装 `.[tui]`。
 
 ## 许可证
 

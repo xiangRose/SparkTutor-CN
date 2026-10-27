@@ -1,15 +1,17 @@
+> 本文验收当前网页版本。原扩展的 F5、命令入口与构建步骤见 [vscode-legacy 历史文档](https://github.com/xiangRose/SparkTutor-CN/blob/vscode-legacy/docs/demo-acceptance.md)。安装与数据目录见 [README](../README.md)。
+
 # 第四阶段验收：可复现诊断演示
 
-本阶段对应 Issue #7，将已有 Tracker、可信判题、四维诊断、推荐与历史复盘串成一条可以重复核查的演示流程。它验证系统行为，不是教学效果实验；技术报告和演示视频仍属后续阶段。
+本阶段对应 Issue #7，将已有 Tracker、可信判题、四维诊断、推荐与历史复盘串成一条可以重复核查的演示流程。它验证系统行为，不是教学效果实验。比赛演示安排见 [比赛提交说明](competition-submission.md)。
 
 ## 1. 先用无需 Spark 的模式验收
 
-1. 在 VS Code 中打开 `sparktutor-vscode` 文件夹，确认 `sparktutor.pythonPath` 指向项目虚拟环境，按 F5 启动新的扩展开发宿主。
-2. 执行“SparkTutor：打开诊断演示”，或从学习工作台的演示入口进入。
+1. 按 [README](../README.md#新电脑首次安装与启动) 启动网站，浏览器打开服务地址。
+2. 点击侧栏“诊断演示”，无需打开课程或填写模型密钥。
 3. 选择“合成轨迹（无需 Spark）”与先失败再修复的场景，点击运行。打开页面和切换选项不会自动执行演示。
-4. 完成后按阶段逐项查看四维画像、中文诊断、推荐、事件及前后复盘。
+4. 查看运行中的阶段进度；完成后按阶段逐项展开四维画像、中文诊断、只读推荐、事件及前后复盘。
 
-该模式只有执行结果是预设的；其余事件采集、评分、推荐导航与复盘使用实际代码。页面必须明确说明：这些是合成演示记录，未实际运行 Spark，不能作为自己的成绩或实验结果。
+该模式只有执行结果是预设的；其余事件采集、评分、推荐导航与复盘使用实际代码。网页推荐仅供解释规则，不能通过演示按钮改动普通学习任务。页面必须明确说明：这些是合成演示记录，未实际运行 Spark，不能作为自己的成绩或实验结果。
 
 ## 2. 核查任务 A 的错误、修改与求助
 
@@ -55,7 +57,7 @@ H 的 100%→50% 来自新增一个无首评前提示的任务，不能解释成
 
 真实模式仍使用脚本预设代码，不是学生自主作答，不输出教学效果结论。
 
-本次本机原生 Windows 验证中，A 的实际运行、修复提交与推荐跳转已通过，但 B 在创建本地数据的 Python worker 中发生 EOF/意外退出，完整真实轨迹未在该环境通过。没有把这类运行故障记成学习者失败或补造通过；真实流程以 Linux CI 的两条轨迹为验证基线。Windows 可先用合成模式验收页面，真实 Spark 演示建议在已准备的 Linux、WSL2 或 Dev Container 环境运行。
+历史原生 Windows 验证中，A 的实际运行、修复提交与推荐跳转曾通过，但 B 在创建本地数据的 Python worker 中发生 EOF/意外退出，完整真实轨迹未在该环境通过。没有把这类运行故障记成学习者失败或补造通过；真实流程以 Linux 环境的两条轨迹为验证基线。Windows 可先用合成模式验收页面，真实 Spark 演示建议在已准备的 Linux 或 WSL2 环境运行。
 
 ## 5. 隔离、重复与错误反馈
 
@@ -79,12 +81,11 @@ H 的 100%→50% 来自新增一个无首评前提示的任务，不能解释成
 
 ## 自动化验证
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest tests/test_demo_scenarios.py tests/test_demo_protocol.py tests/test_demo_cli.py -q
-cd sparktutor-vscode
-npm.cmd run lint
-npm.cmd test
-npm.cmd run build
+在已安装开发依赖的项目环境中，于仓库根目录执行：
+
+```bash
+python -m pytest tests/test_demo_scenarios.py tests/test_demo_protocol.py tests/test_demo_cli.py tests/test_web_runtime_parity.py -q
+node --test tests/web_frontend.test.cjs
 ```
 
-默认测试不启动 Spark。Linux CI 的独立 `demo-spark` 作业设置 `SPARKTUTOR_TEST_SPARK=1`，实际运行两条完整轨迹；原有 18 道综合题仍由 `spark-courses` 作业独立验证。自动化不能代替真实 VS Code 界面验收。
+默认测试不执行真实 Spark 课程作业。真实演示验收需在已准备的 Linux 环境中设置 `SPARKTUTOR_TEST_SPARK=1`，运行 `python -m pytest tests/test_demo_scenarios.py -q -m spark`；课程执行测试独立验证当前 24 道可执行题及常见错误反例。自动化检查不能代替真实浏览器界面验收。

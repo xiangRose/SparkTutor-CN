@@ -1,8 +1,10 @@
 - Class: meta
-  Lesson: "Gold 层"
-  EstimatedMinutes: 20
+  Id: '0'
+  Lesson: Gold 层
+  EstimatedMinutes: 60
 
 - Class: text
+  Id: "1"
   Depth: all
   Output: |
     ## 你将学到什么
@@ -23,6 +25,23 @@
     报表和 ML 特征存储中。
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：能产出包含 product 与数值 total 的 Silver 表；会分组聚合。
+
+    **完成后能做什么**：分别计算订单数、营收和客单价，再对产品汇总表做窗口排名。
+
+    先定义指标 → 聚合小样例 → rank 并列规则 → Gold 综合题。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: "2"
   Depth: all
   Output: |
     ## 从 Silver 到 Gold
@@ -39,6 +58,7 @@
     模式永远是：**group → aggregate → （可选）rank 或 sort**。
 
 - Class: text
+  Id: "3"
   Depth: beginner
   Output: |
     gold 层的主力是 `groupBy().agg()`：
@@ -62,6 +82,7 @@
     Spark 会生成像 `sum(total)` 这样的名字，下游很难使用。
 
 - Class: text
+  Id: "4"
   Depth: all
   Output: |
     ## 常用聚合函数
@@ -88,6 +109,7 @@
     [Column.alias](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.Column.alias.html)
 
 - Class: mult_question
+  Id: "5"
   KnowledgeComponents: [dataframe.aggregate]
   Context: sales_analytics
   Depth: all
@@ -96,7 +118,31 @@
   CorrectAnswer: "agg()"
   Hint: "它是一个三个字母的短方法，接受一个或多个聚合表达式。"
 
+- Class: text
+  Id: gold-metrics-example
+  Depth: all
+  Output: |
+    ## 先决定指标的分母与单位
+
+    同一产品两条订单的 total 为 10 和 30，则订单数为 2、营收为 40、平均订单金额为 20。
+    `count(*)` 数订单行，`sum(total)` 加金额，`avg(total)` 求每条订单金额的平均。
+    quantity 的总和是销量，不能拿它代替订单数；本题每条 Silver 行表示一条订单。
+
+- Class: mult_question
+  Id: gold-metrics-check
+  Depth: all
+  KnowledgeComponents:
+  - pipeline.gold
+  - dataframe.aggregate
+  Output: |
+    两条订单 total 为 10 和 30，order_count、total_revenue、avg_order_value 分别是什么？
+  AnswerChoices: 2、40、20;40、2、20;2、40、40
+  CorrectAnswer: 2、40、20
+  Hint: 先识别每行表示什么，再选聚合函数。
+  Context: sales_analytics
+
 - Class: cmd_question
+  Id: "6"
   KnowledgeComponents: [dataframe.group_by, dataframe.aggregate]
   Context: sales_analytics
   Depth: all
@@ -117,6 +163,7 @@
   Hint: "使用 groupBy('product').agg(f.sum(...).alias(...), f.sum(...).alias(...))"
 
 - Class: mult_question
+  Id: "7"
   KnowledgeComponents: [dataframe.aggregate]
   Context: sales_analytics
   Depth: all
@@ -126,6 +173,7 @@
   Hint: "它把 'count' 和 'distinct' 合到了一个函数名里。"
 
 - Class: cmd_question
+  Id: "8"
   KnowledgeComponents: [dataframe.group_by, dataframe.aggregate]
   Context: sales_analytics
   Depth: intermediate
@@ -148,6 +196,7 @@
   Hint: "groupBy order_hour，agg 用 count、sum、countDistinct，然后 orderBy。"
 
 - Class: text
+  Id: "9"
   Depth: all
   Output: |
     ## 窗口函数：不坍缩行的聚合
@@ -181,6 +230,7 @@
     [f.row_number](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.row_number.html)
 
 - Class: cmd_question
+  Id: "10"
   KnowledgeComponents: [dataframe.window]
   Context: sales_analytics
   Depth: intermediate
@@ -198,6 +248,7 @@
   Hint: "用 partitionBy、orderBy 和 rowsBetween 定义 Window。用 f.sum().over(window)。"
 
 - Class: text
+  Id: "11"
   Depth: all
   Output: |
     ## 用窗口函数做排名
@@ -218,6 +269,7 @@
     就能得到前 10 个产品。
 
 - Class: mult_question
+  Id: "12"
   KnowledgeComponents: [dataframe.window]
   Context: sales_analytics
   Depth: intermediate
@@ -227,6 +279,7 @@
   Hint: "对于值 100, 90, 90, 80：rank 给出 1,2,2,4，而 dense_rank 给出 1,2,2,3。"
 
 - Class: text
+  Id: "13"
   Depth: advanced
   Output: |
     ## Gold 聚合的性能调优
@@ -251,6 +304,7 @@
     再聚合一次。
 
 - Class: mult_question
+  Id: "14"
   KnowledgeComponents: [spark.shuffle]
   Context: sales_analytics
   Depth: advanced
@@ -260,6 +314,7 @@
   Hint: "加随机盐把单个热点键拆成多个子键，用于第一阶段。"
 
 - Class: cmd_question
+  Id: "15"
   KnowledgeComponents: [dataframe.group_by, dataframe.aggregate]
   Context: sales_analytics
   Depth: advanced
@@ -285,7 +340,31 @@
     )
   Hint: "添加一个随机 _salt 列，第一阶段 groupBy(product, _salt)，第二阶段 groupBy(product)。"
 
+- Class: text
+  Id: gold-rank-example
+  Depth: all
+  Output: |
+    ## 聚合后，再给产品排位
+
+    先得到每个 product 一行的汇总表，再对 total_revenue 降序使用 rank。
+    营收为 100、100、60 时，rank 是 1、1、3；dense_rank 是 1、1、2，两者不能随意互换。
+    本题明确要求 rank，并且排名不会把已经汇总好的产品行再次合并。
+    时间累计窗口和加盐聚合是拓展，不是理解本题指标的前提。
+
+- Class: mult_question
+  Id: gold-rank-check
+  Depth: all
+  KnowledgeComponents:
+  - dataframe.window
+  Output: |
+    本题用 rank 对 100、100、60 降序排名，结果应为什么？
+  AnswerChoices: 1、1、3;1、1、2;1、2、3
+  CorrectAnswer: 1、1、3
+  Hint: 并列占用名次，后续会跳号。
+  Context: sales_analytics
+
 - Class: script
+  Id: "16"
   KnowledgeComponents: [pipeline.gold, dataframe.group_by, dataframe.aggregate, dataframe.window]
   Context: sales_analytics
   Depth: all
@@ -319,6 +398,7 @@
   Hint: "groupBy product，agg 计算 count 和 sum，然后用 Window 配合 f.rank().over(w)。"
 
 - Class: text
+  Id: "17"
   Depth: all
   Output: |
     ## 小结

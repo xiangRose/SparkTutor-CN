@@ -309,3 +309,52 @@ async def test_local_spark_python_defaults_preserve_user_configuration(monkeypat
     assert env["PYSPARK_DRIVER_PYTHON"] == (
         "explicit-driver-python" if custom_python else sys.executable
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("worker,driver", [
+    (None, None),
+    ("configured-worker-python", None),
+    (None, "configured-driver-python"),
+    ("configured-worker-python", "configured-driver-python"),
+])
+async def test_auto_detection_and_execution_share_python_environment(monkeypatch, worker, driver):
+    """A venv launcher must discover Spark with the same Python used to run it."""
+    for name, value in (("PYSPARK_PYTHON", worker), ("PYSPARK_DRIVER_PYTHON", driver)):
+        monkeypatch.delenv(name, raising=False)
+        if value:
+            monkeypatch.setenv(name, value)
+    monkeypatch.delenv("SPARK_REMOTE", raising=False)
+    before = dict(os.environ)
+    executor = Executor(settings=Settings(execution_mode=ExecutionMode.AUTO))
+    calls = []
+    expected_python = {
+        "PYSPARK_PYTHON": worker or sys.executable,
+        "PYSPARK_DRIVER_PYTHON": driver or sys.executable,
+    }
+
+    async def start_process(*args, **kwargs):
+        if args[0] == "docker":
+            raise FileNotFoundError("No local Docker installation")
+        env = kwargs.get("env", {})
+        calls.append((args, dict(env)))
+        # The pip-installed Windows launcher cannot locate its jars when its
+        # Python discovery falls back to an unrelated system interpreter.
+        correct_python = all(env.get(key) == value for key, value in expected_python.items())
+        return AsyncMock(returncode=0 if correct_python else 1)
+
+    monkeypatch.setattr(executor, "_start_process", start_process)
+    monkeypatch.setattr(executor, "_communicate", AsyncMock(return_value=(b"", b"")))
+    monkeypatch.setattr(executor, "_stream_process", AsyncMock(return_value=ExecResult(
+        ExecMode.LOCAL, 0, "ran with selected Python", "",
+    )))
+    result = await executor.execute("print('exercise')")
+
+    assert result.mode == ExecMode.LOCAL
+    assert result.success
+    assert len(calls) == 2
+    assert calls[0][0][1] == "--version"
+    assert calls[1][0][1] != "--version"
+    assert calls[0][1] == calls[1][1]
+    assert calls[0][1]["PYTHONIOENCODING"] == "utf-8"
+    assert os.environ == before

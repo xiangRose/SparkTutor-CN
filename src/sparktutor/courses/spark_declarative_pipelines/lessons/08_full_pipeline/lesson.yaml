@@ -1,8 +1,10 @@
 - Class: meta
-  Lesson: "完整管道"
-  EstimatedMinutes: 25
+  Id: '0'
+  Lesson: 完整管道
+  EstimatedMinutes: 85
 
 - Class: text
+  Id: "1"
   Depth: all
   Output: |
     ## 你将学到什么
@@ -21,6 +23,23 @@
     - 为生产环境选择部署模式（高级）
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：分别通过框架、Bronze、Silver、Gold 的练习，理解每一层的输入输出。
+
+    **完成后能做什么**：组合已学函数，并用行数、类型和业务结果逐层定位问题。
+
+    检查层间契约 → 连接依赖 → 查看每层数据 → 核对最终汇总 → 讨论生产拓展边界。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: "2"
   Depth: all
   Output: |
     ## 完整图景
@@ -43,6 +62,7 @@
     Pipeline 框架会检测这些依赖，并按正确顺序运行所有内容。
 
 - Class: text
+  Id: "3"
   Depth: beginner
   Output: |
     连接各层很简单。用管道装饰器注册每个函数，依赖检测会
@@ -76,6 +96,7 @@
     运行它。
 
 - Class: mult_question
+  Id: "4"
   KnowledgeComponents: [pipeline.dependencies]
   Context: end_to_end_orders
   Depth: all
@@ -85,6 +106,7 @@
   Hint: "每一层都依赖上一层的输出。"
 
 - Class: text
+  Id: "5"
   Depth: all
   Output: |
     ## 为什么这个设计有效
@@ -104,6 +126,7 @@
     都有明确的负责人和契约。
 
 - Class: mult_question
+  Id: "6"
   KnowledgeComponents: [pipeline.dependencies]
   Context: end_to_end_orders
   Depth: all
@@ -113,6 +136,7 @@
   Hint: "Gold 从 silver 读取。如果 silver 数据错了，gold 也会错。逐层调试。"
 
 - Class: text
+  Id: "7"
   Depth: intermediate
   Output: |
     ## 错误处理与日志
@@ -150,6 +174,7 @@
     把它持久化到监控系统。
 
 - Class: mult_question
+  Id: "8"
   KnowledgeComponents: [pipeline.dependencies]
   Context: end_to_end_orders
   Depth: intermediate
@@ -159,6 +184,7 @@
   Hint: "Gold 从 silver 读取。如果 silver 失败了，gold 就没有有效数据可消费。"
 
 - Class: cmd_question
+  Id: "9"
   KnowledgeComponents: [pipeline.framework]
   Context: end_to_end_orders
   Depth: intermediate
@@ -193,6 +219,7 @@
   Hint: "遍历排序后的 flows，每个包在 try/except 中，把状态收集到字典里。"
 
 - Class: text
+  Id: "10"
   Depth: advanced
   Output: |
     ## 幂等性：跑两次，得到相同结果
@@ -211,6 +238,7 @@
     仍需要单独设计，临时视图和普通 Parquet 覆盖不提供完整事务保证。
 
 - Class: mult_question
+  Id: "11"
   KnowledgeComponents: [dataframe.io]
   Context: end_to_end_orders
   Depth: advanced
@@ -220,6 +248,7 @@
   Hint: "如果你把管道跑两次，append 会把相同数据写两遍。"
 
 - Class: text
+  Id: "12"
   Depth: advanced
   Output: |
     ## 部署模式
@@ -245,6 +274,7 @@
     `results` 字典是一个天然的起点。
 
 - Class: mult_question
+  Id: "13"
   KnowledgeComponents: [pipeline.framework]
   Context: end_to_end_orders
   Depth: advanced
@@ -253,8 +283,38 @@
   CorrectAnswer: "用 Kubernetes 容器化"
   Hint: "Kubernetes 编排容器。Spark on K8s 从 Docker 镜像启动 executor pod。"
 
+- Class: text
+  Id: pipeline-acceptance-example
+  Depth: all
+  Output: |
+    ## 结业前：按层验收，不只盯最终数字
+
+    测试输入有 6 行；按 order_id 去重后 Bronze 应有 5 行，过滤坏价格后 Silver 应有 4 行，
+    Gold 按产品聚合后为 3 行。某一层行数异常，先检查该层及它的输入，不随机修改所有函数。
+    结业输入比单独 Bronze 练习多了 order_ts，记得在 Bronze 的全字符串 Schema 中保留它。
+    `build_pipeline` 返回注册好的 Pipeline，测试随后调用 run；不要在返回前自行运行一遍。
+    这里只创建临时视图，没有持久化事务、增量水位线或生产调度；这些需要后续独立实现和验证。
+
+- Class: mult_question
+  Id: pipeline-acceptance-check
+  Depth: all
+  KnowledgeComponents:
+  - pipeline.silver
+  - pipeline.framework
+  Output: |
+    Bronze 已是 5 行，但 Silver 仍保留 N/A 价格，首先应该检查哪里？
+  AnswerChoices: Silver 的类型解析与坏价格筛选;Gold 的排名是否使用升序;直接把最终营收写成常量
+  CorrectAnswer: Silver 的类型解析与坏价格筛选
+  Hint: 从最早出现错误的层开始定位。
+  Context: end_to_end_orders
+
 - Class: script
-  KnowledgeComponents: [pipeline.framework, pipeline.bronze, pipeline.silver, pipeline.gold]
+  Id: '14'
+  KnowledgeComponents:
+  - pipeline.framework
+  - pipeline.bronze
+  - pipeline.silver
+  - pipeline.gold
   Context: end_to_end_orders
   Depth: all
   RequiresExecution: true
@@ -275,7 +335,7 @@
        临时视图读取，按 `product` 分组，计算 `order_count`、
        `total_revenue`、`avg_order_value`，并添加 `revenue_rank`
     4. 用 `@pipe.materialized_view()` 注册全部三个函数，
-       然后调用 `pipe.run()`
+       返回已注册好的 pipe，由测试调用 `pipe.run()`
 
     测试框架会喂入一个同时包含干净行和脏行的 CSV，然后
     验证三层是否都产出正确输出。
@@ -292,14 +352,15 @@
     请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。
   StarterFile: starter.py
   SolutionFile: solution.py
-  Hint: "综合第 04-07 课的所有内容。用管道装饰器注册三个函数。"
+  Hint: 综合第 04-07 课的所有内容。用管道装饰器注册三个函数。
 
 - Class: text
+  Id: '15'
   Depth: all
   Output: |
     ## 课程完成！
 
-    你已经从零构建了一条生产级的数据管道。以下是你在全部
+    你已经组合出一条可在本地运行的教学数据管道。以下是你在全部
     八课中学到的内容：
 
     | 课程 | 你构建了什么 |
@@ -323,5 +384,5 @@
     - 用 spark-submit 或 Airflow 之类的编排器部署
     - 在层与层之间添加数据质量检查
 
-    现在你已经具备了用 Apache Spark 构建生产级数据管道的
-    能力。工程愉快！
+    接下来可以把教学流程逐项扩展为真实工程：持久化、事务、重试、观测和部署分别验证。
+    当前完成的是本地教学管道，不是经过生产验收的平台。

@@ -1,8 +1,10 @@
 - Class: meta
-  Lesson: "管道框架"
-  EstimatedMinutes: 25
+  Id: '0'
+  Lesson: 管道框架
+  EstimatedMinutes: 100
 
 - Class: text
+  Id: "1"
   Depth: all
   Output: |
     ## 你将学到什么
@@ -20,6 +22,43 @@
     bronze、silver 和 gold 层。
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：会写带参数和返回值的函数，认识类和字典；装饰器与排序会从小例子讲起。
+
+    **完成后能做什么**：先手工执行依赖链，再实现注册、依赖检测、拓扑排序与运行四个部件。
+
+    普通函数 → 注册小练习 → 类装饰器 → 依赖图手算 → 排序小练习 → 综合实现。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: functions-before-decorators
+  Depth: all
+  Output: |
+    ## 先不用框架，把三个函数排好顺序
+
+    Bronze 读输入，Silver 读 Bronze，Gold 读 Silver。
+    如果直接写 Python，就应先运行 bronze，再运行 silver，最后运行 gold。
+    接下来写的框架只是把“注册函数”和“确定顺序”自动组织起来，不会改变这条依赖。
+
+    ```python
+    flows = {}
+    def register(func):
+        flows[func.__name__] = func
+        return func
+    ```
+
+    `register(my_function)` 保存函数对象，不是立即调用 `my_function()`。
+    `@register` 放在函数定义前，是这次注册调用的语法写法；先分清注册和执行，再看类中的版本。
+
+- Class: text
+  Id: "2"
   Depth: all
   Output: |
     Python **装饰器**是一个包装另一个函数以增加行为的函数。
@@ -37,7 +76,43 @@
     名为 `bronze_orders` 的临时视图。函数名即表名 —— 这就是
     "声明式"的部分。
 
+- Class: mult_question
+  Id: registration-versus-run
+  Depth: all
+  KnowledgeComponents:
+  - pipeline.framework
+  Output: |
+    把函数对象保存到注册表字典，是否已经处理了订单数据？
+  AnswerChoices: 没有，还需要在运行阶段调用函数;已经执行了所有 Spark action;已经写入永久湖仓表
+  CorrectAnswer: 没有，还需要在运行阶段调用函数
+  Hint: 区分函数对象与函数调用。
+  Context: view_dependency_graph
+
+- Class: script
+  Id: practice-function-registry
+  Depth: all
+  RequiresExecution: true
+  ExerciseTitle: 注册函数对象而不提前执行
+  KnowledgeComponents: [pipeline.framework, pipeline.decorator]
+  Context: function_registry_practice
+  StarterCode: registry_practice_starter.py
+  SolutionCode: registry_practice_solution.py
+  Output: |
+    ## 单项练习：先把注册和执行分开
+
+    **输入、输出与通过条件**
+
+    实现 `register_flow(flows, func)`。flows 是已有字典，func 是一个函数对象。
+    按 `func.__name__` 更新原字典并返回原函数对象；注册时不要调用 func。
+    保留其他已注册步骤，同名注册则替换该名字对应的旧函数。
+
+    测试先注册 bronze、silver，确认没有处理数据；显式调用字典中的函数后才出现执行记录。
+    本题只练普通 Python 注册，不创建 SparkSession；通过后再把同一逻辑放进类装饰器。
+    请保留测试区；在平台的可执行模式提交，语法检查不能代替这些断言。
+  Hint: flows[func.__name__] = func 保存对象；func(...) 才是执行调用。
+
 - Class: text
+  Id: "3"
   Depth: all
   Output: |
     ## 装饰器模式
@@ -64,6 +139,7 @@
     分离开来。你声明步骤；框架负责排序。
 
 - Class: mult_question
+  Id: "4"
   KnowledgeComponents: [pipeline.decorator]
   Context: view_dependency_graph
   Depth: all
@@ -73,6 +149,7 @@
   Hint: "装饰器将函数加入管道的内部注册表。"
 
 - Class: cmd_question
+  Id: "5"
   KnowledgeComponents: [pipeline.framework]
   Context: view_dependency_graph
   Depth: all
@@ -94,6 +171,7 @@
   Hint: "装饰器将 func 存入 self._flows[func.__name__] 并返回 func。"
 
 - Class: text
+  Id: "6"
   Depth: all
   Output: |
     ## 依赖检测
@@ -117,15 +195,42 @@
     正则表达式无法可靠处理注释、动态表名或复杂代码。生产框架应使用显式依赖或语法分析。
 
 - Class: mult_question
-  KnowledgeComponents: [pipeline.dependencies]
+  Id: '7'
+  KnowledgeComponents:
+  - pipeline.dependencies
   Context: view_dependency_graph
-  Depth: intermediate
-  Output: "管道如何自动检测 silver_orders 依赖 bronze_orders？"
-  AnswerChoices: "通过扫描函数源码中的 spark.table() 调用;通过检查 Spark catalog;通过运行函数并捕获错误;通过分析 DataFrame 血缘"
-  CorrectAnswer: "通过扫描函数源码中的 spark.table() 调用"
-  Hint: "管道使用 inspect.getsource 和正则表达式来查找表引用。"
+  Depth: all
+  Output: 管道如何自动检测 silver_orders 依赖 bronze_orders？
+  AnswerChoices: 通过扫描函数源码中的 spark.table() 调用;通过检查 Spark catalog;通过运行函数并捕获错误;通过分析 DataFrame 血缘
+  CorrectAnswer: 通过扫描函数源码中的 spark.table() 调用
+  Hint: 管道使用 inspect.getsource 和正则表达式来查找表引用。
 
 - Class: text
+  Id: dependency-graph-example
+  Depth: all
+  Output: |
+    ## 先手算依赖图，再写排序算法
+
+    图使用“节点 → 它依赖的节点”表示：
+    `{"gold": ["silver"], "silver": ["bronze"], "bronze": []}`。
+    先找没有未完成依赖的 bronze，完成后轮到 silver，再轮到 gold；注册时先后顺序不重要。
+    Kahn 算法重复这个过程，若还有节点但找不到可执行的节点，就检查循环依赖。
+    本课通过固定字符串 `spark.table("...")` 识别部分依赖；动态拼接表名不在教学检测器的支持范围。
+
+- Class: mult_question
+  Id: dependency-graph-check
+  Depth: all
+  KnowledgeComponents:
+  - pipeline.framework
+  Output: |
+    即使按 gold、silver、bronze 的次序注册，依赖不变时应按什么顺序执行？
+  AnswerChoices: bronze → silver → gold;gold → silver → bronze;按函数名长度执行
+  CorrectAnswer: bronze → silver → gold
+  Hint: 执行顺序由依赖决定。
+  Context: view_dependency_graph
+
+- Class: text
+  Id: "8"
   Depth: all
   Output: |
     ## 拓扑排序
@@ -166,7 +271,33 @@
         return order
     ```
 
+- Class: script
+  Id: practice-dependency-order
+  Depth: all
+  RequiresExecution: true
+  ExerciseTitle: 给依赖图排执行顺序
+  KnowledgeComponents: [pipeline.dependencies]
+  Context: dependency_sort_practice
+  StarterCode: dependency_practice_starter.py
+  SolutionCode: dependency_practice_solution.py
+  Output: |
+    ## 单项练习：先单独验证依赖排序
+
+    **输入、输出与通过条件**
+
+    实现 `dependency_order(graph)`。输入是“节点名 → 依赖名列表”的字典。
+    返回节点名列表，每个图内节点恰好出现一次，且在依赖之后；不要修改输入。
+    重复依赖只计一次，图外依赖视为已准备好的外部输入，不加入排序结果。
+    图内有环时抛出 ValueError；空图返回空列表。互不依赖的节点不用固定先后顺序。
+
+    例如 gold → silver → bronze 的依赖链，应返回 bronze、silver、gold；
+    gold 与 silver 互相依赖则必须报错，不能返回一份看似成功的部分列表。
+    测试还检查重复依赖、多个独立分支、外部依赖和自环；本题不创建 SparkSession。
+    请保留测试区；通过后把排序逻辑接入 Pipeline 类，再组合运行整个框架。
+  Hint: 先统计每个节点未完成的图内依赖；每次取就绪节点，若最终未取完所有节点就检查环。
+
 - Class: cmd_question
+  Id: "9"
   KnowledgeComponents: [pipeline.dependencies]
   Context: view_dependency_graph
   Depth: advanced
@@ -184,6 +315,7 @@
   Hint: "用 inspect.getsource 获取源码，然后用 re.findall 匹配 spark.table(...) 的模式。"
 
 - Class: text
+  Id: "10"
   Depth: all
   Output: |
     ## run() 方法
@@ -210,7 +342,18 @@
     每一步的结果都注册为一个**临时视图**，这样下游步骤就能用
     `spark.table("step_name")` 引用它。这正是让依赖检测生效的契约。
 
+- Class: mult_question
+  Id: "12"
+  KnowledgeComponents: [pipeline.dependencies]
+  Context: view_dependency_graph
+  Depth: all
+  Output: "如果步骤 A 依赖步骤 B，而步骤 B 又依赖步骤 A，拓扑排序时会发生什么？"
+  AnswerChoices: "检测到环并抛出错误;步骤 A 先运行;步骤 B 先运行;两者并行运行"
+  CorrectAnswer: "检测到环并抛出错误"
+  Hint: "循环依赖无法解析 —— 当不是所有节点都被处理时，算法会检测到这一点。"
+
 - Class: script
+  Id: "11"
   KnowledgeComponents: [pipeline.framework, pipeline.dependencies]
   Context: view_dependency_graph
   Depth: all
@@ -244,16 +387,8 @@
   SolutionFile: solution.py
   Hint: "实现全部四个方法。参考课程正文中的示例代码。"
 
-- Class: mult_question
-  KnowledgeComponents: [pipeline.dependencies]
-  Context: view_dependency_graph
-  Depth: all
-  Output: "如果步骤 A 依赖步骤 B，而步骤 B 又依赖步骤 A，拓扑排序时会发生什么？"
-  AnswerChoices: "检测到环并抛出错误;步骤 A 先运行;步骤 B 先运行;两者并行运行"
-  CorrectAnswer: "检测到环并抛出错误"
-  Hint: "循环依赖无法解析 —— 当不是所有节点都被处理时，算法会检测到这一点。"
-
 - Class: text
+  Id: "13"
   Depth: all
   Output: |
     ## 小结

@@ -15,7 +15,7 @@ from typing import Callable, Optional
 from sparktutor.config.settings import ExecutionMode, Settings
 from sparktutor.courses.registry import CourseRegistry
 from sparktutor.engine.adaptive import Depth, LearnerProfile
-from sparktutor.engine.evaluator import Evaluator
+from sparktutor.engine.evaluator import EvalResult, Evaluator, FeedbackItem
 from sparktutor.engine.executor import Executor
 from sparktutor.engine.assessment_evidence import execution_failure_kind
 from sparktutor.engine.diagnosis import build_diagnosis
@@ -72,6 +72,18 @@ def _feedback_to_dict(item) -> dict:
     }
 
 
+def _evaluation_to_dict(result) -> dict:
+    return {
+        "passed": result.passed,
+        "feedback": [_feedback_to_dict(item) for item in result.feedback],
+        "encouragement": result.encouragement,
+        "skillSignals": result.skill_signals,
+        "assessmentSource": result.assessment_source,
+        "assessmentEligible": result.assessment_eligible,
+        "failureKind": result.failure_kind,
+    }
+
+
 class ServerHandler:
     """Routes incoming requests to engine methods and returns result dicts."""
 
@@ -79,8 +91,10 @@ class ServerHandler:
         self,
         settings: Optional[Settings] = None,
         write_notification: Optional[Callable[[Notification], None]] = None,
+        workspace_path: Optional[Path] = None,
     ):
         self.settings = settings or Settings.load()
+        self.workspace_path = Path(workspace_path) if workspace_path is not None else Path.home() / ".sparktutor" / "workspace"
         self._write_notification = write_notification or (lambda n: None)
 
         self.registry = CourseRegistry()
@@ -160,7 +174,7 @@ class ServerHandler:
             "getLearningEvents", "getDiagnosis", "getEnvironmentReport", "getLearningDataOverview",
             "exportLearningSummary", "backupLearningDatabase",
         }:
-            raise ValueError("学习记录已清除，请重载窗口后开始新的学习会话。")
+            raise ValueError("学习记录已清除，请重载学习页面或重启后端后开始新的学习会话。")
 
         handler_map = {
             "listCourses": self._list_courses,
@@ -245,7 +259,7 @@ class ServerHandler:
 
     async def _get_learning_data_overview(self, params: dict) -> dict:
         from sparktutor.state.data_management import get_data_overview
-        return get_data_overview(self.progress.db_path, Path.home() / ".sparktutor" / "workspace")
+        return get_data_overview(self.progress.db_path, self.workspace_path)
 
     async def _export_learning_summary(self, params: dict) -> dict:
         from sparktutor.state.data_management import export_learning_summary
@@ -263,6 +277,15 @@ class ServerHandler:
         if params != {"confirmation": "clear-learning-records"}:
             raise ValueError("需要在学习数据管理中明确确认清除。")
         result = clear_learning_records(self.progress.db_path)
+        self.invalidate_learning_session()
+        return result
+
+    def invalidate_learning_session(self) -> None:
+        """Freeze an old session after learning records are explicitly cleared.
+
+        Web transports share storage across tabs and call this for every live
+        handler; no lifecycle callback may recreate the deleted records.
+        """
         self._learning_data_cleared = True
         self._runner = None
         self._current_course_id = None
@@ -272,7 +295,6 @@ class ServerHandler:
         from sparktutor.engine.learning_coach import LearningCoachManager
         self._coach = LearningCoachManager()
         self._coach_visit_id = uuid.uuid4().hex
-        return result
 
     async def _get_course_progress(self, params: dict) -> dict:
         return get_course_progress(self.registry, self.progress, params["courseId"],
@@ -331,7 +353,8 @@ class ServerHandler:
             scope_course_id=params.get("scopeCourseId"), depth=self._profile.depth.value,
         )
 
-    async def _load_lesson(self, params: dict, *, target_step_id: Optional[str] = None) -> dict:
+    async def _load_lesson(self, params: dict, *, target_step_id: Optional[str] = None,
+                           resume_step_id: Optional[str] = None) -> dict:
         course_id = params["courseId"]
         lesson_idx = params["lessonIdx"]
         depth = params.get("depth", self._profile.depth.value)
@@ -357,6 +380,12 @@ class ServerHandler:
         state = self._runner.load_lesson(lesson_dir)
         if target_step_id is not None:
             self._runner.open_practice_step(target_step_id)
+        elif resume_step_id is not None:
+            matches = [index for index, step in enumerate(state.filtered_steps) if step.id == resume_step_id]
+            if matches:
+                if state.current_index != matches[0]:
+                    self._runner._restored_code = ""
+                state.current_index = matches[0]
         self._coach_visit_id = uuid.uuid4().hex
         self._task_started_at.clear()
         self._hinted_tasks.clear()
@@ -455,12 +484,7 @@ class ServerHandler:
                 "error",
                 {"errorType": "EvaluationError", "source": "code_submit"},
             )
-        return {
-            "passed": result.passed,
-            "feedback": [_feedback_to_dict(f) for f in result.feedback],
-            "encouragement": result.encouragement,
-            "skillSignals": result.skill_signals,
-        }
+        return _evaluation_to_dict(result)
 
     async def _advance(self, params: dict) -> dict:
         if self._runner is None:
@@ -621,12 +645,7 @@ class ServerHandler:
                     "error",
                     {"errorType": "EvaluationError", "source": "local_submit"},
                 )
-            response["localResult"] = {
-                "passed": result.passed,
-                "feedback": [_feedback_to_dict(f) for f in result.feedback],
-                "encouragement": result.encouragement,
-                "skillSignals": result.skill_signals,
-            }
+            response["localResult"] = _evaluation_to_dict(result)
 
         if needs_ai and review_kwargs:
             messages = self.evaluator.build_review_prompt(**review_kwargs)
@@ -697,23 +716,23 @@ class ServerHandler:
                     {"errorType": "EvaluationError", "source": "ai_review"},
                 )
 
-        return {
-            "passed": result.passed,
-            "feedback": [_feedback_to_dict(f) for f in result.feedback],
-            "encouragement": result.encouragement,
-            "skillSignals": result.skill_signals,
-        }
+        return _evaluation_to_dict(result)
 
     async def _complete_review_failure(self, params: dict) -> dict:
-        """End an unavailable external review with the same tracking as Claude."""
-        return await self._parse_review_response({
-            "reviewId": params.get("reviewId"),
-            "rawText": json.dumps({
-                "passed": False,
-                "feedback": [{"severity": "warning", "category": None,
-                              "message": str(params.get("message", "AI 评审暂不可用，请稍后重试。"))[:1500]}],
-            }, ensure_ascii=False),
-        })
+        """Record an unavailable review without calling it a learner mistake."""
+        if (self._runner is None or not self._runner.pending_review_id
+                or params.get("reviewId") != self._runner.pending_review_id):
+            raise ValueError("这次 AI 评审对应的提交已失效，请在当前练习重新提交。")
+        result = EvalResult(
+            passed=False, assessment_source="ai_review", assessment_eligible=False,
+            failure_kind="infrastructure", feedback=[FeedbackItem(
+                line=None, severity="warning", category=None,
+                message=str(params.get("message", "AI 评审暂不可用，请稍后重试。"))[:1500],
+            )],
+        )
+        self._runner.complete_review(result)
+        self._record_submission(result, ai_review=True)
+        return _evaluation_to_dict(result)
 
     async def _get_learning_events(self, params: dict) -> dict:
         latest = params.get("latest", False)

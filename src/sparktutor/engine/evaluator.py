@@ -394,6 +394,29 @@ Rules:
                     assessment_source="course_tests", assessment_eligible=True,
                 ), False, {}
 
+        # Explicit introductory contracts do not need an AI provider. These
+        # checks describe source structure, not successful Spark execution.
+        session_checks = [v.params for v in step.validation if v.type == "spark_session"]
+        if session_checks:
+            from sparktutor.engine.session_validation import validate_spark_session
+
+            feedback = []
+            for check in session_checks:
+                required = (check.get("variable"), check.get("app_name"), check.get("master"))
+                if any(not isinstance(item, str) or not item for item in required):
+                    return EvalResult(passed=False, assessment_source="structural",
+                                      failure_kind="infrastructure", feedback=[FeedbackItem(
+                        line=None, severity="warning", message="本题的本地检查配置不完整，请联系课程维护者。",
+                    )]), False, {}
+                feedback.extend(FeedbackItem(line=line, severity="warning", message=message, category="bug")
+                                for line, message in validate_spark_session(
+                                    code, variable=required[0], app_name=required[1], master=required[2]))
+            return EvalResult(
+                passed=not feedback, feedback=feedback, assessment_source="structural", assessment_eligible=True,
+                failure_kind="learner" if feedback else "",
+                encouragement="" if feedback else "本题的本地代码结构检查已通过；这不代表 Spark 已实际运行。",
+            ), False, {}
+
         # Exact match check
         if step.correct_answer:
             exact = self.check_code_exact(code, step.correct_answer)

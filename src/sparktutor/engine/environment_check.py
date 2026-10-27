@@ -36,7 +36,7 @@ async def _java_check() -> dict:
     details = [f"JAVA_HOME：{java_home}" if java_home else "JAVA_HOME：未设置；将使用 PATH 中的 Java。"]
     if not executable or not Path(executable).is_file():
         return _check("java", "Java / JAVA_HOME", "missing", "未找到可用的 Java 启动程序。", details,
-                      ["安装 Java 17 或更高版本；将 JAVA_HOME 指向 Java 安装目录，然后重载窗口。"])
+                      ["安装 Java 17 或更高版本；将 JAVA_HOME 指向 Java 安装目录，然后重启学习服务。"])
     details.append(f"Java 路径：{executable}")
     process = None
     try:
@@ -56,15 +56,15 @@ async def _java_check() -> dict:
             if major >= 17:
                 return _check("java", "Java / JAVA_HOME", "available", "检测到 Java 17+。", details)
             return _check("java", "Java / JAVA_HOME", "warning", "Java 版本低于课程所需的 17。", details,
-                          ["安装 Java 17 或更高版本，并更新 JAVA_HOME 后重载窗口。"])
+                          ["安装 Java 17 或更高版本，并更新 JAVA_HOME 后重启学习服务。"])
         return _check("java", "Java / JAVA_HOME", "warning", "Java 启动检查未成功或版本无法确认。", details,
-                      ["检查 Java 安装和 JAVA_HOME；在本机终端确认 java -version 后重载窗口。"])
+                      ["检查 Java 安装和 JAVA_HOME；在本机终端确认 java -version 后重启学习服务。"])
     except asyncio.TimeoutError:
         return _check("java", "Java / JAVA_HOME", "warning", "Java 版本检查超时（5 秒）。", details,
                       ["检查 Java 安装和 JAVA_HOME，修复后刷新检查。"])
     except OSError:
         return _check("java", "Java / JAVA_HOME", "warning", "Java 启动程序无法执行。", details,
-                      ["检查 Java 安装和执行权限，修复后重载窗口。"])
+                      ["检查 Java 安装和执行权限，修复后重启学习服务。"])
     finally:
         if process is not None and process.returncode is None:
             try:
@@ -79,7 +79,7 @@ def _pyspark_check() -> dict:
         version = metadata.version("pyspark")
     except metadata.PackageNotFoundError:
         return _check("pyspark", "PySpark", "missing", "当前后端 Python 未发现 PySpark 安装元数据。", [],
-                      ['在下方显示的 Python 环境安装项目 Spark 依赖：python -m pip install -e ".[spark]"，然后重载窗口。'])
+                      ['在下方显示的 Python 环境安装项目 Spark 依赖：python -m pip install -e ".[spark]"，然后重启学习服务。'])
     if version != SPARK_BASELINE:
         return _check("pyspark", "PySpark", "warning", f"发现 PySpark {version}；课程基线为 {SPARK_BASELINE}。",
                       ["仅检查安装元数据，尚未导入 PySpark 或运行课程测试。"],
@@ -105,7 +105,7 @@ async def build_environment_report(settings: Settings, executor: Executor | None
     spark_submit = _check("sparkSubmit", "spark-submit", "available" if found_launcher else "missing",
                           "已找到启动程序；尚未执行。" if found_launcher else "未找到 spark-submit 启动程序。",
                           [f"启动程序：{found_launcher}"] if found_launcher else [],
-                          [] if found_launcher else ['在当前后端 Python 环境安装项目 Spark 依赖：python -m pip install -e ".[spark]"，然后重载窗口。'])
+                          [] if found_launcher else ['在当前后端 Python 环境安装项目 Spark 依赖：python -m pip install -e ".[spark]"，然后重启学习服务。'])
     java = await _java_check()
     local_ready = all(item["status"] == "available" for item in (pyspark, spark_submit, java))
     mode_next: list[str] = []
@@ -132,7 +132,7 @@ async def build_environment_report(settings: Settings, executor: Executor | None
         if not local_ready:
             mode_next.append("若计划使用本地 Spark，请先补齐下列本地前置条件。")
     if sys.platform == "win32" and configured in {"local", "auto"}:
-        mode_next.append("原生 Windows 仍需验证 Spark/Java/Hadoop 组合；若出现 Python worker 或 Hadoop 兼容错误，可在 WSL2、Linux 或项目 Dev Container 中重试真实运行。")
+        mode_next.append("原生 Windows 仍需验证 Spark/Java/Hadoop 组合；若出现 Python worker 或 Hadoop 兼容错误，可在 WSL2、Linux 或已配置的 Dev Container 中重试真实运行。")
     spark_available = "needs_setup" if configured == "dry_run" or (configured == "local" and not local_ready) else "unverified"
     return {
         "schemaVersion": 1, "staticOnly": True, "sparkVerified": False,

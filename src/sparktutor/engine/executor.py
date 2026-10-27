@@ -55,6 +55,14 @@ class Executor:
         return shutil.which(name) or name
 
     @staticmethod
+    def _local_spark_env() -> dict[str, str]:
+        """Use one interpreter environment for Spark discovery and execution."""
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+        env.setdefault("PYSPARK_PYTHON", sys.executable)
+        env.setdefault("PYSPARK_DRIVER_PYTHON", sys.executable)
+        return env
+
+    @staticmethod
     async def _start_process(*args: str, **kwargs) -> asyncio.subprocess.Process:
         if os.name != "nt":
             # Spark launches Java/Python children. Give executions their own
@@ -132,6 +140,7 @@ class Executor:
                 self._spark_submit(), "--version",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=self._local_spark_env(),
             )
             await self._communicate(proc)
             if proc.returncode == 0:
@@ -222,14 +231,11 @@ class Executor:
         with tempfile.TemporaryDirectory(prefix="sparktutor_") as tmp_dir:
             tmp_path = Path(tmp_dir) / "exercise.py"
             tmp_path.write_text(code, encoding="utf-8")
-            env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
-            env.setdefault("PYSPARK_PYTHON", sys.executable)
-            env.setdefault("PYSPARK_DRIVER_PYTHON", sys.executable)
             proc = await self._start_process(
                 self._spark_submit(), str(tmp_path),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=env,
+                env=self._local_spark_env(),
             )
             return await self._stream_process(proc, ExecMode.LOCAL, on_output)
 

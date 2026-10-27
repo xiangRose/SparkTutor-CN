@@ -8,21 +8,32 @@ from pathlib import Path
 @click.option("--dry-run", is_flag=True, help="Force dry-run mode (no Spark execution)")
 @click.pass_context
 def main(ctx: click.Context, dry_run: bool) -> None:
-    """SparkTutor — Interactive Spark 4.1 learning environment."""
+    """SparkTutor — 在浏览器中学习 PySpark，默认启动本地网站。"""
     ctx.ensure_object(dict)
     ctx.obj["dry_run"] = dry_run
     if ctx.invoked_subcommand is None:
-        ctx.invoke(launch)
+        ctx.invoke(web)
 
 
 @main.command()
 @click.pass_context
 def launch(ctx: click.Context) -> None:
-    """Launch the interactive learning environment."""
+    """Launch the optional legacy terminal interface (requires .[tui])."""
     from sparktutor.app.main_app import SparkTutorApp
 
     app = SparkTutorApp(force_dry_run=ctx.obj.get("dry_run", False))
     app.run()
+
+
+@main.command()
+@click.option("--port", default=8888, type=click.IntRange(1, 65535), show_default=True)
+@click.option("--host", default="0.0.0.0", show_default=True, help="监听地址；127.0.0.1 仅允许本机访问。")
+@click.option("--data-dir", type=click.Path(file_okay=False, path_type=Path), help="网页端学习数据目录。")
+@click.pass_context
+def web(ctx: click.Context, port: int, host: str, data_dir: Path | None) -> None:
+    """在浏览器中学习 Spark，默认地址 http://localhost:8888。"""
+    from sparktutor.web.server import serve
+    serve(port=port, data_dir=data_dir, dry_run=ctx.obj.get("dry_run", False), host=host)
 
 
 @main.command()

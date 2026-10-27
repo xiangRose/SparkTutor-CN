@@ -11,6 +11,8 @@ import sys
 
 import pytest
 
+from sparktutor.courses.registry import CourseRegistry
+from sparktutor.engine.lesson_loader import load_lesson
 from sparktutor.state.learning_events import LearningEventStore
 
 
@@ -25,9 +27,14 @@ Settings.load = classmethod(lambda cls: Settings(data_dir=Path(sys.argv[1])))
 from sparktutor.server.__main__ import main
 asyncio.run(main())
 """
+    lesson = load_lesson(CourseRegistry().courses_dir / "learning_spark/lessons/11_diagnosis_practice")
+    steps = [step for step in lesson.steps_for_depth("beginner") if step.cls != "meta"]
+    target_index = next(index for index, step in enumerate(steps) if step.id == "debug_orders")
+    assert all(step.cls == "text" for step in steps[:target_index])
     requests = [
         {"id": 1, "method": "loadLesson", "params": {"courseId": "learning_spark", "lessonIdx": 10}},
-        {"id": 2, "method": "advance", "params": {}},
+        *[{"id": f"intro-{index}", "method": "advance", "params": {}} for index in range(target_index)],
+        {"id": 2, "method": "getStep", "params": {}},
         {"id": 3, "method": "recordLearningEvent", "params": {
             "eventType": "code_edit", "courseId": "learning_spark",
             "lessonId": "11_diagnosis_practice", "taskId": "11_diagnosis_practice:debug_orders",
@@ -57,6 +64,7 @@ asyncio.run(main())
     assert completed.returncode == 0, completed.stderr
     responses = {item["id"]: item for item in map(json.loads, completed.stdout.splitlines()) if "id" in item}
     assert responses[1]["result"]["lessonTitle"] == "调试与新场景迁移练习"
+    assert responses[2]["result"]["step"]["id"] == "debug_orders"
     assert responses[3]["result"]["recorded"] is True
     assert responses[4].get("error"), "The client must not manufacture assessment events"
     assert all(item["score"] is None for item in responses[5]["result"]["dimensions"])

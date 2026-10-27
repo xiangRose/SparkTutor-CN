@@ -1,8 +1,10 @@
 - Class: meta
-  Lesson: "读写数据"
-  EstimatedMinutes: 15
+  Id: '0'
+  Lesson: 读写数据
+  EstimatedMinutes: 45
 
 - Class: text
+  Id: "1"
   Depth: all
   Output: |
     ## 你将学到什么
@@ -23,6 +25,23 @@
     的第一步。
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：会使用 select、filter 和 withColumn，认识列类型。
+
+    **完成后能做什么**：显式声明订单输入类型，并安全地完成一次文件读写往返。
+
+    CSV 小样例 → 显式 Schema → 写入模式 → Parquet 往返 → 可选湖仓 API。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: "2"
   Depth: beginner
   Output: |
     读取 CSV 文件最简单的方式：
@@ -37,6 +56,7 @@
     （一遍推断类型，一遍加载数据）。
 
 - Class: text
+  Id: "3"
   Depth: all
   Output: |
     ## DataFrameReader 模式
@@ -68,6 +88,7 @@
     [.parquet](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.parquet.html)
 
 - Class: mult_question
+  Id: "4"
   KnowledgeComponents: [dataframe.schema]
   Context: orders_files
   Depth: all
@@ -77,6 +98,7 @@
   Hint: "Spark 需要额外扫一遍数据来确定类型。"
 
 - Class: cmd_question
+  Id: "5"
   KnowledgeComponents: [dataframe.io, dataframe.schema]
   Context: orders_files
   Depth: all
@@ -88,11 +110,12 @@
   Hint: "spark.read.csv(path, header=True, inferSchema=True)"
 
 - Class: text
+  Id: '6'
   Depth: all
   Output: |
     ## 显式 schema：生产环境标准
 
-    对于生产管道，**绝不**依赖 `inferSchema`。用 `StructType`
+    稳定的数据接口优先使用显式 Schema；探索数据时可先推断类型并检查结果。用 `StructType`
     显式定义 schema：
 
     ```python
@@ -124,9 +147,11 @@
     —— `StructField(name, dataType, nullable)` 及所有类型类。
 
 - Class: cmd_question
-  KnowledgeComponents: [dataframe.schema]
+  Id: '7'
+  KnowledgeComponents:
+  - dataframe.schema
   Context: orders_files
-  Depth: intermediate
+  Depth: all
   Output: |
     为一个 `users` CSV 定义 schema，包含列：`user_id`（StringType）、
     `name`（StringType）和 `age`（IntegerType）。然后用该 schema
@@ -141,9 +166,10 @@
     ])
 
     users = spark.read.csv("/data/users.csv", header=True, schema=schema)
-  Hint: "用三个 StructField 条目构建一个 StructType，然后将 schema=schema 传给 spark.read.csv。"
+  Hint: 用三个 StructField 条目构建一个 StructType，然后将 schema=schema 传给 spark.read.csv。
 
 - Class: text
+  Id: "8"
   Depth: all
   Output: |
     ## 写入模式
@@ -165,6 +191,7 @@
     但重试时需要批次标识、去重或事务机制防止重复；覆盖模式本身不保证完整的幂等性。
 
 - Class: mult_question
+  Id: "9"
   KnowledgeComponents: [dataframe.io]
   Context: orders_files
   Depth: all
@@ -174,6 +201,7 @@
   Hint: "Spark 默认很谨慎 —— 除非你告诉它，否则不会覆盖已有数据。"
 
 - Class: cmd_question
+  Id: "10"
   KnowledgeComponents: [dataframe.io]
   Context: orders_files
   Depth: all
@@ -184,8 +212,21 @@
     orders.write.mode("overwrite").parquet("/output/orders_parquet")
   Hint: "df.write.mode('overwrite').parquet(path)"
 
+- Class: mult_question
+  Id: write-mode-check
+  Depth: all
+  KnowledgeComponents:
+  - dataframe.io
+  Output: |
+    本地练习要把同一批小表重算到独立临时目录，避免追加两次，应该明确选择哪种模式？
+  AnswerChoices: overwrite，并确认目标是本练习的临时目录;append，自动保证不会重复;忽略目标路径直接覆盖任意目录
+  CorrectAnswer: overwrite，并确认目标是本练习的临时目录
+  Hint: 写入模式和目标范围都要明确。
+  Context: orders_files
+
 - Class: text
-  Depth: intermediate
+  Id: '11'
+  Depth: all
   Output: |
     ## Parquet：首选的管道格式
 
@@ -205,9 +246,12 @@
     对于管道运行之间的持久化存储，Parquet 或 Iceberg 表是标准选择。
 
 - Class: cmd_question
-  KnowledgeComponents: [dataframe.io, dataframe.filter]
+  Id: '12'
+  KnowledgeComponents:
+  - dataframe.io
+  - dataframe.filter
   Context: orders_files
-  Depth: intermediate
+  Depth: all
   Output: |
     读取 `'/data/events.parquet'` 处的 Parquet 文件，过滤出
     `event_type` 等于 `'purchase'` 的行，并将结果以 overwrite 模式
@@ -217,9 +261,10 @@
     events = spark.read.parquet("/data/events.parquet")
     purchases = events.filter(f.col("event_type") == "purchase")
     purchases.write.mode("overwrite").parquet("/output/purchases")
-  Hint: "链式调用 read → filter → write。过滤条件用 f.col()。"
+  Hint: 链式调用 read → filter → write。过滤条件用 f.col()。
 
 - Class: text
+  Id: "13"
   Depth: advanced
   Output: |
     ## Iceberg 表：管道级 ACID
@@ -245,6 +290,7 @@
     - **时间旅行** —— 可查询任意历史版本用于调试
 
 - Class: mult_question
+  Id: "14"
   KnowledgeComponents: [lakehouse.time_travel]
   Context: orders_files
   Depth: advanced
@@ -254,6 +300,7 @@
   Hint: "Iceberg 存储不可变的快照。你可以读取任意历史快照。"
 
 - Class: cmd_question
+  Id: "15"
   KnowledgeComponents: [lakehouse.catalog]
   Context: orders_files
   Depth: advanced
@@ -265,6 +312,7 @@
   Hint: "用 df.writeTo(table_name).using('iceberg').createOrReplace()。"
 
 - Class: text
+  Id: "16"
   Depth: all
   Output: |
     ## 小结

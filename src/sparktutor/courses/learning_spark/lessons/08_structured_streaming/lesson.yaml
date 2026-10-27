@@ -1,8 +1,10 @@
 - Class: meta
+  Id: '0'
   Lesson: Structured Streaming 结构化流处理
-  EstimatedMinutes: 30
+  EstimatedMinutes: 60
 
 - Class: text
+  Id: "1"
   Depth: all
   Output: |
     ## 你将学到什么
@@ -14,16 +16,32 @@
     Structured Streaming 让你在数据到达时就处理它，
     而且使用的是你已经熟悉的 DataFrame API。
 
-    学完本课后，你将能够：
+    本课分为概念阅读和本地练习两个部分：
 
-    - 解释流式执行模型（无界表）
-    - 设置数据源（文件、Kafka、socket）和数据汇（文件、控制台）
-    - 选择合适的输出模式（append、update、complete）
-    - 配置触发器以控制处理频率
-    - 应用水位线来处理迟到数据
-    - 通过 checkpoint 理解容错机制
+    - **能解释与识别**：无界表模型、数据源与数据汇、输出模式、触发器、水位线和 checkpoint 的用途。
+    - **能动手完成**：对有限 DataFrame 做词频统计和时间窗口变换，检查预期结果。
+
+    阅读中的 Kafka、socket 和持续流 API 是后续实验参考；本课综合题不运行这些服务，
+    也不验证迟到数据处理、checkpoint 恢复或端到端容错。实际部署还需单独准备环境并测试。
 
 - Class: text
+  Id: learning-route
+  Depth: all
+  Output: |
+    ## 本课路线：先看懂，再动手
+
+    **开始前**：会对静态 DataFrame 进行分组聚合；理解 action 和运行中的作业。
+
+    **完成后能做什么**：解释无界输入和状态；用本地批处理练习验证核心变换，并识别模拟边界。
+
+    静态与持续输入对照 → 读取与写出 → 状态和时间窗口 → 水位线 → 批处理模拟练习。
+
+    初级、中级、高级都学习综合题必需的知识并完成核心小练习；
+    专属内容用于补充类比或拓展原理，不代替核心练习。
+    时间包含阅读、编码和调试，可分几次完成；遇到困难先回看对应小节，再使用提示。
+
+- Class: text
+  Id: "2"
   Depth: beginner
   Output: |
     想象一条传送带上包裹不断到达仓库。你不需要等所有包裹到齐再
@@ -35,6 +53,18 @@
     几乎和批处理代码一模一样。
 
 - Class: text
+  Id: streaming-scope
+  Depth: all
+  Output: |
+    ## 先区分：理解流处理，与验证流系统
+
+    静态文件是“处理这批已有数据”；流处理是“新数据到来后，继续更新结果”。
+    本课阅读会展示 readStream/writeStream，但综合题只对有限 DataFrame 做词频和时间窗口变换。
+    它不连接 Kafka、不启动真实持续流，也不验证 checkpoint 恢复、迟到数据清理或端到端 exactly-once。
+    先把变换算对，再用独立的流式实验验证运行语义，不能拿模拟测试代替后者。
+
+- Class: text
+  Id: "3"
   Depth: all
   Output: |
     ## 流式模型
@@ -54,6 +84,7 @@
     - **Output mode（输出模式）** —— 每次触发器向 sink 写入什么
 
 - Class: text
+  Id: "4"
   Depth: all
   Output: |
     ## 读取流
@@ -84,6 +115,7 @@
     以及流-流 join，均有完整代码示例。
 
 - Class: text
+  Id: "5"
   Depth: all
   Output: |
     ## 写入流
@@ -104,6 +136,7 @@
     和停止流。
 
 - Class: text
+  Id: "6"
   Depth: all
   Output: |
     ## 输出模式
@@ -123,6 +156,7 @@
     无状态转换支持全部三种模式。
 
 - Class: mult_question
+  Id: "7"
   KnowledgeComponents: [spark.streaming]
   Context: socket_word_counts
   Depth: all
@@ -132,6 +166,7 @@
   Hint: "这种模式输出所有内容 —— 而不仅仅是新行或变更行。"
 
 - Class: text
+  Id: "8"
   Depth: all
   Output: |
     ## 无状态与有状态转换
@@ -148,6 +183,7 @@
     （如水位线），状态可能无限增长。
 
 - Class: text
+  Id: "9"
   Depth: intermediate
   Output: |
     ## 触发器
@@ -172,6 +208,7 @@
     按计划运行（例如通过 cron 每小时一次）来处理积累的数据。
 
 - Class: text
+  Id: "10"
   Depth: all
   Output: |
     ## 窗口聚合
@@ -195,48 +232,49 @@
     滚动窗口将时间划分为不重叠的桶。滑动窗口会重叠，
     因此每个事件出现在多个窗口中。
 
-- Class: mult_question
-  KnowledgeComponents: [spark.watermark]
-  Context: socket_word_counts
-  Depth: intermediate
-  Output: "水位线在 Structured Streaming 中的作用是什么？"
-  AnswerChoices: "定义数据最多可以迟到多久后被丢弃，从而让 Spark 清理旧状态;限制流的输出速率;控制输出分区数量;加密传输中的数据"
-  CorrectAnswer: "定义数据最多可以迟到多久后被丢弃，从而让 Spark 清理旧状态"
-  Hint: "水位线为迟到数据设定了一个阈值。比阈值更老的状态会怎样？"
-
 - Class: text
-  Depth: intermediate
+  Id: '12'
+  Depth: all
   Output: |
-    ## 水位线：处理迟到数据
+    ## 水位线：基于事件时间管理状态
 
-    在现实世界中，事件可能迟到 —— 5 分钟前的传感器读数现在才到。
-    水位线告诉 Spark 要等多久：
+    事件时间是业务事件发生的时间，不一定等于服务收到它的时间。
 
     ```python
     result = (events
         .withWatermark("event_time", "10 minutes")
-        .groupBy(window("event_time", "5 minutes"))
+        .groupBy(f.window("event_time", "5 minutes"))
         .count())
     ```
 
-    Spark 跟踪迄今为止看到的最大事件时间。任何落后最大值超过
-    10 分钟的事件都会被丢弃。这让 Spark 能够丢弃旧状态并
-    限制内存使用。
+    对满足水位线聚合条件的查询，Spark 跟踪事件时间进展，用延迟阈值帮助判断哪些旧窗口可以清理。
+    阈值内迟到的数据有不被丢弃的保证；比阈值更晚的数据可能被处理，也可能被丢弃，不能承诺恰好到点一律丢弃。
+    状态能否清理还取决于查询、输出模式、窗口和水位线列等条件，它不是固定等待十分钟的墙上时钟。
+    本课批处理模拟不验证这些流式运行保证。
+    **文档：** [水位线语义](https://spark.apache.org/docs/4.1.1/streaming/apis-on-dataframes-and-datasets.html)。
 
-    没有水位线或其他状态清理策略时，持续增长的窗口状态可能耗尽资源。
-    是否清理状态还取决于查询类型、输出模式与水位线条件。
-
-    **文档：** [f.window](https://spark.apache.org/docs/4.1.1/api/python/reference/pyspark.sql/api/pyspark.sql.functions.window.html)
-    —— 滚动窗口和滑动窗口的 `windowDuration`、`slideDuration`
-    和 `startTime` 参数。
+- Class: mult_question
+  Id: '11'
+  KnowledgeComponents:
+  - spark.watermark
+  Context: socket_word_counts
+  Depth: all
+  Output: 水位线在 Structured Streaming 中的作用是什么？
+  AnswerChoices: 根据事件时间进展和延迟阈值帮助处理迟到数据与清理状态;限制流的输出速率;控制输出分区数量;保证所有超时数据立即丢弃
+  CorrectAnswer: 根据事件时间进展和延迟阈值帮助处理迟到数据与清理状态
+  Hint: 阈值内有不被丢弃的保证；阈值外并不保证一律丢弃。
 
 - Class: cmd_question
-  KnowledgeComponents: [spark.streaming]
+  Id: '13'
+  KnowledgeComponents:
+  - spark.streaming
   Context: socket_word_counts
   Depth: all
   Output: |
     从 localhost:9999 的 socket 源创建流式词频统计。
     将行拆分成单词，按单词分组计数，以 complete 模式写入控制台。
+
+    这是外部 socket API 的短代码练习，运行时需先启动发送端；它不是网页内置的词频数据源。下面的综合题使用自带有限数据，不依赖该服务。
   CorrectAnswer: |
     from pyspark.sql import functions as f
 
@@ -254,9 +292,10 @@
         .outputMode("complete")
         .format("console")
         .start())
-  Hint: "readStream 用 socket 格式，split 和 explode 拆词，groupBy + count，writeStream 用 complete 模式。"
+  Hint: readStream 用 socket 格式，split 和 explode 拆词，groupBy + count，writeStream 用 complete 模式。
 
 - Class: text
+  Id: "14"
   Depth: advanced
   Output: |
     ## 流-流与流-静态 Join
@@ -281,6 +320,7 @@
     ```
 
 - Class: text
+  Id: "15"
   Depth: advanced
   Output: |
     ## 容错：Checkpoint
@@ -300,7 +340,31 @@
     1. 重启之间不要在不清除 checkpoint 的情况下更改查询逻辑
     2. 不要在不同查询之间共享 checkpoint 位置
 
+- Class: text
+  Id: streaming-window-check-example
+  Depth: all
+  Output: |
+    ## 先手算一个小窗口
+
+    窗口以时间区间表示，例如 [10:00, 10:05) 包含 10:00，不包含 10:05。
+    10:01 和 10:04 的事件落在这个窗口，10:05 落入下一个不重叠窗口。
+    Spark 的 window 函数可用于批 DataFrame，验证分组变换；这不会自动验证真实流的状态清理。
+    水位线是事件时间进展与状态管理机制，不能简单解释为“固定等几分钟再接收所有数据”。
+
+- Class: mult_question
+  Id: streaming-window-check-check
+  Depth: all
+  KnowledgeComponents:
+  - streaming.window
+  Output: |
+    不重叠的五分钟窗口 [10:00, 10:05) 是否包含 10:05:00？
+  AnswerChoices: 不包含，属于下一个窗口;包含所有未来事件;一定同时属于两个窗口
+  CorrectAnswer: 不包含，属于下一个窗口
+  Hint: 左闭右开：起点包含，终点不包含。
+  Context: socket_word_counts
+
 - Class: script
+  Id: "16"
   KnowledgeComponents: [dataframe.filter, dataframe.group_by, dataframe.aggregate]
   Context: socket_word_counts
   Depth: all
@@ -335,6 +399,7 @@
   Hint: "单词用 f.split() + f.explode()，聚合用 groupBy().count()，时间分组用 f.window()。"
 
 - Class: text
+  Id: "17"
   Depth: all
   Output: |
     ## 小结
