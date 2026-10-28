@@ -17,6 +17,22 @@ class ExecutionMode(str, Enum):
     LOCAL = "local"
     DRY_RUN = "dry_run"
     DATABRICKS = "databricks"
+    ISOLATED = "isolated"
+
+
+class IsolatedExecutionConfig(BaseModel):
+    """Administrator-owned limits; never accepted from browser settings."""
+    enabled: bool = False
+    image: str = Field(default="sparktutor-executor:4.1.1", pattern=r"^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,199}$")
+    docker_executable: str = "docker"
+    cpus: float = Field(default=2.0, gt=0, le=32)
+    memory: str = Field(default="3g", pattern=r"^[1-9][0-9]*[kKmMgG]$")
+    pids_limit: int = Field(default=512, ge=64, le=4096)
+    max_concurrent_jobs: int = Field(default=2, ge=1, le=32)
+    max_jobs_per_user: int = Field(default=1, ge=1, le=8)
+    timeout_seconds: int = Field(default=120, ge=1, le=600)
+    output_limit_bytes: int = Field(default=1_048_576, ge=1024, le=8_388_608)
+    tmpfs_mb: int = Field(default=1024, ge=128, le=4096)
 
 
 class DatabricksConfig(BaseModel):
@@ -53,6 +69,7 @@ class Settings(BaseModel):
     execution_mode: ExecutionMode = ExecutionMode.AUTO
     docker: DockerConfig = Field(default_factory=DockerConfig)
     databricks: DatabricksConfig = Field(default_factory=DatabricksConfig)
+    isolated_execution: IsolatedExecutionConfig = Field(default_factory=IsolatedExecutionConfig)
     claude: ClaudeConfig = Field(default_factory=ClaudeConfig)
     timeout_seconds: int = 120
     data_dir: Path = Path.home() / ".sparktutor"
@@ -88,6 +105,14 @@ class Settings(BaseModel):
                 db[key] = val
         if db:
             data["databricks"] = db
+
+        isolated = data.get("isolated_execution", {})
+        for key in IsolatedExecutionConfig.model_fields:
+            value = os.environ.get("SPARKTUTOR_ISOLATED_" + key.upper())
+            if value is not None:
+                isolated[key] = value
+        if isolated:
+            data["isolated_execution"] = isolated
 
         return cls(**data)
 

@@ -8,7 +8,7 @@ import shutil
 import signal
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Optional
@@ -21,6 +21,7 @@ class ExecMode(str, Enum):
     LOCAL = "local"
     DRY_RUN = "dry_run"
     DATABRICKS = "databricks"
+    ISOLATED = "isolated"
 
 
 @dataclass
@@ -30,6 +31,8 @@ class ExecResult:
     stdout: str
     stderr: str
     validation_passed: bool = False
+    execution: dict = field(default_factory=dict)
+    failure_kind: str = ""
 
     @property
     def success(self) -> bool:

@@ -154,6 +154,50 @@ async def test_compatible_headers_text_blocks_and_probe_do_not_write_learning_da
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("model", ["deepseek-flash", "deepseek-v4-pro"])
+async def test_official_deepseek_tutor_coach_and_connection_share_non_thinking_mode(tmp_path, model):
+    calls = []
+    manager = WebAiManager(Settings(data_dir=tmp_path), opener=fake_opener([
+        response("Tutor hint"), response("Coach selection"), response("OK"),
+    ], calls))
+    ai = compatible(manager, baseUrl="https://api.deepseek.com", model=model)
+    assert await manager.complete(ai, [{"role": "user", "content": "Tutor input"}]) == "Tutor hint"
+    assert await manager.complete(ai, [{"role": "user", "content": "Coach input"}], coach=True) == "Coach selection"
+    assert (await manager.check_connection(ai))["ok"]
+    bodies = [json.loads(request.data) for request, _ in calls]
+    assert [body["thinking"] for body in bodies] == [{"type": "disabled"}] * 3
+    assert [body["max_tokens"] for body in bodies] == [4096, 4096, 256]
+    assert all(body["model"] == model for body in bodies)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("base,model", [("https://elsewhere.invalid/v1", "deepseek-flash"),
+                                        ("https://api.deepseek.com.other.invalid", "deepseek-flash"),
+                                        ("https://api.deepseek.com", "another-model")])
+async def test_deepseek_non_thinking_override_does_not_change_other_models_or_providers(tmp_path, base, model):
+    calls = []
+    manager = WebAiManager(Settings(data_dir=tmp_path), opener=fake_opener([response("hint")], calls))
+    ai = compatible(manager, baseUrl=base, model=model)
+    assert await manager.complete(ai, [{"role": "user", "content": "input"}]) == "hint"
+    assert "thinking" not in json.loads(calls[0][0].data)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", [
+    {"choices": [{"message": {"content": "", "reasoning_content": "private thought"}}]},
+    response("partial", finish_reason="length"),
+])
+async def test_deepseek_still_rejects_reasoning_only_and_truncated_responses(tmp_path, payload):
+    calls = []
+    manager = WebAiManager(Settings(data_dir=tmp_path), opener=fake_opener([payload], calls))
+    ai = compatible(manager, baseUrl="https://api.deepseek.com", model="deepseek-flash")
+    with pytest.raises(WebAiError) as caught:
+        await manager.complete(ai, [{"role": "user", "content": "input"}], coach=True)
+    assert caught.value.kind == "incomplete" and "private thought" not in str(caught.value)
+    assert json.loads(calls[0][0].data)["thinking"] == {"type": "disabled"}
+
+
+@pytest.mark.asyncio
 async def test_endpoint_fallback_and_max_tokens_retry_are_bounded(tmp_path):
     calls = []
     manager = WebAiManager(Settings(data_dir=tmp_path), opener=fake_opener([

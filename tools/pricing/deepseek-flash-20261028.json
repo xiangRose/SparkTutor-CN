@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "model-token-price-quote-v1",
+  "provider": "DeepSeek official API",
+  "model": "deepseek-flash",
+  "publishedModelVersion": "DeepSeek-V4.1-Flash-1017",
+  "sourceUrl": "https://api-docs.deepseek.com/quick_start/pricing/",
+  "retrievedAt": "2026-10-28T13:48:07+00:00",
+  "currency": "USD",
+  "unitTokens": 1000000,
+  "rates": {
+    "off_peak": {"cacheHitInput": "0.003", "cacheMissInput": "0.15", "output": "0.6"},
+    "peak": {"cacheHitInput": "0.006", "cacheMissInput": "0.3", "output": "1.2"}
+  },
+  "regimeDescription": "Peak: Monday-Friday 01:00-04:00 and 06:00-10:00 UTC, excluding Chinese public holidays; other times off-peak.",
+  "estimatePolicy": "Compute both quoted regimes as a range. Do not infer holidays or pretend this is an actual invoice. Prices may change."
+}

@@ -23,6 +23,7 @@ import zipfile
 
 from sparktutor.config.settings import ExecutionMode, Settings
 from sparktutor.engine.exercise_catalog import build_exercise_catalog
+from sparktutor.engine.isolated_executor import ExecutionIdentity, IsolatedExecutor, execution_scope
 from sparktutor.server.handler import ServerHandler
 from sparktutor.state.data_management import backup_learning_database
 from sparktutor.state.checkins import CheckInStore
@@ -40,7 +41,7 @@ CONTEXT_METHODS = {
     "buildCoachPrompt", "parseCoachResponse", "ackCoachMessage", "runCoachProbe",
     "buildReviewPrompt", "parseReviewResponse", "completeReviewFailure", "recordLearningEvent",
 }
-EXECUTION_METHODS = {"run", "submit", "webSubmit", "runDemoScenario", "webCoach", "webChat", "chat"}
+EXECUTION_METHODS = {"run", "submit", "webSubmit", "buildReviewPrompt", "runDemoScenario", "webCoach", "webChat", "chat"}
 
 
 class SessionResetError(ValueError):
@@ -56,10 +57,14 @@ class WebRuntime:
     run, another tab, or an orderly shutdown from undoing a requested reset.
     """
 
-    def __init__(self, settings: Settings, *, multi_user=False):
+    def __init__(self, settings: Settings, *, multi_user=False, isolated_pool=None, account_id=""):
         self.settings = settings
         self.checkins = CheckInStore(settings.data_dir / "progress.db")
         self.multi_user = multi_user
+        self.isolated_pool = isolated_pool
+        self.account_id = account_id
+        if isolated_pool is not None and (not multi_user or not account_id):
+            raise ValueError("隔离执行必须绑定已认证的账号。")
         self.token = secrets.token_urlsafe(32)
         self.sessions: dict = {}
         self.workspace = WebWorkspace(settings.data_dir / "workspace")
@@ -180,6 +185,7 @@ class WebRuntime:
             "contextToken": uuid.uuid4().hex, "navigation": self._read_navigation(session_id),
             "notifications": deque(maxlen=1000), "cursor": 0,
             "notificationLock": threading.Lock(), "operationId": None,
+            "cancelRequested": False,
             "ai": inherited if inherited is not None else self.ai_manager.new_session(),
         }
         settings = self.settings.model_copy(deep=True)
@@ -189,6 +195,8 @@ class WebRuntime:
             settings=settings, workspace_path=self.workspace.base_dir,
             write_notification=lambda item: self._notify(entry, item.method, item.params),
         )
+        if self.isolated_pool is not None:
+            entry["handler"].executor = IsolatedExecutor(settings, self.isolated_pool, self.account_id)
         self.ai_manager.apply_to_handler(entry["ai"], entry["handler"])
         self.sessions[session_id] = entry
         return entry
@@ -197,6 +205,16 @@ class WebRuntime:
         values = dict(params)
         if entry["operationId"]:
             values.setdefault("operationId", entry["operationId"])
+        if self.multi_user:
+            values.setdefault("userId", self.account_id)
+            identity = self._identity(entry)
+            if identity:
+                values.setdefault("courseId", identity["courseId"])
+                values.setdefault("lessonId", identity["lessonId"])
+                values.setdefault("taskId", identity["lessonId"] + ":" + identity["stepId"])
+            execution = getattr(entry["handler"].executor, "execution_metadata", {})
+            if execution.get("jobId"):
+                values.setdefault("jobId", execution["jobId"])
         with entry["notificationLock"]:
             entry["cursor"] += 1
             entry["notifications"].append({"cursor": entry["cursor"], "method": method, "params": values})
@@ -348,6 +366,17 @@ class WebRuntime:
             raise ValueError("学习服务正在关闭，请稍后重新打开。")
         entry = self._entry(session_id)
         entry["seen"] = time.monotonic()
+        if method == "cancelExecution":
+            operation = params.get("operationId")
+            if set(params) - {"operationId"} or not isinstance(operation, str) or not OPERATION_ID.fullmatch(operation):
+                raise ValueError("请提供当前作业的有效运行标识。")
+            running = entry.get("executionTask")
+            if operation != entry.get("operationId") or running is None or running.done():
+                return {"cancelRequested": False, "operationId": operation}
+            if not entry["cancelRequested"]:
+                entry["cancelRequested"] = True
+                running.cancel()
+            return {"cancelRequested": True, "operationId": operation}
         if method == "pollWebNotifications":
             after = params.get("after", 0)
             if isinstance(after, bool) or not isinstance(after, int) or after < 0:
@@ -371,30 +400,57 @@ class WebRuntime:
                         if not isinstance(operation, str) or not OPERATION_ID.fullmatch(operation):
                             raise ValueError("运行标识无效。")
                         entry["operationId"] = operation
+                        entry["cancelRequested"] = False
+                        entry["executionTask"] = task
                         self._notify(entry, "operationStarted", {})
                     try:
-                        result = await self._dispatch(session_id, entry, method, params)
+                        execution_identity = None
+                        if self.isolated_pool is not None and method in {"run", "submit", "webSubmit", "buildReviewPrompt"}:
+                            target = self._identity(entry)
+                            if not target:
+                                raise ValueError("请先打开当前练习，再运行或提交代码。")
+                            execution_identity = ExecutionIdentity(
+                                self.account_id, session_id, target["courseId"], target["lessonId"],
+                                target["stepId"], operation, entry["contextToken"])
+                        with execution_scope(execution_identity):
+                            result = await self._dispatch(session_id, entry, method, params)
                         if operation and isinstance(result, dict):
                             result["operationId"] = operation
+                            runner = entry["handler"]._runner
+                            execution = runner.state.last_exec if runner and runner.state else None
+                            if execution and execution.execution.get("operationId") == operation:
+                                result["execution"] = dict(execution.execution)
+                                result.setdefault("mode", execution.mode.value)
                         return result
                     finally:
                         if operation:
                             self._notify(entry, "operationComplete", {})
                             entry["operationId"] = None
+                            entry["cancelRequested"] = False
+                            entry["executionTask"] = None
         finally:
             self._tasks.discard(task)
 
     async def _dispatch(self, session_id, entry, method, params):
         handler = entry["handler"]
         values = {key: value for key, value in params.items() if key not in {"contextToken", "operationId"}}
-        if self.multi_user and method in {'configureWebSettings', 'setExecutionMode'} and values.get('mode', 'dry_run') != 'dry_run':
-            raise ValueError('多用户网页目前仅开放语法检查，真实运行需要独立的执行环境。')
+        if self.multi_user and method in {'configureWebSettings', 'setExecutionMode'} and "mode" in values:
+            allowed_mode = "isolated" if self.isolated_pool is not None else "dry_run"
+            if values["mode"] != allowed_mode:
+                raise ValueError('账号执行方式由管理员配置，不能切换为共享宿主执行。')
+        if self.multi_user and method == "runDemoScenario" and values.get("mode") == "spark":
+            raise ValueError("账号实操请通过当前练习运行；预设诊断示例仅提供合成轨迹。")
 
         async def call(name, arguments=None):
             return await handler.dispatch({"method": name, "params": values if arguments is None else arguments})
 
         if method == "webSettings":
             return self.public_settings(entry)
+        if method == "getExecutionServiceStatus":
+            if self.isolated_pool is not None:
+                return await self.isolated_pool.status()
+            return {"enabled": False, "ready": False, "mode": handler.settings.execution_mode.value,
+                    "message": "管理员尚未启用账号隔离执行服务。"}
         if method == "getCheckInStatus":
             if set(values) - {"month"}:
                 raise ValueError("签到查询仅支持选择月份。")
@@ -433,6 +489,12 @@ class WebRuntime:
         if method == "getEnvironmentReport":
             result = await call(method)
             result["ai"] = self.public_settings(entry)
+            if self.isolated_pool is not None:
+                result["executionService"] = await self.isolated_pool.status()
+                result["execution"].update(
+                    configuredMode="isolated", localPrerequisites=None,
+                    summary=result["executionService"]["message"],
+                    nextSteps=["在当前练习运行和提交；每次作业在独立容器中验证。"])
             return result
         if method == "getLearningDashboard":
             result = await call(method)
@@ -455,7 +517,8 @@ class WebRuntime:
         if method == "webLastExecution":
             runner = handler._runner
             result = runner.state.last_exec if runner and runner.state else None
-            return {"stdout": result.stdout, "stderr": result.stderr, "mode": result.mode.value} if result else {}
+            return {"stdout": result.stdout, "stderr": result.stderr, "mode": result.mode.value,
+                    **({"execution": dict(result.execution)} if result.execution else {})} if result else {}
         if method == "getDraft":
             identity = self._check_identity(entry, values)
             return self._draft(identity) if identity else {"code": None, "draftFound": False, "draftRevision": ""}
@@ -567,7 +630,9 @@ class WebRuntime:
         return await call(method)
 
     def public_settings(self, entry):
-        return {**self.ai_manager.public(entry["ai"]), "mode": entry["handler"].settings.execution_mode.value}
+        return {**self.ai_manager.public(entry["ai"]), "mode": entry["handler"].settings.execution_mode.value,
+                "accountExecutionManaged": self.multi_user,
+                "isolatedExecutionEnabled": self.isolated_pool is not None}
 
     async def complete(self, ai, messages):
         return await self.ai_manager.complete(ai, messages)

@@ -5,18 +5,20 @@ from __future__ import annotations
 import asyncio
 import hmac
 import html
+import ipaddress
 import json
 import os
 import re
 import socket
 import threading
 from http.cookies import SimpleCookie
-from concurrent.futures import TimeoutError as FutureTimeout
+from concurrent.futures import CancelledError as FutureCancelled, TimeoutError as FutureTimeout
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from sparktutor.config.settings import ExecutionMode, Settings
+from sparktutor.engine.isolated_executor import IsolatedJobPool
 from .accounts import AccountError, AccountStore, COOKIE, SESSION_SECONDS
 from .runtime import SessionResetError, WebRuntime
 
@@ -25,6 +27,28 @@ MAX_BODY = 2 * 1024 * 1024
 DISABLED_DATA_METHODS = frozenset({
     "getLearningDataOverview", "exportLearningSummary", "backupLearningDatabase", "clearLearningRecords",
 })
+
+
+def trusted_local_settings(*, host, data_dir=None, dry_run=False):
+    """Validate an explicit, loopback-only execution workspace before opening it."""
+    if dry_run:
+        raise ValueError("--trusted-local 与 --dry-run 不能同时使用。")
+    try:
+        local_address = host == "localhost" or (
+            ipaddress.ip_address(host).version == 4 and ipaddress.ip_address(host).is_loopback
+        )
+    except ValueError:
+        local_address = False
+    if not local_address:
+        raise ValueError("可信本机实操模式只允许 127.0.0.1 等 IPv4 回环地址或 localhost。")
+    directory = Path(data_dir) if data_dir else Path.cwd() / ".sparktutor-trusted-local"
+    directory = directory.resolve()
+    account_roots = [directory, *directory.parents]
+    if directory == (Path.cwd() / ".sparktutor-web").resolve() or any(
+            (directory / name).exists() for name in ("accounts", "users")) or any(
+            (parent / "accounts" / "accounts.sqlite3").exists() for parent in account_roots):
+        raise ValueError("可信本机实操模式需要独立数据目录，不能使用账号数据目录。")
+    return directory
 
 
 class WebServer(ThreadingHTTPServer):
@@ -38,11 +62,19 @@ class WebServer(ThreadingHTTPServer):
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         super().server_bind()
 
-    def __init__(self, address, settings, *, accounts=False, trusted_proxy=False):
+    def __init__(self, address, settings, *, accounts=False, trusted_proxy=False, trusted_local=False):
+        if trusted_local:
+            if accounts:
+                raise ValueError("可信本机实操模式不能与多用户账号同时启用。")
+            trusted_local_settings(host=address[0], data_dir=settings.data_dir,
+                                   dry_run=settings.execution_mode == ExecutionMode.DRY_RUN)
         super().__init__(address, WebRequestHandler)
         self.settings = settings
+        self.trusted_local = trusted_local
         self.trusted_proxy = trusted_proxy
         self.accounts = AccountStore(settings.data_dir / 'accounts') if accounts else None
+        self.isolated_pool = (IsolatedJobPool(settings.isolated_execution, settings.data_dir / "isolated-jobs")
+                              if accounts and settings.isolated_execution.enabled else None)
         self.user_runtimes = {}
         self.runtime_lock = threading.RLock()
         self.runtime = WebRuntime(settings)
@@ -54,8 +86,12 @@ class WebServer(ThreadingHTTPServer):
             if user['id'] not in self.user_runtimes:
                 # Each account owns its database, files, navigation, and model settings.
                 settings = Settings(data_dir=self.settings.data_dir / 'users' / user['id'],
-                                    execution_mode=ExecutionMode.DRY_RUN, timeout_seconds=self.settings.timeout_seconds)
-                self.user_runtimes[user['id']] = WebRuntime(settings, multi_user=True)
+                                    execution_mode=ExecutionMode.ISOLATED if self.isolated_pool else ExecutionMode.DRY_RUN,
+                                    isolated_execution=self.settings.isolated_execution.model_copy(deep=True),
+                                    timeout_seconds=self.settings.isolated_execution.timeout_seconds if self.isolated_pool
+                                    else self.settings.timeout_seconds)
+                self.user_runtimes[user['id']] = WebRuntime(
+                    settings, multi_user=True, isolated_pool=self.isolated_pool, account_id=user['id'])
             return self.user_runtimes[user['id']]
 
     def server_close(self):
@@ -131,7 +167,11 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                   "/style.css": ("style.css", "text/css; charset=utf-8"),
                   "/favicon.svg": ("favicon.svg", "image/svg+xml")}
         if path == "/api/health":
-            return self.reply(200, {"status": "ok", "port": self.server.server_port})
+            return self.reply(200, {"status": "ok", "port": self.server.server_port,
+                                    "accessMode": "trusted_local" if self.server.trusted_local else
+                                    "accounts" if self.server.accounts else "local",
+                                    "executionMode": ("isolated" if self.server.isolated_pool else "dry_run") if self.server.accounts else
+                                    self.server.settings.execution_mode.value})
         extra = {"/features.js", "/features.css", "/settings.js", "/settings.css", "/appearance.js", "/appearance.css",
                  '/account.js', '/account.css', '/login.js', '/checkin.js', '/checkin.css',
                  "/vendor/editor.bundle.js", "/vendor/EDITOR-LICENSES.txt"}
@@ -155,6 +195,10 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             content = content.replace(b'__USER_ROLE__', (user['role'] if user else '').encode())
             content = content.replace(b'__USER_NAME__', html.escape(user['displayName'] if user else '自主学习者', quote=True).encode())
             content = content.replace(b'__MUST_CHANGE_PASSWORD__', str(bool(user and user['mustChangePassword'])).lower().encode())
+            if self.server.trusted_local:
+                content = content.replace(
+                    b'<span class="local-tag"><i></i> ',
+                    '<span class="local-tag"><i></i> 本机实操 · '.encode(), 1)
         self.reply(200, content, mime)
 
     def do_POST(self):
@@ -202,6 +246,8 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             if future:
                 future.cancel()
             self.reply(504, {"error": "运行超时，请检查执行环境后重试。"})
+        except FutureCancelled:
+            self.reply(409, {"error": "运行已取消，课程测试未完成，没有记录为通过。", "cancelled": True})
         except SessionResetError as error:
             self.reply(409, {"error": str(error), "sessionReset": True, "sessionId": error.session_id})
         except (ValueError, KeyError, TypeError, UnicodeError) as error:
@@ -256,17 +302,32 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self.reply(400, {'error':'请求格式无效。'})
 
 
-def serve(port=8888, data_dir=None, dry_run=False, host="0.0.0.0"):
+def serve(port=8888, data_dir=None, dry_run=False, host="0.0.0.0", trusted_local=False, isolated_execution=False):
+    if isolated_execution and (trusted_local or dry_run):
+        raise ValueError("账号隔离执行不能与可信单人或仅语法检查参数同时使用。")
+    if trusted_local:
+        # Validate before Settings.load or WebRuntime can create/read learning files.
+        data_dir = trusted_local_settings(host=host, data_dir=data_dir, dry_run=dry_run)
     settings = Settings.load()
     settings.data_dir = Path(data_dir) if data_dir else Path.cwd() / ".sparktutor-web"
-    if dry_run:
-        from sparktutor.config.settings import ExecutionMode
+    if isolated_execution:
+        settings.isolated_execution.enabled = True
+    if trusted_local:
+        settings.execution_mode = ExecutionMode.LOCAL
+    elif dry_run:
         settings.execution_mode = ExecutionMode.DRY_RUN
-    server = WebServer((host, port), settings, accounts=True)
+        settings.isolated_execution.enabled = False
+    server = WebServer((host, port), settings, accounts=not trusted_local, trusted_local=trusted_local)
     print(f"SparkTutor 网页端已启动：http://localhost:{server.server_port}", flush=True)
     print(f"监听地址：{host}:{server.server_port}", flush=True)
     print(f"学习数据：{settings.data_dir.resolve()}", flush=True)
-    print(f"首次管理员密码：{(settings.data_dir / 'accounts' / 'initial-admin.json').resolve()}（首次登录后修改）", flush=True)
+    if trusted_local:
+        print("可信本机实操：无需登录，仅限本机使用。代码在当前电脑真实执行，请只运行可信练习。", flush=True)
+        print("真实课程测试成功后才记录通过；缺少 Spark、错误或超时不会降级为通过。", flush=True)
+    else:
+        print(f"首次管理员密码：{(settings.data_dir / 'accounts' / 'initial-admin.json').resolve()}（首次登录后修改）", flush=True)
+        if server.isolated_pool:
+            print("账号实操：每次作业独立容器执行；服务或镜像未就绪时明确失败，不降级为宿主执行。", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -279,8 +340,14 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="SparkTutor 本地网页端")
     parser.add_argument("--port", type=int, default=8888)
-    parser.add_argument("--host", default="0.0.0.0", help="默认允许局域网访问；仅本机使用可选 127.0.0.1。")
+    parser.add_argument("--host", help="账号模式默认 0.0.0.0；可信本机实操默认 127.0.0.1。")
     parser.add_argument("--data-dir", type=Path)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--trusted-local", action="store_true", help="可信单人本机实操，不启用账号，仅允许回环地址。")
+    parser.add_argument("--isolated-execution", action="store_true", help="启用账号独立容器执行。")
     args = parser.parse_args()
-    serve(args.port, args.data_dir, args.dry_run, args.host)
+    host = args.host or ("127.0.0.1" if args.trusted_local else "0.0.0.0")
+    try:
+        serve(args.port, args.data_dir, args.dry_run, host, args.trusted_local, args.isolated_execution)
+    except ValueError as error:
+        parser.error(str(error))

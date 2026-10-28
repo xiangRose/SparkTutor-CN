@@ -376,7 +376,7 @@ test('settings exposes diagnostic examples while the environment check is still 
  assert.equal(renderComplete,true);
 });
 
-test('account settings retain appearance and diagnostic examples while execution remains syntax-only',async()=>{
+test('account settings retain appearance and diagnostic examples when isolated execution is disabled',async()=>{
  const source=fs.readFileSync(path.join(assets,'settings.js'),'utf8');
  const mode={value:'local',disabled:false,notice:'',insertAdjacentHTML(position,html){this.notice+=html;}};
  const host={isConnected:true,innerHTML:'',querySelector:selector=>selector==='#execution-mode-select'?mode:null,
@@ -394,6 +394,26 @@ test('account settings retain appearance and diagnostic examples while execution
  assert.match(host.innerHTML,/<a\b[^>]*href="#demo"/);
  assert.ok(!host.innerHTML.includes('href="#data"'));
  assert.deepEqual(calls,['webSettings']);
+});
+
+test('managed account settings preserve isolated mode and report execution service readiness',async()=>{
+ const source=fs.readFileSync(path.join(assets,'settings.js'),'utf8');
+ const mode={value:'local',disabled:false,notice:'',insertAdjacentHTML(position,html){this.notice+=html;}};
+ const host={isConnected:true,innerHTML:'',querySelector:selector=>selector==='#execution-mode-select'?mode:null,
+  insertAdjacentHTML(position,html){this.innerHTML+=html;}};
+ const context={window:{location:{hash:'#settings'},SparkTutorAccount:{user:{id:'learner-account'}}},document:{querySelector:()=>null}};
+ vm.runInNewContext(source,context);
+ const calls=[];
+ const api=context.window.createSparkTutorSettings({rpc:async method=>{calls.push(method);
+  if(method==='getExecutionServiceStatus')return{enabled:true,ready:false,message:'隔离执行镜像未就绪'};
+  return{provider:'auto',resolvedProvider:'none',mode:'isolated',accountExecutionManaged:true,isolatedExecutionEnabled:true};
+ },esc:escape});
+ await api.render(host);
+ assert.equal(mode.value,'isolated');assert.equal(mode.disabled,true);
+ assert.ok(mode.notice.includes('每次提交在独立 Spark 环境运行'));
+ assert.ok(mode.notice.includes('隔离执行镜像未就绪'));
+ assert.ok(!mode.notice.includes('目前仅检查语法'));
+ assert.deepEqual(calls,['webSettings','getExecutionServiceStatus']);
 });
 
 test('a direct demo hash keeps the settings parent active and provides a working return route',async()=>{

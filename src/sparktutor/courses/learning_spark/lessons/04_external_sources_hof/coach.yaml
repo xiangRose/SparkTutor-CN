@@ -1,0 +1,75 @@
+schemaVersion: coach-catalog-v1
+tasks:
+- stepId: practice-window-ranking
+  topic: window
+  contract: rank_orders(df) 保留输入 order_id、region、total 的全部行，新增 region_rank；每个 region 独立按 total 降序使用 rank，包含并列、重复行与空输入。
+  knowledgeComponents:
+  - dataframe.window
+  validation:
+    kind: course_tests
+    guidance: 修改后提交当前练习，使用课程保留的原始断言验证；运行成功、小样例或模型判断不能代替课程通过。
+  hypotheses:
+    window_partition_scope:
+      summary: 排名可能没有按每个区域独立计算
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 排名是整张表共享，还是每个区域重新开始？
+        guidance: 先取两个区域各一条记录，分别预测它们在本区域内的名次。
+        reflection: 窗口划分与最终展示排序承担不同作用。
+      - question: 改变另一区域的金额，会影响当前区域的名次吗？
+        guidance: 只改一个无关区域的数据，比较当前区域排名是否保持。
+        reflection: 跨区域相互影响通常提示窗口范围需要检查。
+      - question: 两个区域都只有一行时，区域内的名次应该是什么？
+        guidance: 用这个局部样例检查窗口划分，同时确认所有订单和原列仍被保留。
+        reflection: 该样例只能检查范围，不能证明并列语义正确。
+    window_tie_semantics:
+      summary: 可能混用了 rank、dense_rank 或逐行编号
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 题目要求并列后跳过名次，还是连续编号？
+        guidance: 选择两笔相同金额和一笔较小金额，先写出题目要求的名次。
+        reflection: 同为排序窗口函数，不表示它们有相同并列语义。
+      - question: 相同金额的两行应同名次吗，下一行又应是多少？
+        guidance: 把并列行和之后一行一起核查，不只检查第一名。
+        reflection: 只看一个并列行无法区分几种排名方式。
+      - question: 金额 50、50、20 时，rank 的后续名次如何变化？
+        guidance: 按题目中 rank 的定义手算，再对照实际结果；保留重复订单而非先去重。
+        reflection: 这个局部例子不构成完整函数答案，空输入和多区域仍需验证。
+    window_sort_direction:
+      summary: 窗口内排序方向可能与金额降序相反
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 较大金额应排在较小金额之前还是之后？
+        guidance: 先只比较同一区域内两个不同金额的预期先后。
+        reflection: 最后把结果表排序，不会改变已计算的窗口名次。
+      - question: 当前名次列是按哪个表达式、哪个方向计算的？
+        guidance: 核对窗口定义中的排序，而非只看最终展示顺序。
+        reflection: 表格显示第一行不等于这一行的区域排名就是第一。
+      - question: 若两行金额是 80 和 15，谁应获得更小的名次？
+        guidance: 先验证这对不同金额，再加入并列值检查另一种边界。
+        reflection: 方向检查和并列检查需要分别通过。
+    uncertain:
+      summary: 现有证据不足，先比较预期与实际再提出假设
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 区域内窗口排名任务中，哪项实际结果与题目要求不同？
+        guidance: 先选最小输入，写出预期输出，再查看当前真实执行结果；没有运行结果就保留未知。
+        reflection: 最近输出可能属于旧代码；不能仅凭历史失败断定当前代码仍有同样错误。
+      - question: 如何只改变一个条件，区分两个可能原因？
+        guidance: 保留其他输入和逻辑，选择一个与题目契约直接相关的边界检查。
+        reflection: 一次修改多处会失去定位依据；记录是哪项检查支持或排除了假设。
+      - question: 这次检查已经验证了什么，还有什么未知？
+        guidance: 将手算或小样例观察与课程原始测试结果分开记录，修复后再提交。
+        reflection: 局部样例不等于完整题目通过；不要把代码未报错当作满足任务契约。

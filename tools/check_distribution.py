@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 RESOURCE_SUFFIXES = {".py", ".yaml", ".json", ".js", ".css", ".html", ".svg", ".txt", ".tcss"}
 PRIVATE_PARTS = {".git", ".sparktutor-web", ".sparktutor", ".web-runtime", ".venv", "node_modules", "__pycache__", ".pytest_cache"}
 SOURCE_FILES = (
-    "pyproject.toml", "README.md", "LICENSE", ".gitignore", "start-web.ps1",
+    "pyproject.toml", "README.md", "LICENSE", ".gitignore", "start-web.ps1", "start-web-wsl.ps1",
+    "containers/executor/Dockerfile", "containers/executor/.dockerignore",
     "启动网站.cmd", "使用说明.txt", ".github/workflows/ci.yml",
     "tools/check_distribution.py", "tools/smoke_installed_web.py",
 )

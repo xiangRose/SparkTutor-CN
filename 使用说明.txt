@@ -1,10 +1,27 @@
 SparkTutor-CN 网页版 · 源码使用说明
 ================================
 
-本仓库默认分支 master 为正式网页版与比赛提交版本。
+本仓库默认分支 master 提供正式网页版。
 旧版 VS Code 扩展：https://github.com/xiangRose/SparkTutor-CN/tree/vscode-legacy
 源码包含网页、课程、教学引擎和测试；不包含 Python、Java、PySpark、密钥或个人学习记录。
-更完整的安装、课程与功能说明见 README.md；比赛演示说明见 docs/competition-submission.md。
+更完整的安装、课程与功能说明见 README.md；真实模型评估步骤见 docs/coach-evaluation.md。
+
+账号真实 Spark 执行
+管理员准备 Linux Docker 执行服务与 sparktutor-executor:4.1.1 镜像后，以 --isolated-execution 启动账号网站。
+Windows 启动器支持按本机 runtime.json 选择 WSL；本机已配置时，双击“启动网站.cmd”即可使用该配置。
+登录后在设置中确认“账号隔离 Spark”和“执行服务已就绪”，再运行或提交题目。
+每次操作使用独立容器、资源限额和独立临时目录，不向容器开放账号数据库、模型密钥或网络。
+未启用服务时仍只能检查语法；服务不可用时明确拒绝判题，不把它算成代码错误或通过。
+
+可选可信本机实操入口（单人）
+Windows 完成依赖安装后，可双击“启动本机实操.cmd”，或运行：
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-web.ps1 -TrustedLocal -Port 8889
+Linux / WSL2 完成依赖安装后运行：
+   python -m sparktutor web --trusted-local --port 8889
+浏览器打开 http://localhost:8889，无需登录，数据独立保存在 .sparktutor-trusted-local。
+该入口仅允许本机回环地址，代码在本机真实执行，只运行你审阅过的可信练习。
+不要复用账号数据目录，不能与 --dry-run 混用。完整迁移实操优先使用已验证的 Linux / WSL2。
+该单人入口只适合可信个人代码；账号真实运行应使用上面的隔离执行服务。
 
 一、Windows 首次安装
 1. 安装 Git、Python 3.12（项目最低要求 3.10）和 Java JDK 17+。
@@ -20,30 +37,37 @@ SparkTutor-CN 网页版 · 源码使用说明
 6. 保持启动窗口打开，按 Ctrl+C 停止。若端口被占用，停止旧实例或用 -Port 8889。
 
 二、Linux / WSL2 首次安装
-在 Linux / WSL 内安装 Python 3.10+（推荐 3.12）、对应 venv 组件、Git 和 Java JDK 17+。
+在 Linux / WSL 内安装 Python 3.10+（推荐 3.12）、对应 venv 组件、Git 和可用的 Docker Linux 引擎。
+账号执行容器自带 Java 与 PySpark，网站主进程不需要另外安装宿主 Spark。
 在项目目录依次运行：
    python3 -m venv .venv
    source .venv/bin/activate
    python -m pip install --upgrade pip
-   python -m pip install -e '.[spark]'
-   python -m sparktutor web --host 127.0.0.1 --port 8888
+   python -m pip install -e .
+   docker build --network host -t sparktutor-executor:4.1.1 containers/executor
+   python -m sparktutor web --isolated-execution --host 127.0.0.1 --port 8888
 浏览器打开 http://localhost:8888 。WSL 需单独安装 Linux 依赖，不能直接使用 Windows 的 .venv。
+Windows 还可运行 start-web.ps1 -Runtime WSL，具体本机配置与镜像构建选项见 README.md。
+若使用可信单人入口，另在宿主准备 Java 17+ 与项目 .[spark] 依赖，再按上面的本机实操命令启动。
 
 三、环境与模型配置
 1. 网页登录后打开“设置”，核对当前环境并配置本账号的模型。
-2. 当前多用户网页固定为“仅检查 Python 语法”，不能切换到自动检测、本机 Spark 或其他真实执行方式。
-3. 课程与真实判题引擎仍保留，后续接入多用户独立执行环境后再开放。真实课程测试本身不需要模型密钥。
+2. 账号执行方式由管理员管理：服务启用后显示“账号隔离 Spark”，未启用时仅检查语法。
+3. 账号不能切换成共享宿主执行。真实课程测试本身不需要模型密钥，服务故障也不会被记作学生的知识错误。
 4. [dry-run] Syntax OK 仅表示语法通过，代码和课程测试没有实际执行。
 5. 已有其他 Spark Python 时，用 -PythonPath '你的环境\Scripts\python.exe' 启动。
    .sparktutor-web/runtime.json 可以保存本机解释器路径；不要把别人的路径复制到自己的电脑。
 6. AI 导师、调试教练和部分开放式短题评审需填写自己的接口、模型和密钥。
    调试教练固定使用兼容接口；导师可选择 Anthropic 或兼容接口，分别检查连接。
-7. 原生 Windows 的部分 Python worker 作业仍需验证兼容性，完整真实课程验证以 Linux 为基线。
+7. 账号隔离执行使用 Linux 容器。原生 Windows 的可信本机模式仍有部分 Python worker 兼容限制。
+8. Windows 保存的 DPAPI 加密模型密钥不能由 WSL 解密；切换运行系统后需在账号设置中重新填写并保存，原学习数据保留。
 
 四、同一局域网访问与试用
-首次安装示例只允许本机访问。Windows 启动时省略 -ListenAddress 127.0.0.1，或在 Linux 中运行：
-   python -m sparktutor web --host 0.0.0.0 --port 8888
-同一网络设备访问 http://运行网站的电脑IPv4地址:8888 ，对方只需浏览器，当前代码检查在服务端进行。
+首次安装示例只允许本机访问。准备 Docker 服务与镜像后，在 Linux 中运行：
+   python -m sparktutor web --isolated-execution --host 0.0.0.0 --port 8888
+Windows 已保存 WSL 隔离执行配置时，可在启动命令中省略 -ListenAddress 127.0.0.1。
+同一网络设备访问 http://运行网站的电脑IPv4地址:8888 ，对方只需浏览器，代码在服务端容器执行。
+未启用隔离执行服务的兼容入口仍只检查语法。
 Windows 如需放行防火墙，可在管理员 PowerShell 运行 .\enable-lan.ps1；默认网卡 WLAN。
 有线网络可用 .\enable-lan.ps1 -InterfaceAlias '以太网'。
 不同用户使用独立账号，进度、历史、练习代码和模型设置分别保存。
@@ -51,7 +75,9 @@ Windows 如需放行防火墙，可在管理员 PowerShell 运行 .\enable-lan.p
 管理员可创建、启停账号和重置密码。关闭服务后再备份数据目录，避免多个实例同时写同一目录。
 
 五、课程与数据
-教材版本 1.2.0，共 19 课、24 道可执行编程练习（6 道分步、18 道综合）。
+教材版本 1.2.0，共 19 课、27 道可执行编程练习（6 道分步、21 道综合）。
+Join 课程新增最新维表关联、广播/排序合并执行计划对照、新情境迁移三道练习，检查重复事实、未匹配键、空键和空输入。
+调试教练的题目契约、错误假设、证据要求和三级提示来自课程旁的 coach.yaml，现支持聚合、Schema、Join、窗口四类共八道题。
 学习记录、代码和模型设置保存在 .sparktutor-web/users/<用户ID>/；源码不附带个人数据目录。
 原单人版根目录的数据库和代码保留，不会自动并入新账号；迁移前应在服务器本机备份并确认归属。
 第一课 SparkSession 短题支持本地结构检查，这不等于 Spark 已实际运行。

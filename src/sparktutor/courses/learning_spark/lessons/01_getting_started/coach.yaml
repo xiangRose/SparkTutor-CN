@@ -1,0 +1,71 @@
+schemaVersion: coach-catalog-v1
+tasks:
+- stepId: '15'
+  topic: aggregation
+  contract: "## 练习：M&M 糖果计数分析\n\n是时候将所有内容综合运用了。实现 `mnm_analysis` 函数，\n改编自《Learning Spark》一书中的 M&M 计数示例。\n\n你的函数应该：\n\
+    1. 读取一个 CSV 文件（带 header 和 inferSchema），包含列：\n   `State`、`Color`、`Count`\n2. 按 State 和 Color 分组，对 Count 列求和（别名为\
+    \ \"Total\"）\n3. 按 Total 降序排列\n4. 仅筛选加利福尼亚州（`'CA'`）\n5. 返回仅包含加利福尼亚州的 DataFrame\n\n这道练习综合运用了本课的所有技能：SparkSession、读取数据、\n\
+    groupBy、agg、orderBy 和 filter。\n**输入、输出与通过条件**\n\n输入：`mnm_analysis(spark, file_path)` 接收已有 SparkSession 和 CSV\
+    \ 路径，\n文件有表头 State、Color、Count。输出列必须是 State、Color、Total。\n通过条件：仅返回 CA 的两组结果，按 Total 降序为 Yellow=2030、Brown=1500；\n\
+    不要只筛选原始行，应先正确求和。\n\n请保留 starter 的函数名和测试区，在真实 Spark 环境运行全部断言；只通过语法检查不算完成。"
+  knowledgeComponents:
+  - dataframe.filter
+  - dataframe.group_by
+  - dataframe.aggregate
+  validation:
+    kind: course_tests
+    guidance: 修改后提交当前练习，使用课程保留的原始断言验证；运行成功、小样例或模型判断不能代替课程通过。
+  hypotheses:
+    missing_group_key:
+      summary: 可能需要重新检查分组键是否完整
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 题目中，哪些属性共同决定一组数据？
+        guidance: 先用自然语言写出“一组”的含义，再对照输入列。
+        reflection: 是否存在地点相同但类别不同、仍应分开的记录？
+      - question: 只保留一个分组属性，会把哪些原本不同的组放到一起？
+        guidance: 手工画两行地点相同、类别不同的数据，比较预计组数与实际输出组数。
+        reflection: 把组数变化与某一个分组属性对应起来，再做一次局部修改。
+      - question: 例如（区域甲，类型 X）和（区域甲，类型 Y）应属于几组？
+        guidance: 这两行地点相同但类别不同；用这个局部例子检查分组是否保留了两种角色。
+        reflection: 示例不是完整答案；回到当前代码只修改分组相关部分，再用课程测试验证。
+    row_count_vs_quantity:
+      summary: 可能混淆了记录行数与每行代表的数量
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 一行表示一个对象，还是一个批次包含的数量？
+        guidance: 先区分“有几条记录”和“这些记录合计代表多少数量”。
+        reflection: 输出单位应该是行、批次，还是题目要求的数量？
+      - question: 如果两行记录中的数量都不是 1，统计行数和累计数量还会相同吗？
+        guidance: 选择一个很小的数量列表，先手算两种结果，再检查当前聚合表达式的含义。
+        reflection: 不要因为某一组巧合相等，就认定两种统计方式等价。
+      - question: 局部例子中两个批次各有 3 和 7 个对象，总共有几条记录、多少对象？
+        guidance: 记录行数是 2，数量之和是 10。用单位差异检查当前聚合，不需要重写整道题。
+        reflection: 可运行下方参考探针核查手算；它不会运行你的 Spark 实现或证明题目通过。
+    uncertain:
+      summary: 现有信息不足以定位问题，先收集可区分的证据
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 目前哪一条输出与题目要求不一致？
+        guidance: 先选一个最小输入，写出预期列、组数和数量；没有真实运行时，请把结果标为未知。
+        reflection: 不要从一次环境故障推断知识错误，也不要把运行成功当作提交通过。
+      - question: 怎样设计一次只改变一个条件的检查？
+        guidance: 在分组、数量单位、筛选和排序中先选一项核查，保留其他条件。
+        reflection: 记录具体差异后再请求下一层提示，避免同时修改多处而丢失判断依据。
+      - question: 能否用两行小数据说明预期与实际的差别？
+        guidance: 例如两个批次各含 3 和 7 个对象，可分别检查批次数和数量之和；这只是一个局部检查思路。
+        reflection: 若尚无可信运行结果，请先获取结果；该局部示例不能定位所有类型的错误。
+  probe:
+    kind: row_count_vs_quantity
+    allowedHypotheses:
+    - row_count_vs_quantity
+    - uncertain

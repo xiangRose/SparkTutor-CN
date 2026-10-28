@@ -6,6 +6,8 @@ import re
 def execution_failure_kind(result) -> str:
     if result is None:
         return "unverified"
+    if getattr(result, "failure_kind", "") in {"infrastructure", "unverified", "learner"}:
+        return result.failure_kind
     if result.mode.value == "dry_run":
         return "dry_run"
     if result.success:

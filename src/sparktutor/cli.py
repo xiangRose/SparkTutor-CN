@@ -27,13 +27,20 @@ def launch(ctx: click.Context) -> None:
 
 @main.command()
 @click.option("--port", default=8888, type=click.IntRange(1, 65535), show_default=True)
-@click.option("--host", default="0.0.0.0", show_default=True, help="监听地址；127.0.0.1 仅允许本机访问。")
+@click.option("--host", help="监听地址；账号模式默认 0.0.0.0，可信本机实操默认 127.0.0.1。")
 @click.option("--data-dir", type=click.Path(file_okay=False, path_type=Path), help="网页端学习数据目录。")
+@click.option("--trusted-local", is_flag=True, help="启用可信单人本机实操，真实执行代码，仅允许本机访问。")
+@click.option("--isolated-execution", is_flag=True, help="启用登录账号的独立容器执行。")
 @click.pass_context
-def web(ctx: click.Context, port: int, host: str, data_dir: Path | None) -> None:
+def web(ctx: click.Context, port: int, host: str | None, data_dir: Path | None, trusted_local: bool, isolated_execution: bool) -> None:
     """在浏览器中学习 Spark，默认地址 http://localhost:8888。"""
     from sparktutor.web.server import serve
-    serve(port=port, data_dir=data_dir, dry_run=ctx.obj.get("dry_run", False), host=host)
+    host = host or ("127.0.0.1" if trusted_local else "0.0.0.0")
+    try:
+        serve(port=port, data_dir=data_dir, dry_run=ctx.obj.get("dry_run", False),
+              host=host, trusted_local=trusted_local, isolated_execution=isolated_execution)
+    except ValueError as error:
+        raise click.ClickException(str(error)) from error
 
 
 @main.command()

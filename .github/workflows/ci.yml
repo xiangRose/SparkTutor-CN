@@ -85,7 +85,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: python -m pip install -e '.[spark,dev]'
-      - run: python -m pytest tests/test_course_execution.py -q -m spark
+      - run: python -m pytest tests/test_course_execution.py tests/test_join_labs.py -q -m spark
 
   demo-spark:
     name: Real Spark / isolated diagnosis scenarios
@@ -126,3 +126,21 @@ jobs:
           java-version: '17'
       - run: python -m pip install -e '.[spark,dev]'
       - run: python -m pytest tests/test_web_execution.py -q -m spark
+      - name: Verify the trusted-local CLI and HTTP learning route
+        run: python tools/verify_trusted_local.py --output "${{ runner.temp }}/trusted-local-acceptance"
+
+  account-isolated-spark:
+    name: Account login / disposable Spark containers
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Build the same restricted execution image used by accounts
+        run: docker build -t sparktutor-executor:4.1.1 containers/executor
+      - name: Verify two logged-in accounts, real grading, Join plans and transfer
+        run: python tools/verify_account_execution.py --output "${{ runner.temp }}/account-isolated-acceptance" --include-join --include-plan

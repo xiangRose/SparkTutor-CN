@@ -345,8 +345,12 @@ class WebAiManager:
             headers[name.casefold()] = (name, value)
         headers = dict(headers.values())
         body = {"model": ai["model"], "messages": messages, "max_tokens": 256 if probe else 4096}
-        if (probe and urlsplit(ai["baseUrl"]).hostname == "api.deepseek.com"
+        if (urlsplit(ai["baseUrl"]).hostname == "api.deepseek.com"
                 and ai["model"] in {"deepseek-flash", "deepseek-v4-pro"}):
+            # Educational hints need a usable final answer within the bounded
+            # output budget. Apply the same non-thinking mode to Tutor, Coach,
+            # and connection checks; never grant one evaluation condition a
+            # different reasoning budget. Other compatible providers are unchanged.
             body["thinking"] = {"type": "disabled"}
         last_error = None
         for url in self._urls(ai["baseUrl"]):

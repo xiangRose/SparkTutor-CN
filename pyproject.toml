@@ -40,6 +40,8 @@ Issues = "https://github.com/xiangRose/SparkTutor-CN/issues"
 [tool.hatch.build]
 exclude = [
     "/.sparktutor-web",
+    "/.sparktutor-trusted-local",
+    "/output",
     "/.sparktutor",
     "/.web-runtime",
     "/.venv",
@@ -69,8 +71,11 @@ only-include = [
     "CHANGELOG.md",
     "LICENSE",
     "start-web.ps1",
+    "start-web-wsl.ps1",
+    "containers",
     "enable-lan.ps1",
     "启动网站.cmd",
+    "启动本机实操.cmd",
     "使用说明.txt",
     "requirements-portable.txt",
 ]
