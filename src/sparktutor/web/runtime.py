@@ -25,6 +25,7 @@ from sparktutor.config.settings import ExecutionMode, Settings
 from sparktutor.engine.exercise_catalog import build_exercise_catalog
 from sparktutor.server.handler import ServerHandler
 from sparktutor.state.data_management import backup_learning_database
+from sparktutor.state.checkins import CheckInStore
 
 from .ai import WebAiManager
 from .secret_store import atomic_write
@@ -55,12 +56,15 @@ class WebRuntime:
     run, another tab, or an orderly shutdown from undoing a requested reset.
     """
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, *, multi_user=False):
         self.settings = settings
+        self.checkins = CheckInStore(settings.data_dir / "progress.db")
+        self.multi_user = multi_user
         self.token = secrets.token_urlsafe(32)
         self.sessions: dict = {}
         self.workspace = WebWorkspace(settings.data_dir / "workspace")
         self.ai_manager = WebAiManager(settings)
+        self.ai_manager.use_environment = not multi_user
         self._remembered_mode = self._read_execution_preference()
         self._retired_sessions = self._read_retired_sessions()
         self._pending_sessions: dict = {}
@@ -383,12 +387,22 @@ class WebRuntime:
     async def _dispatch(self, session_id, entry, method, params):
         handler = entry["handler"]
         values = {key: value for key, value in params.items() if key not in {"contextToken", "operationId"}}
+        if self.multi_user and method in {'configureWebSettings', 'setExecutionMode'} and values.get('mode', 'dry_run') != 'dry_run':
+            raise ValueError('多用户网页目前仅开放语法检查，真实运行需要独立的执行环境。')
 
         async def call(name, arguments=None):
             return await handler.dispatch({"method": name, "params": values if arguments is None else arguments})
 
         if method == "webSettings":
             return self.public_settings(entry)
+        if method == "getCheckInStatus":
+            if set(values) - {"month"}:
+                raise ValueError("签到查询仅支持选择月份。")
+            return self.checkins.status(values.get("month"))
+        if method == "checkIn":
+            if values:
+                raise ValueError("签到日期由服务器确定，不支持补签或指定日期。")
+            return self.checkins.check_in()
         if method == "ping":
             provider = self.public_settings(entry).get("resolvedProvider", "none")
             return {"ready": True, "aiAvailable": provider not in {None, "none"},

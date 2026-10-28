@@ -86,11 +86,12 @@ def test_catalogue_protocol_returns_all_19_chinese_lesson_titles_without_saved_p
 
 def test_real_backend_catalogue_renders_chinese_tree_labels_across_progress_and_refresh(catalogue_snapshots):
     extension_dir = Path(__file__).resolve().parents[1] / "sparktutor-vscode"
+    extension_test = extension_dir / "tests" / "courseTree.test.cjs"
     node = shutil.which("node")
-    if not node or not (extension_dir / "node_modules" / "esbuild").exists():
-        pytest.skip("Sidebar integration requires Node and the extension's development dependencies")
+    if not node or not extension_test.is_file() or not (extension_dir / "node_modules" / "esbuild").exists():
+        pytest.skip("Sidebar integration requires the archived extension source, Node and its development dependencies")
     completed = subprocess.run(
-        [node, str(extension_dir / "tests" / "courseTree.test.cjs"), "--protocol-fixture"],
+        [node, str(extension_test), "--protocol-fixture"],
         input=json.dumps(catalogue_snapshots, ensure_ascii=False),
         capture_output=True, encoding="utf-8", timeout=30,
     )

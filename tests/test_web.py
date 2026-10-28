@@ -151,7 +151,7 @@ def test_assets_health_and_token_are_served(http_server):
         assert http_server.runtime.token in html
         assert "__API_TOKEN__" not in html
         assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
-    for path in ("/app.js", "/style.css", "/favicon.svg", "/api/health"):
+    for path in ("/app.js", "/style.css", "/appearance.js", "/appearance.css", "/favicon.svg", "/api/health"):
         with http(http_server, path) as response:
             assert response.status == 200
     with pytest.raises(HTTPError) as error:
