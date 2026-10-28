@@ -13,7 +13,7 @@ if (!session) {
 const state = { dashboard: null, lesson: null, courseId: '', lessonIdx: 0, depth: sessionStorage.getItem('sparktutor.depth') || 'beginner', choice: '', passed: false,
   busy: false, routeVersion: 0, courseFilter: '', query: '', historyOffset: 0, historyWindow: 'all', historyCourse: '',
   helpTab: 'tutor', chats: [], coach: null, coachMessage: null, edit: null, draftTimer: null, lastCode: '', draftDirty: false, scopeCourseId: sessionStorage.getItem('sparktutor.scope') || '', notificationCursor: 0, operationId: '', depthExplicit: sessionStorage.getItem('sparktutor.depth') !== null };
-const names = { home: '学习工作台', courses: '课程目录', lesson: '课程学习', diagnosis: '学习画像', history: '学习历史', demo: '诊断演示', settings: '环境与 AI 设置', data: '学习数据与备份', events: '学习行为记录' };
+const names = { home: '学习工作台', courses: '课程目录', lesson: '课程学习', diagnosis: '学习画像', history: '学习历史', demo: '学习诊断示例', settings: '设置', data: '学习数据与备份', events: '学习行为记录' };
 const eventNames = { code_submit: '提交判题', code_run: '运行代码', hint_request: '查看提示', code_edit: '编辑代码', task_start: '开始练习', task_complete: '完成步骤', solution_view: '查看答案', chat_request: '导师问答', lesson_loaded: '进入课程' };
 const statusNames = { not_started: '尚未开始', in_progress: '学习中', completed: '已完成', unavailable: '暂不可用' };
 let toastTimer;
@@ -255,7 +255,7 @@ async function taskHistory(index, offset = 0) {
 function taskRef(task) { return {courseId:task.courseId, lessonId:task.lessonId, taskId:task.taskId}; }
 
 function renderDemo() {
-  $('#content').innerHTML = heading('看见证据，如何变成画像', '一条可复现的学习轨迹，演示调试、提示与迁移如何影响诊断。') + `<div class="notice warning">演示与自己的学习记录隔离。预设轨迹用于验证系统规则，不代表真实学生成绩或教学效果。</div><section class="panel"><div class="section-title"><h2>选择一条演示轨迹</h2><span class="badge">可复现</span></div><div class="settings-grid"><div class="field"><label for="demo-scenario">学习情境</label><select id="demo-scenario"><option value="transfer_retry">新情境首次失败，修复后通过</option><option value="transfer_first_pass">新情境首次通过</option></select></div><div class="field"><label for="demo-mode">运行方式</label><select id="demo-mode"><option value="recorded">合成轨迹 · 无需 Spark</option><option value="spark">真实 Spark · 运行课程测试</option></select></div></div><button class="btn primary" data-action="run-demo">▷ 运行演示</button><div id="demo-result" aria-live="polite"></div></section>`;
+  $('#content').innerHTML = `<a class="text-link" href="#settings">← 返回设置</a>` + heading('学习诊断示例', '让系统演示一次做题过程，了解学习画像、推荐和复盘如何生成。') + `<div class="notice warning">这是设置中的辅助功能，使用预设案例，与自己的学习记录隔离，不计入我的成绩。适合了解系统、团队展示与功能验收，不代表真实学生成绩或教学效果。</div><section class="panel"><div class="section-title"><h2>选择一条演示轨迹</h2><span class="badge">可重复运行</span></div><div class="settings-grid"><div class="field"><label for="demo-scenario">学习情境</label><select id="demo-scenario"><option value="transfer_retry">新情境首次失败，修复后通过</option><option value="transfer_first_pass">新情境首次通过</option></select></div><div class="field"><label for="demo-mode">运行方式</label><select id="demo-mode"><option value="recorded">合成轨迹 · 无需 Spark</option><option value="spark">真实 Spark · 运行课程测试</option></select></div></div><button class="btn primary" data-action="run-demo">▷ 运行演示</button><div id="demo-result" aria-live="polite"></div></section>`;
 }
 async function runDemo() {
   $('#demo-result').innerHTML = '<div class="busy-indicator"><span class="spinner"></span>正在运行独立演示，请稍候…</div>';
@@ -271,8 +271,8 @@ async function route(){
   try{await flushEdits();}catch(error){if(!localCopy){toast('服务端与浏览器均未能保存，当前代码仍留在编辑器中。请先下载代码再离开。',true);return;}toast(`${error.message} 浏览器副本已保留，可在数据页下载后处理。`,true);}
   const name=location.hash.slice(1)||'home';features.invalidate();destroyEditor();
   $('.sidebar').classList.remove('open');$('#menu-toggle').setAttribute('aria-expanded','false');
-  document.querySelectorAll('[data-nav]').forEach(link=>link.classList.toggle('active',link.dataset.nav===name||(name==='lesson'&&link.dataset.nav==='courses')));
-  $('#breadcrumb').textContent=names[name]||'学习工作台';document.title=`${names[name]||'学习工作台'} · SparkTutor`;
+  document.querySelectorAll('[data-nav]').forEach(link=>link.classList.toggle('active',link.dataset.nav===name||(name==='lesson'&&link.dataset.nav==='courses')||(name==='demo'&&link.dataset.nav==='settings')));
+  $('#breadcrumb').textContent=name==='demo'?'设置 / 学习诊断示例':names[name]||'学习工作台';document.title=`${names[name]||'学习工作台'} · SparkTutor`;
   $('#content').innerHTML=loading();window.scrollTo(0,0);
   if(['home','courses','diagnosis'].includes(name))await dashboard();if(version!==state.routeVersion)return;
   switch(name){

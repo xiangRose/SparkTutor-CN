@@ -32,7 +32,7 @@
       if (currentSequence !== sequence || !target?.isConnected || route !== window.location?.hash) return;
       settings = result;
       const headers = result.extraHeaderNames?.length ? result.extraHeaderNames.join('、') : '暂无';
-      target.innerHTML = `<div class="page-heading"><div><p class="eyebrow">YOUR SPARK JOURNEY</p><h1>准备好你的学习环境</h1><p>运行 Spark 代码不需要模型密钥。代码执行环境和 AI 连接分别配置。</p></div></div>
+      target.innerHTML = `<div class="page-heading"><div><p class="eyebrow">YOUR SPARK JOURNEY</p><h1>设置</h1><p>配置学习环境与 AI 连接，也可以通过辅助示例了解学习画像。运行 Spark 代码不需要模型密钥。</p></div></div>
         <div class="settings-grid settings-parity"><form id="settings-form" class="panel">
           <div class="section-title"><h2>AI 导师与调试教练</h2><span class="badge" id="settings-resolved-provider">${esc(providerNames[result.resolvedProvider] || '尚未配置')}</span></div>
           <div class="field"><label for="ai-provider">导师问答与代码评审</label><select id="ai-provider">
@@ -59,6 +59,13 @@
           <p class="disclaimer">连接检查只发送一条短测试消息，不发送题面或代码，也不计入学习、提交或求助记录。</p><div id="settings-connection-status" role="status" aria-live="polite"></div>
         </form><aside class="settings-guidance"><section class="panel"><h2>连接状态如何理解</h2><p>返回正文说明接口能够生成回答；空正文、仅思考或截断回复会标记为尚未验证。认证、额度和网络问题会分别提示，可以手动重试。</p><p class="disclaimer">${esc(result.copilotMessage || 'GitHub Copilot 的模型接口属于 VS Code，独立网页请配置 Anthropic 或兼容模型服务。')}</p></section><section class="tool-card"><h3>学习数据与模型配置分开管理</h3><p>代码、进度与学习记录可以在数据管理中备份；模型密钥不会随学习数据导出。</p><a class="text-link" href="#data">管理学习数据 ${icon('arrow')}</a></section></aside></div>`;
       storageStatus();
+      target.insertAdjacentHTML('beforeend', `<section class="panel settings-tools" aria-labelledby="settings-tools-title">
+        <div class="section-title"><h2 id="settings-tools-title">辅助功能</h2></div>
+        <details class="settings-demo"><summary>学习诊断示例</summary>
+          <p>让系统演示一段“做错题 → 查看提示 → 修改通过 → 尝试新题”的过程，了解学习画像、推荐和复盘如何生成。适合了解系统、团队展示和功能验收。</p>
+          <p class="disclaimer">使用预设案例，与自己的学习记录隔离，不计入我的成绩；无需配置 AI 模型。</p>
+          <a class="btn" href="#demo">打开学习诊断示例 ${icon('arrow')}</a>
+        </details></section>`);
       if (renderEnvironment) await renderEnvironment(target);
     }
 

@@ -7,4 +7,6 @@
 .settings-storage-note{margin:10px 0}.settings-warning{color:#8c6021}.settings-check{margin-top:15px;border:1px solid var(--line,#e3e8dd);border-radius:8px;padding:13px 15px;font-size:12px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}
 .settings-check:empty{display:none}.settings-check.is-success{background:#f0f6e8;border-color:#cadbb4}.settings-check.is-unverified{background:#fff9ea;border-color:#e5d5a8}.settings-check.is-error{background:#fff3ed;border-color:#e9c4b3;color:#8c4c33}
 .settings-guidance p{font-size:12px;line-height:1.9}.settings-guidance .tool-card{margin-top:18px}.settings-parity .field small{line-height:1.8;overflow-wrap:anywhere}
+.settings-tools{margin-top:24px}.settings-demo summary{cursor:pointer;font-weight:600;color:var(--green,#255540);padding:8px 0}.settings-demo p{font-size:13px;line-height:1.9;max-width:75ch}.settings-demo .btn{margin-top:8px}
+.sidebar-bottom>a.active{background:#d9e8b8;color:#253c2d;font-weight:600}
 @media(max-width:700px){.settings-parity .settings-provider-fields{padding:13px 13px 5px;margin:16px 0}.settings-parity .inline-actions{gap:8px}.settings-parity .inline-actions .btn{font-size:11px;padding:9px 11px}}

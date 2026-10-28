@@ -176,7 +176,7 @@ test('settings distinguish Spark execution from optional model configuration and
  const context={window:{location:{hash:'#settings'}},document:{querySelector:()=>null}};
  vm.runInNewContext(source,context);
  const api=context.window.createSparkTutorSettings({rpc:async()=>({provider:'auto',resolvedProvider:'none',mode:'auto'}),esc:escape});
- const host={isConnected:true,innerHTML:'',querySelector:()=>null};
+ const host={isConnected:true,innerHTML:'',querySelector:()=>null,insertAdjacentHTML(position,html){this.innerHTML+=html;}};
  await api.render(host);
  assert.ok(host.innerHTML.includes('运行 Spark 代码不需要模型密钥'));
  assert.ok(host.innerHTML.includes('找不到可用 Spark 时会退回语法检查'));
@@ -195,7 +195,7 @@ function settingsView(savedMode='auto',saveResponse={mode:'local',remember:false
  };
  const context={window:{location:{hash:'#settings'}},document:{querySelector:()=>null}};
  vm.runInNewContext(source,context);
- const host={isConnected:true,innerHTML:'',querySelector:selector=>nodes[selector]};
+ const host={isConnected:true,innerHTML:'',querySelector:selector=>nodes[selector],insertAdjacentHTML(position,html){this.innerHTML+=html;}};
  const api=context.window.createSparkTutorSettings({rpc:async(method,params)=>{
   if(method==='webSettings')return{provider:'auto',resolvedProvider:'none',mode:savedMode};
   calls.push({method,params});
@@ -227,4 +227,120 @@ test('failed saving does not mark an unsaved execution selection as active',asyn
  view.nodes['#execution-mode-select'].value='local';await assert.rejects(view.api.save(),/保存失败/);
  assert.ok(view.nodes['#settings-storage-status'].textContent.includes('当前已保存的执行方式：仅检查 Python 语法'));
  assert.equal(view.toasts.length,0);
+});
+
+test('diagnostic examples are removed from primary navigation while settings keeps a discoverable parent link',()=>{
+ const index=fs.readFileSync(path.join(assets,'index.html'),'utf8');
+ const primary=index.match(/<nav\b[^>]*aria-label="主导航"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
+ assert.ok(primary);assert.ok(!primary.includes('href="#demo"'));assert.ok(!index.includes('data-nav="demo"'));
+ const settings=index.match(/<a\b[^>]*data-nav="settings"[^>]*>([\s\S]*?)<\/a>/)?.[1];
+ assert.equal(settings?.replace(/<[^>]+>/g,'').trim(),'设置');
+});
+
+/** Execute the real settings renderer, router and explicit demo action with local RPC doubles. */
+function demoNavigationView(){
+ const app=fs.readFileSync(path.join(assets,'app.js'),'utf8');
+ const settingsSource=fs.readFileSync(path.join(assets,'settings.js'),'utf8');
+ const calls=[],nodes={},nav=['home','courses','diagnosis','history','events','data','settings'].map(name=>({
+  dataset:{nav:name},active:false,classList:{toggle(className,enabled){if(className==='active')this.owner.active=enabled;}},
+ }));
+ nav.forEach(link=>{link.classList.owner=link;});
+ const content={isConnected:true,innerHTML:'',querySelector:selector=>nodes[selector],
+  insertAdjacentHTML(position,html){this.innerHTML=position==='afterbegin'?html+this.innerHTML:this.innerHTML+html;}};
+ Object.assign(nodes,{'#content':content,'#breadcrumb':{textContent:''},'#menu-toggle':{setAttribute(){}},
+  '.sidebar':{classList:{remove(){}}},'#demo-scenario':{value:'transfer_retry'},'#demo-mode':{value:'recorded'},
+  '#demo-result':{innerHTML:''}});
+ const location={hash:'#settings'},state={busy:false,routeVersion:0,operationId:''};
+ const rpc=async(method,params)=>{
+  calls.push({method,params});
+  if(method==='webSettings')return{provider:'auto',resolvedProvider:'none',mode:'local'};
+  if(method==='getEnvironmentReport')return{checks:[],execution:{configuredMode:'local'}};
+  if(method==='runDemoScenario')return{provenanceLabel:params.mode==='recorded'?'合成轨迹':'真实 Spark',checks:[],stages:[],disclaimer:'隔离演示'};
+  throw new Error(`Unexpected RPC ${method}`);
+ };
+ const document={title:'',querySelector:selector=>nodes[selector]||null,querySelectorAll:selector=>selector==='[data-nav]'?nav:[]};
+ const context=vm.createContext({window:{location,scrollTo(){}},location,document,state,rpc,esc:escape,
+  $:selector=>nodes[selector]||null,heading:(title,subtitle)=>`<h1>${escape(title)}</h1><p>${escape(subtitle)}</p>`,
+  rememberDraft:()=>true,flushEdits:async()=>{},destroyEditor(){},loading:()=>'<p>加载中</p>',toast(){},
+  beginOperation:async()=>{state.operationId='test-demo-operation';},
+  features:{invalidate(){},handleAction:async()=>false,demoStage:()=>''},
+ });
+ vm.runInContext(settingsSource,context);
+ context.settingsPanel=context.window.createSparkTutorSettings({rpc,esc:escape,
+  renderEnvironment:async host=>{await rpc('getEnvironmentReport');host.insertAdjacentHTML('beforeend','<section id="environment-report">环境检查</section>');}});
+ vm.runInContext(app.match(/^const names = .*;$/m)[0],context);
+ vm.runInContext(app.slice(app.indexOf('function renderDemo('),app.indexOf('async function action(')),context);
+ vm.runInContext(app.slice(app.indexOf('async function action('),app.indexOf('async function saveSettings(')),context);
+ return{calls,nodes,nav,content,document,state,
+  async navigate(hash){location.hash=hash;await context.route();},
+  async run(){await context.action({dataset:{action:'run-demo'},innerHTML:'运行演示',disabled:false,isConnected:true});},
+ };
+}
+
+test('opening and refreshing settings exposes a folded example link without running a scenario',async()=>{
+ const view=demoNavigationView();
+ for(let i=0;i<2;i++){
+  await view.navigate('#settings');
+  assert.ok(view.content.innerHTML.includes('<h1>设置</h1>'));
+  assert.match(view.content.innerHTML,/<details\b[^>]*class="settings-demo"[^>]*>\s*<summary>学习诊断示例<\/summary>/);
+  assert.ok(!/<details\b[^>]*class="settings-demo"[^>]*\bopen\b/.test(view.content.innerHTML));
+  assert.match(view.content.innerHTML,/<a\b[^>]*href="#demo"[^>]*>打开学习诊断示例/);
+  assert.ok(view.content.innerHTML.includes('与自己的学习记录隔离'));
+  assert.ok(!view.content.innerHTML.includes('data-action="run-demo"'));
+ }
+ assert.deepEqual(view.calls.map(call=>call.method),['webSettings','getEnvironmentReport','webSettings','getEnvironmentReport']);
+ assert.equal(view.nav.filter(link=>link.active).map(link=>link.dataset.nav).join(','),'settings');
+});
+
+test('settings exposes diagnostic examples while the environment check is still pending',async()=>{
+ const source=fs.readFileSync(path.join(assets,'settings.js'),'utf8');
+ const context={window:{location:{hash:'#settings'}},document:{querySelector:()=>null}};
+ vm.runInNewContext(source,context);
+ const calls=[];
+ let finishEnvironment,enteredEnvironment,renderComplete=false;
+ const pendingEnvironment=new Promise(resolve=>{finishEnvironment=resolve;});
+ const environmentStarted=new Promise(resolve=>{enteredEnvironment=resolve;});
+ const host={isConnected:true,innerHTML:'',querySelector:()=>null,
+  insertAdjacentHTML(position,html){this.innerHTML+=html;}};
+ const api=context.window.createSparkTutorSettings({
+  rpc:async method=>{calls.push(method);return{provider:'auto',resolvedProvider:'none',mode:'auto'};},
+  esc:escape,renderEnvironment:()=>{enteredEnvironment();return pendingEnvironment;},
+ });
+ const rendering=api.render(host).then(()=>{renderComplete=true;});
+ try{
+  await environmentStarted;
+  assert.equal(renderComplete,false);
+  assert.match(host.innerHTML,/<details\b[^>]*class="settings-demo"/);
+  assert.match(host.innerHTML,/<a\b[^>]*href="#demo"[^>]*>打开学习诊断示例/);
+  assert.deepEqual(calls,['webSettings']);
+  assert.ok(!calls.includes('runDemoScenario'));
+ }finally{finishEnvironment();await rendering;}
+ assert.equal(renderComplete,true);
+});
+
+test('a direct demo hash keeps the settings parent active and provides a working return route',async()=>{
+ const view=demoNavigationView();await view.navigate('#demo');
+ assert.ok(view.content.innerHTML.includes('<h1>学习诊断示例</h1>'));
+ assert.equal(view.nodes['#breadcrumb'].textContent,'设置 / 学习诊断示例');
+ assert.equal(view.document.title,'学习诊断示例 · SparkTutor');
+ assert.equal(view.nav.filter(link=>link.active).map(link=>link.dataset.nav).join(','),'settings');
+ assert.deepEqual(view.calls,[]);
+ const back=view.content.innerHTML.match(/<a\b[^>]*href="([^"]+)"[^>]*>← 返回设置<\/a>/);
+ assert.equal(back?.[1],'#settings');await view.navigate(back[1]);
+ assert.ok(view.content.innerHTML.includes('<h1>设置</h1>'));
+ assert.equal(view.nodes['#breadcrumb'].textContent,'设置');
+ assert.ok(!view.calls.some(call=>call.method==='runDemoScenario'));
+});
+
+test('moving the entry preserves both scenarios and modes and requires an explicit run action',async()=>{
+ const view=demoNavigationView();await view.navigate('#demo');
+ for(const value of ['transfer_retry','transfer_first_pass','recorded','spark'])assert.ok(view.content.innerHTML.includes(`value="${value}"`));
+ assert.ok(view.content.innerHTML.includes('data-action="run-demo"'));assert.deepEqual(view.calls,[]);
+ for(const scenarioId of ['transfer_retry','transfer_first_pass'])for(const mode of ['recorded','spark']){
+  view.nodes['#demo-scenario'].value=scenarioId;view.nodes['#demo-mode'].value=mode;await view.run();
+  const request=view.calls.at(-1);assert.equal(request.method,'runDemoScenario');
+  assert.deepEqual({...request.params},{scenarioId,mode,operationId:'test-demo-operation'});
+  assert.equal(view.state.busy,false);assert.equal(view.state.operationId,'');
+ }
+ assert.equal(view.calls.length,4);
 });
