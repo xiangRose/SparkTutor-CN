@@ -10,6 +10,10 @@ if (sessionStorage.getItem('sparktutor.activeUser') !== accountUser) {
   sessionStorage.setItem('sparktutor.activeUser',accountUser);
 }
 const isStudyTab = new URLSearchParams(location.search).get('study') === '1';
+if (!isStudyTab) {
+  sessionStorage.removeItem('sparktutor.studySession');
+  if (window.name.startsWith('sparktutor-study-')) window.name = '';
+}
 // A newly opened window inherits sessionStorage. Give learning its own server context.
 if (isStudyTab && !sessionStorage.getItem('sparktutor.studySession')) {
   sessionStorage.removeItem('sparktutor.session');
@@ -343,7 +347,6 @@ async function route(){
 async function action(button) {
   const type = button.dataset.action;
   if (state.busy) return;
-  if (type === 'study-tab') { openStudyTab(); return; }
   if (!isStudyTab && ['resume','load','course-start','recommended'].includes(type)) {
     if (type === 'resume' && state.dashboard.resume) {
       // Focusing the existing study window preserves its unsent answer and cursor.
