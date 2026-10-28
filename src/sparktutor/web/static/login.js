@@ -22,7 +22,15 @@
    let data;try{data=await response.json();}catch{throw Error('暂时无法连接学习空间，请稍后刷新重试。');}
    if(!response.ok)throw Error(data.error||'操作未完成，请重试。');
    if(mode==='register'){$('#login-tab').click();message.textContent='注册成功，请使用新账号登录。';$('#password').value='';$('#password').focus();}
-   else{try{localStorage.setItem('sparktutor.auth.changed',String(Date.now()));}catch{}const target=new URL(location.href);target.hash=data.user.mustChangePassword?'account':(target.searchParams.get('study')==='1'?'lesson':'home');location.replace(target.href);location.reload();}
+   else{
+    try{localStorage.setItem('sparktutor.auth.changed',String(Date.now()));}catch{}
+    const target=new URL(location.href);
+    target.searchParams.delete('study');
+    target.hash=data.user.mustChangePassword?'account':'home';
+    // Fetch the signed-in page even when only the hash changes after login.
+    history.replaceState(null,'',target.href);
+    location.reload();
+   }
   }catch(error){message.textContent=error.message||'网络连接中断，请稍后重试。';}
   finally{button.disabled=false;}
  });
