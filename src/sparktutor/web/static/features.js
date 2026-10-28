@@ -59,18 +59,21 @@ window.createSparkTutorFeatures = function ({rpc,esc,state,heading,date,pct,toas
     const blob=body instanceof Blob?body:new Blob([typeof body==='string'?body:JSON.stringify(body,null,2)],{type});
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
   }
-  async function renderData() {
-    const own=++sequence,data=await rpc('getLearningDataOverview');if(own!==sequence)return;
-    state.dataOverview=data;
-    document.querySelector('#content').innerHTML=heading('管理自己的学习数据','了解保存位置，导出摘要，备份或清除学习记录。')+`<section class="panel"><h2>保存位置与数量</h2><dl class="data-locations"><dt>学习数据库</dt><dd>${esc(data.databasePath)}</dd><dt>逐题代码目录</dt><dd>${esc(data.workspacePath)}</dd><dt>课节进度 / 已完成</dt><dd>${num(data.progressCount)} / ${num(data.completedLessonCount)}</dd><dt>行为记录</dt><dd>${num(data.eventCount)}</dd></dl><p class="disclaimer">这是服务端的保存位置。浏览器本地草稿仅作故障兜底，已成功保存的题目以服务端代码为准。</p><div class="inline-actions"><button class="btn" data-action="feature-summary">下载学习摘要</button><button class="btn" data-action="feature-local-drafts">下载浏览器草稿副本</button><button class="btn" data-action="feature-backup">备份数据库</button><button class="btn" data-action="feature-backup-all">备份数据库与逐题代码</button></div></section><section class="panel evidence-section"><h2>导出与模型发送范围</h2>${Object.entries(data.privacy||{}).map(([key,value])=>`<p>${esc(value)}</p>`).join('')}</section><section class="panel evidence-section"><h2>清除学习记录</h2><p>删除全部课节进度和行为记录，画像与历史将重新开始。保留服务端练习代码和模型设置。共享此服务的其他标签页也会重新开始。</p><p class="disclaimer">请先下载需要的备份。这是逻辑删除，不是磁盘安全擦除。</p><div class="field"><label for="clear-confirmation">输入“清除学习记录”后再确认</label><input id="clear-confirmation" autocomplete="off" placeholder="清除学习记录"></div><button class="btn danger" data-action="feature-clear-records">确认清除学习记录</button></section>`;
-  }
   async function renderEvents() {
     const own=++sequence;
     const [data,dashboard]=await Promise.all([rpc('getLearningEvents',{courseId:state.eventsCourse||'',latest:true,limit:200}),rpc('getLearningDashboard')]);
     if(own!==sequence)return;
     const eventLabels={session_start:'开始会话',session_end:'结束会话',lesson_loaded:'进入课程',task_start:'开始题目',task_complete:'完成题目',code_edit:'编辑代码',code_run:'运行代码',code_submit:'提交判题',hint_request:'请求提示',solution_view:'查看答案',chat_request:'导师问答',coach_probe:'核查教练样例'};
-    const allowed=['changeCount','addedChars','removedChars','burstDurationMs','exitCode','mode','assessmentSource','assessmentEligible','failureKind','passed','hintType','level','durationMs','reason'];
-    document.querySelector('#content').innerHTML=heading('学习行为记录','查看必要的过程元数据，不展示代码、聊天原文或凭据。','<button class="btn" data-action="feature-events-refresh">刷新记录</button>')+`<div class="scope-controls"><label for="events-course">课程</label><select id="events-course">${options(dashboard.courses,state.eventsCourse||'')}</select><span>最近 ${data.events.length} / ${num(data.totalCount)} 条${data.hasMore?'；更多历史可在学习历史中按题目查看':''}</span></div><section class="panel"><div class="event-list">${data.events.length?data.events.map(event=>`<article class="event-item"><time>${date(event.timestamp)}</time><strong>${esc(eventLabels[event.eventType]||event.eventType)}</strong><p>${esc(event.courseId||'')} ${esc(event.lessonId||'')} ${esc(event.taskId||'')}</p><dl class="event-metadata">${allowed.filter(key=>Object.hasOwn(event.data||{},key)).map(key=>`<dt>${esc(key)}</dt><dd>${esc(event.data[key])}</dd>`).join('')}</dl></article>`).join(''):'<p class="disclaimer">尚无记录。</p>'}</div></section>`;
+    const metadataLabels={changeCount:'修改次数',addedChars:'新增字符',removedChars:'删除字符',burstDurationMs:'编辑时长',exitCode:'退出码',mode:'执行模式',assessmentSource:'评估来源',assessmentEligible:'有效评估',failureKind:'问题类型',passed:'是否通过',hintType:'提示类型',level:'提示层级',durationMs:'用时',reason:'说明'};
+    const format=(key,value)=>key.endsWith('Ms')&&typeof value==='number'?`${(value/1000).toFixed(1)} 秒`:typeof value==='boolean'?(value?'是':'否'):value;
+    const items=data.events.map(event=>{
+      const course=dashboard.courses.find(item=>item.id===event.courseId);
+      const lesson=course?.lessons?.find(item=>item.id===event.lessonId);
+      const identity=[course?.title||event.courseId,lesson?.title||event.lessonId].filter(Boolean).join(' · ');
+      const metadata=Object.keys(metadataLabels).filter(key=>Object.hasOwn(event.data||{},key)&&event.data[key]!==null&&event.data[key]!=='');
+      return `<article class="event-item behavior-item"><div class="behavior-heading"><strong>${esc(eventLabels[event.eventType]||event.eventType)}</strong><time>${date(event.timestamp)}</time></div>${identity?`<p class="behavior-context">${esc(identity)}</p>`:''}${metadata.length?`<dl class="event-metadata">${metadata.map(key=>`<div><dt>${esc(metadataLabels[key])}</dt><dd>${esc(format(key,event.data[key]))}</dd></div>`).join('')}</dl>`:''}</article>`;
+    }).join('');
+    document.querySelector('#content').innerHTML=heading('学习行为记录','查看必要的过程元数据，不展示代码、聊天原文或凭据。','<button class="btn" data-action="feature-events-refresh">刷新记录</button>')+`<div class="scope-controls"><label for="events-course">课程</label><select id="events-course">${options(dashboard.courses,state.eventsCourse||'')}</select><span>最近 ${data.events.length} / ${num(data.totalCount)} 条${data.hasMore?'；更多历史可在学习历史中按题目查看':''}</span></div><section class="panel behavior-panel"><div class="event-list behavior-list">${items||'<p class="disclaimer">尚无记录。</p>'}</div></section>`;
   }
   function comparison(student,solution) {
     const left=String(student).split('\n'),right=String(solution).split('\n');
@@ -111,26 +114,11 @@ window.createSparkTutorFeatures = function ({rpc,esc,state,heading,date,pct,toas
     if(type==='feature-events-refresh')await renderEvents();
     if(type==='feature-editor-search')window.activeSparkTutorEditor?.search();
     if(type==='feature-editor-download')download(currentCode(),'sparktutor-exercise.py','text/x-python;charset=utf-8');
-    if(type==='feature-summary')download(await rpc('exportLearningSummary'),'sparktutor-learning-summary.json');
-    if(type==='feature-local-drafts'){
-      const drafts={};for(const key of Object.keys(localStorage))if(key.startsWith('sparktutor.draft.')||key.startsWith('sparktutor.recovery.'))drafts[key]=localStorage.getItem(key);
-      download({exportedAt:new Date().toISOString(),drafts},'sparktutor-browser-drafts.json');
-    }
-    if(type==='feature-backup'||type==='feature-backup-all'){
-      const data=await rpc('backupLearningDatabase',{includeWorkspace:type==='feature-backup-all'});
-      const bytes=Uint8Array.from(atob(data.base64),c=>c.charCodeAt(0));download(new Blob([bytes],{type:data.contentType}),data.filename,data.contentType);toast('备份已下载。');
-    }
-    if(type==='feature-clear-records'){
-      if(document.querySelector('#clear-confirmation')?.value!=='清除学习记录')throw new Error('请先输入“清除学习记录”。');
-      if(!window.confirm('确认删除全部学习进度和行为记录？服务端练习代码和模型设置会保留。'))return true;
-      const result=await rpc('clearLearningRecords',{confirmation:'clear-learning-records'});
-      rotateSession(result.newSessionId);toast('学习记录已清除，练习代码仍保留。');await refresh();
-    }
     if(type==='feature-reset-lesson'){
       if(!state.lesson)return true;
       if(!window.confirm('重置当前课节？本课的进度和受管练习代码会清除；其他课节及辅助文件保留。'))return true;
       await rpc('resetWebLesson',{courseId:state.courseId,lessonId:state.lesson.lessonId,contextToken:state.lesson.contextToken,confirmation:'reset-lesson'});
-      const prefix=`sparktutor.draft.${state.courseId}.${state.lesson.lessonId}.`;
+      const prefix=`${state.storagePrefix||'sparktutor.'}draft.${state.courseId}.${state.lesson.lessonId}.`;
       for(const key of Object.keys(localStorage))if(key.startsWith(prefix))localStorage.removeItem(key);
       state.edit=null;state.draftDirty=false;state.lesson=null;state.lastCode='';state.passed=false;
       toast('当前课节已重置。');await refresh();
@@ -142,5 +130,5 @@ window.createSparkTutorFeatures = function ({rpc,esc,state,heading,date,pct,toas
     if(event.target.id==='events-course'){state.eventsCourse=event.target.value;await renderEvents();return true;}
     return false;
   }
-  return {scopeControls,knowledgeSection,historySupplement,renderEnvironment,renderData,renderEvents,comparison,coachDetails,coachEvidence,demoStage,difficultySelect,handleAction,handleChange,download,invalidate:()=>{sequence++;}};
+  return {scopeControls,knowledgeSection,historySupplement,renderEnvironment,renderEvents,comparison,coachDetails,coachEvidence,demoStage,difficultySelect,handleAction,handleChange,download,invalidate:()=>{sequence++;}};
 };

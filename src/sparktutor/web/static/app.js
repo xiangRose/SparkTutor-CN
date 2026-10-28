@@ -3,6 +3,19 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const token = $('meta[name="sparktutor-token"]').content;
+const accountUser = $('meta[name="sparktutor-user"]')?.content || '';
+const storagePrefix = accountUser ? `sparktutor.user.${accountUser}.` : 'sparktutor.';
+if (sessionStorage.getItem('sparktutor.activeUser') !== accountUser) {
+  for (const key of ['session','lastLesson','studySession','scope','depth']) sessionStorage.removeItem(`sparktutor.${key}`);
+  sessionStorage.setItem('sparktutor.activeUser',accountUser);
+}
+const isStudyTab = new URLSearchParams(location.search).get('study') === '1';
+// A newly opened window inherits sessionStorage. Give learning its own server context.
+if (isStudyTab && !sessionStorage.getItem('sparktutor.studySession')) {
+  sessionStorage.removeItem('sparktutor.session');
+  sessionStorage.removeItem('sparktutor.lastLesson');
+  sessionStorage.setItem('sparktutor.studySession','1');
+}
 let session = sessionStorage.getItem('sparktutor.session');
 if (!session) {
   // getRandomValues also works over plain HTTP on a LAN; randomUUID requires
@@ -10,10 +23,10 @@ if (!session) {
   session = Array.from(crypto.getRandomValues(new Uint8Array(16)), value => value.toString(16).padStart(2,'0')).join('');
   sessionStorage.setItem('sparktutor.session', session);
 }
-const state = { dashboard: null, lesson: null, courseId: '', lessonIdx: 0, depth: sessionStorage.getItem('sparktutor.depth') || 'beginner', choice: '', passed: false,
+const state = { storagePrefix, dashboard: null, lesson: null, courseId: '', lessonIdx: 0, depth: sessionStorage.getItem('sparktutor.depth') || 'beginner', choice: '', passed: false,
   busy: false, routeVersion: 0, courseFilter: '', query: '', historyOffset: 0, historyWindow: 'all', historyCourse: '',
   helpTab: 'tutor', chats: [], coach: null, coachMessage: null, edit: null, draftTimer: null, lastCode: '', draftDirty: false, scopeCourseId: sessionStorage.getItem('sparktutor.scope') || '', notificationCursor: 0, operationId: '', depthExplicit: sessionStorage.getItem('sparktutor.depth') !== null };
-const names = { home: '学习工作台', courses: '课程目录', lesson: '课程学习', diagnosis: '学习画像', history: '学习历史', demo: '学习诊断示例', settings: '设置', data: '学习数据与备份', events: '学习行为记录' };
+const names = { home: '学习工作台', courses: '课程目录', lesson: '课程学习', diagnosis: '学习画像', history: '学习历史', demo: '学习诊断示例', settings: '设置', events: '学习行为记录', account:'我的账号', admin:'管理后台' };
 const eventNames = { code_submit: '提交判题', code_run: '运行代码', hint_request: '查看提示', code_edit: '编辑代码', task_start: '开始练习', task_complete: '完成步骤', solution_view: '查看答案', chat_request: '导师问答', lesson_loaded: '进入课程' };
 const statusNames = { not_started: '尚未开始', in_progress: '学习中', completed: '已完成', unavailable: '暂不可用' };
 let toastTimer;
@@ -59,7 +72,9 @@ async function rpc(method, params = {}, keepalive = false) {
   if(dependent.includes(method)&&state.lesson?.contextToken&&!Object.hasOwn(values,'contextToken'))values.contextToken=state.lesson.contextToken;
   const requestSession=session;
   const response=await fetch('/api/rpc',{method:'POST',headers:{'Content-Type':'application/json','X-SparkTutor-Token':token,'X-SparkTutor-Session':requestSession},body:JSON.stringify({method,params:values}),keepalive});
-  const data=await response.json();
+  let data;try{data=await response.json();}catch{throw new Error('学习空间连接暂时中断，公网地址可能已失效。请确认最新地址后刷新重试。');}
+  if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('学习服务暂时无法连接，请稍后刷新重试。');
+  if(response.status===401&&data.loginRequired){location.reload();throw new Error('登录已过期，请重新登录。');}
   if(data.sessionReset){if(session===requestSession){rotateSession(data.sessionId);queueMicrotask(()=>route());}throw new Error(data.error||'学习记录已清除，请重新开始。');}
   if(requestSession!==session)throw new Error('学习会话已更新，旧操作结果未应用。');
   if(!response.ok||data.error)throw new Error(data.error||'服务暂时不可用，请稍后重试。');return data.result;
@@ -98,7 +113,7 @@ function markdown(text = '') {
   flush(); closeList(); return html;
 }
 
-async function dashboard() { state.dashboard=await rpc('getLearningDashboard',{courseId:state.scopeCourseId}); return state.dashboard; }
+async function dashboard(courseId=state.scopeCourseId) { state.dashboard=await rpc('getLearningDashboard',{courseId}); return state.dashboard; }
 function dimensions() { return state.dashboard?.diagnosis?.dimensions || []; }
 function courseCard(course, index) {
   const progress = course.progress || {}; const done = progress.lessonsCompleted || 0; const started = progress.started;
@@ -113,10 +128,21 @@ function renderHome() {
       ['book','可探索课节',total,'课节'], ['check','已完成课节',done,'课节'], ['target','完成进度',`${Math.round(done / Math.max(total,1) * 100)}%`,''], ['route','学习路径',d.courses.length,'条路径']
     ].map(([symbol,label,value,unit]) => `<div class="stat"><span class="stat-icon">${icon(symbol)}</span><div><div class="stat-label">${label}</div><div class="stat-value">${value}<small>${unit}</small></div></div></div>`).join('')}</section>` +
     `<div class="home-grid"><section><div class="section-title"><div><span class="section-kicker">CURATED LEARNING PATHS</span><h2>找到你的下一步</h2><p>从核心概念出发，在实践中串起知识。</p></div><a class="text-link" href="#courses">全部课程 ${icon('arrowUp')}</a></div><div class="course-cards">${d.courses.map(courseCard).join('')}</div><div class="path-help"><span class="path-icon">${icon('route')}</span><div><strong>看懂，是开始。做出来，才是你的。</strong><p>阅读理解 <span>→</span> 动手编程 <span>→</span> 提交判题 <span>→</span> 回顾改进</p></div><a class="text-link" href="#history">学习足迹 ${icon('arrow')}</a></div></section><aside class="home-aside"><section class="panel diagnosis-mini"><div class="aside-heading"><span class="aside-icon">${icon('chart')}</span><h3>你的学习画像</h3><a class="icon-button" href="#diagnosis" aria-label="查看完整学习画像">${icon('arrowUp')}</a></div><p>每次练习，都让自己更清晰一点。</p><div class="dimension-overview">${dimensions().map((dim,i) => `<div class="dimension-summary"><div class="dimension-row"><span class="dimension-dot dot-${i}"></span>${esc(dim.name)}<strong>${pct(dim.score)}</strong></div><div class="dimension-meter ${dim.score == null ? 'no-evidence' : ''}"><span style="width:${dim.score == null ? 0 : Math.max(0,Math.min(100,dim.score))}%"></span></div></div>`).join('')}</div><p class="diagnosis-note">${diagnosis?.eventCount ? esc(diagnosis.diagnosis) : '画像随练习逐步建立。没有记录的维度保留「证据不足」，每一次进步都有迹可循。'}</p><a class="text-link" href="#diagnosis">了解我的学习状态 ${icon('arrow')}</a></section><section class="tool-card"><span class="tool-icon">${icon('spark')}</span><span class="tool-kicker">A LITTLE HELP GOES A LONG WAY</span><h3>卡住了？<br>换个角度，就有新思路。</h3><p>让 AI 导师陪你拆解问题，<br>在恰到好处的提示中找到答案。</p><a class="text-link" href="#settings">认识你的 AI 导师 ${icon('arrowUp')}</a></section></aside></div>`;
-  $('#content').insertAdjacentHTML('afterbegin',features.scopeControls()); $('#content').insertAdjacentHTML('beforeend',features.knowledgeSection());
+  const primary=$('.home-grid > section');
+  primary.classList.add('home-primary');
+  const knowledge=d.knowledgeComponents||diagnosis?.knowledgeComponents||{};
+  if(Object.values(knowledge).some(item=>item.evaluatedTasks>0)) primary.insertAdjacentHTML('beforeend',features.knowledgeSection());
+  const help=$('.home-aside > .tool-card');
+  if(help){help.classList.add('home-help-card');primary.append(help);}
+  const aside=$('.home-aside');
+  aside.insertAdjacentHTML('afterbegin','<section class="panel checkin-card" id="learning-checkin" aria-label="学习签到"></section>');
+  if (checkinPanel) checkinPanel.mount($('#learning-checkin'));
+  else $('#learning-checkin').innerHTML = `<div class="aside-heading"><span class="aside-icon">${icon('calendar')}</span><h3>学习签到</h3></div><p class="disclaimer">签到功能暂不可用，请管理员更新服务后再试。</p>`;
 }
 function renderCourses() {
   $('#content').innerHTML = heading('找到你的学习路径', '19 个课节，从 Spark 核心概念走向完整数据管道。') + `<div class="catalog-toolbar"><div class="chips"><button class="chip ${!state.courseFilter ? 'active' : ''}" data-action="course-filter" data-course="">全部课程</button>${state.dashboard.courses.map(c => `<button class="chip ${state.courseFilter === c.id ? 'active' : ''}" data-action="course-filter" data-course="${esc(c.id)}">${esc(c.title)}</button>`).join('')}</div><input class="search" id="course-search" type="search" placeholder="搜索课节…" aria-label="搜索课节" value="${esc(state.query)}"></div><div id="catalog-results"></div>`;
+  const resume = state.dashboard.resume;
+  $('.catalog-toolbar').insertAdjacentHTML('beforebegin',`<section class="panel catalog-resume"><div><strong>${resume ? '接着上次的进度学习' : '开始你的第一课'}</strong><p>${resume ? `${esc(resume.courseTitle)} · ${esc(resume.lessonTitle)}` : '在独立学习标签页阅读、做题与编程，随时切回查看其他页面。'}</p></div><button class="btn primary" data-action="resume">${resume ? '继续学习' : '开始学习'} ${icon('arrowUp')}</button></section>`);
   const depthSelect = document.createElement('select'); depthSelect.id = 'depth-select'; depthSelect.className = 'search'; depthSelect.setAttribute('aria-label','练习难度');
   depthSelect.innerHTML = [['beginner','入门 · 详细引导'],['intermediate','进阶 · 适量引导'],['advanced','挑战 · 独立完成']].map(([value,label])=>`<option value="${value}" ${state.depth === value ? 'selected' : ''}>${label}</option>`).join('');
   $('.catalog-toolbar').insertBefore(depthSelect,$('#course-search'));
@@ -152,7 +178,7 @@ function renderDiagnosis() {
   $('#content').insertAdjacentHTML('afterbegin',features.scopeControls()); $('#content').insertAdjacentHTML('beforeend',features.knowledgeSection());
 }
 
-function draftKey() { return `sparktutor.draft.${state.courseId}.${state.lesson?.lessonId}.${state.depth}.${state.lesson?.step?.id}`; }
+function draftKey() { return `${state.storagePrefix}draft.${state.courseId}.${state.lesson?.lessonId}.${state.depth}.${state.lesson?.step?.id}`; }
 function currentCode() { return window.activeSparkTutorEditor?.getValue() ?? $('#code-editor')?.value ?? state.lastCode ?? ''; }
 function currentAnswer() { return state.lesson?.step?.cls === 'mult_question' ? state.choice : currentCode(); }
 function rememberDraft() { if(!state.lesson?.step?.id)return true;try{localStorage.setItem(draftKey(),currentCode());return true;}catch{return false;} }
@@ -172,6 +198,16 @@ async function flushEdits() {
 }
 function draftIdentity(){return{courseId:state.courseId,lessonId:state.lesson?.lessonId,stepId:state.lesson?.step?.id,depth:state.depth,contextToken:state.lesson?.contextToken,draftRevision:state.lesson?.draftRevision};}
 function saveNavigation(){if(state.lesson)sessionStorage.setItem('sparktutor.lastLesson',JSON.stringify({courseId:state.courseId,lessonIdx:state.lessonIdx,depth:state.depth,practiceMode:Boolean(state.lesson.practiceMode),stepId:state.lesson.step?.id}));}
+function openStudyTab(request = null) {
+  if (isStudyTab && !request) { location.hash='lesson'; return; }
+  const tab = window.open('', `sparktutor-study-${accountUser||'local'}`);
+  if (!tab) { toast('浏览器拦截了学习标签页，请允许此网站打开新标签页后重试。',true); return; }
+  const url = new URL(location.pathname,location.origin);
+  url.searchParams.set('study','1');
+  url.hash = request ? `study/${encodeURIComponent(JSON.stringify(request))}` : 'lesson';
+  if (request || tab.location.href === 'about:blank') tab.location.href=url.href;
+  tab.focus();
+}
 async function loadLesson(courseId, index, depth = state.depth) {
   await flushEdits();
   const result = await rpc('loadLesson', {courseId, lessonIdx: Number(index), depth});
@@ -268,29 +304,57 @@ async function route(){
  try{
   if(state.busy){toast('当前操作正在进行，请等待完成。');return;}
   const localCopy=rememberDraft();
-  try{await flushEdits();}catch(error){if(!localCopy){toast('服务端与浏览器均未能保存，当前代码仍留在编辑器中。请先下载代码再离开。',true);return;}toast(`${error.message} 浏览器副本已保留，可在数据页下载后处理。`,true);}
-  const name=location.hash.slice(1)||'home';features.invalidate();destroyEditor();
+  try{await flushEdits();}catch(error){if(!localCopy){toast('服务端与浏览器均未能保存，当前代码仍留在编辑器中。请先下载代码再离开。',true);return;}toast(`${error.message} 浏览器副本已保留，请回到练习页重试保存或下载当前代码。`,true);}
+  const rawName=location.hash.slice(1)||'home';
+  const studyRequest=rawName.startsWith('study/')?JSON.parse(decodeURIComponent(rawName.slice(6))):null;
+  const name=window.SparkTutorAccount?.user.mustChange?'account':(studyRequest?'lesson':rawName);features.invalidate();checkinPanel?.destroy();destroyEditor();
   $('.sidebar').classList.remove('open');$('#menu-toggle').setAttribute('aria-expanded','false');
-  document.querySelectorAll('[data-nav]').forEach(link=>link.classList.toggle('active',link.dataset.nav===name||(name==='lesson'&&link.dataset.nav==='courses')||(name==='demo'&&link.dataset.nav==='settings')));
+  document.querySelectorAll('[data-nav]').forEach(link=>link.classList.toggle('active',link.dataset.nav===name||(name==='demo'&&link.dataset.nav==='settings')));
   $('#breadcrumb').textContent=name==='demo'?'设置 / 学习诊断示例':names[name]||'学习工作台';document.title=`${names[name]||'学习工作台'} · SparkTutor`;
   $('#content').innerHTML=loading();window.scrollTo(0,0);
-  if(['home','courses','diagnosis'].includes(name))await dashboard();if(version!==state.routeVersion)return;
+  if(['home','courses','diagnosis'].includes(name))await dashboard(name==='home'?'':state.scopeCourseId);if(version!==state.routeVersion)return;
   switch(name){
    case 'home':renderHome();break;case 'courses':renderCourses();break;case 'diagnosis':renderDiagnosis();break;
    case 'lesson':{
+    if(studyRequest){
+     let result;
+     if(studyRequest.recommended){result=await rpc('openRecommendedExercise',studyRequest.recommended);}
+     else {result=await rpc('loadLesson',{courseId:studyRequest.courseId,lessonIdx:Number(studyRequest.lessonIdx),depth:studyRequest.depth||state.depth});}
+     if(version!==state.routeVersion)return;
+     state.courseId=result.courseId||studyRequest.courseId;state.lessonIdx=result.lessonIdx??Number(studyRequest.lessonIdx);state.depth=result.depth||studyRequest.depth||state.depth;
+     acceptLesson(result,true);history.replaceState(null,'','#lesson');
+    }
     if(!state.lesson){let saved={};try{saved=JSON.parse(sessionStorage.getItem('sparktutor.lastLesson')||'{}');}catch{}
      const restored=await rpc('resumeWebLesson',saved);if(version!==state.routeVersion)return;
      if(restored.lesson){state.courseId=restored.courseId;state.lessonIdx=restored.lessonIdx;state.depth=restored.depth;acceptLesson(restored.lesson,true);}
      else if(saved.courseId&&!saved.practiceMode)await loadLesson(saved.courseId,saved.lessonIdx??saved.index,saved.depth);
+     else {
+      await dashboard();if(version!==state.routeVersion)return;
+      const resume=state.dashboard.resume,first=state.dashboard.courses[0];
+      if(resume)await loadLesson(resume.courseId,resume.lessonIdx,resume.depth);
+      else if(first)await loadLesson(first.id,0);
+     }
     }renderLesson();break;
    }
-   case 'history':await renderHistory();break;case 'settings':await renderSettings();break;case 'data':await features.renderData();break;case 'events':await features.renderEvents();break;case 'demo':renderDemo();break;default:location.hash='home';
+   case 'history':await renderHistory();break;case 'settings':await renderSettings();break;case 'data':location.hash='home';break;case 'events':await features.renderEvents();break;case 'demo':renderDemo();break;case 'account':window.SparkTutorAccount.renderAccount();break;case 'admin':await window.SparkTutorAccount.renderAdmin();break;default:location.hash='home';
   }
  }catch(error){if(version===state.routeVersion)$('#content').innerHTML=`<div class="panel route-error"><h2>这一步暂时没有完成</h2><p>${esc(error.message)}</p><button class="btn" data-action="refresh">重新加载</button></div>`;}
 }
 async function action(button) {
   const type = button.dataset.action;
   if (state.busy) return;
+  if (type === 'study-tab') { openStudyTab(); return; }
+  if (!isStudyTab && ['resume','load','course-start','recommended'].includes(type)) {
+    if (type === 'resume' && state.dashboard.resume) {
+      // Focusing the existing study window preserves its unsent answer and cursor.
+      openStudyTab(); return;
+    }
+    let request;
+    if (type === 'recommended') { const r=state.dashboard.diagnosis.recommendedExercise; request={recommended:{courseId:r.courseId,lessonId:r.lessonId,stepId:r.stepId,scopeCourseId:state.scopeCourseId}}; }
+    else if (type === 'load') request={courseId:button.dataset.course,lessonIdx:Number(button.dataset.index),depth:state.depth};
+    else {const c=state.dashboard.courses.find(c=>c.id===button.dataset.course)||state.dashboard.courses[0];const l=c.lessons.find(l=>l.status==='in_progress')||c.lessons.find(l=>l.status!=='completed')||c.lessons[0];request={courseId:c.id,lessonIdx:l.index,depth:state.depthExplicit?state.depth:(l.depth||state.depth)};}
+    openStudyTab(request); return;
+  }
   if (type === 'open-search') {
     if (location.hash === '#courses') $('#course-search')?.focus();
     else { state.focusSearch = true; location.hash = 'courses'; }
@@ -360,7 +424,7 @@ async function saveSettings(){return settingsPanel.save();}
 
 document.addEventListener('click', event => {
   if (!event.target.closest('.sidebar') && !event.target.closest('#menu-toggle')) { $('.sidebar').classList.remove('open'); $('#menu-toggle').setAttribute('aria-expanded','false'); }
-  const button = event.target.closest('[data-action]'); if (button) { action(button); return; }
+  const button = event.target.closest('[data-action]'); if (button) { if(button.tagName==='A')event.preventDefault(); action(button); return; }
   if (state.busy && event.target.closest('a[href^="#"]')) { event.preventDefault(); toast('当前操作正在进行，请等待完成。'); }
 });
 document.addEventListener('input', event => {
@@ -412,21 +476,23 @@ let draftFlush=Promise.resolve();
 const features=window.createSparkTutorFeatures({rpc,esc,state,heading,date,pct,toast,currentCode,
  refresh:async()=>{const busy=state.busy;state.busy=false;try{await route();}finally{state.busy=busy;}},rotateSession});
 const settingsPanel=window.createSparkTutorSettings?window.createSparkTutorSettings({rpc,esc,icon,toast,renderEnvironment:host=>features.renderEnvironment(host)}):null;
+const checkinPanel=window.createSparkTutorCheckIn?window.createSparkTutorCheckIn({rpc,esc,icon,toast}):null;
 function destroyEditor(){if(window.activeSparkTutorEditor){window.activeSparkTutorEditor.destroy();window.activeSparkTutorEditor=null;}}
 function rotateSession(newSessionId){
  clearTimeout(state.draftTimer);state.edit=null;state.draftDirty=false;state.lesson=null;state.lastCode='';state.operationId='';state.notificationCursor=0;state.busy=false;destroyEditor();
- for(const key of Object.keys(localStorage))if(key.startsWith('sparktutor.draft.'))localStorage.removeItem(key);
+ for(const key of Object.keys(localStorage))if(key.startsWith(`${state.storagePrefix||'sparktutor.'}draft.`))localStorage.removeItem(key);
  sessionStorage.removeItem('sparktutor.lastLesson');session=newSessionId||Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');sessionStorage.setItem('sparktutor.session',session);location.hash='home';
 }
 async function pollNotifications(){
+ if(window.SparkTutorAccount?.user.mustChange)return;
  if(state.polling)return;state.polling=true;
  try{
   const data=await rpc('pollWebNotifications',{after:state.notificationCursor});state.notificationCursor=data.cursor??state.notificationCursor;
   for(const item of data.notifications||[]){const params=item.params||{};
    if(item.method==='sessionReset'){rotateSession(params.sessionId);toast('学习记录已在另一标签页清除，请重新开始。');await route();break;}
    if(item.method==='lessonReset'){
-    const prefix=`sparktutor.draft.${params.courseId}.${params.lessonId}.`;
-    if(state.courseId===params.courseId&&state.lesson?.lessonId===params.lessonId&&state.draftDirty){try{localStorage.setItem(`sparktutor.recovery.${Date.now()}`,JSON.stringify({courseId:state.courseId,lessonId:state.lesson.lessonId,stepId:state.lesson.step?.id,code:currentCode()}));}catch{}}
+    const prefix=`${state.storagePrefix||'sparktutor.'}draft.${params.courseId}.${params.lessonId}.`;
+    if(state.courseId===params.courseId&&state.lesson?.lessonId===params.lessonId&&state.draftDirty){try{localStorage.setItem(`${state.storagePrefix||'sparktutor.'}recovery.${Date.now()}`,JSON.stringify({courseId:state.courseId,lessonId:state.lesson.lessonId,stepId:state.lesson.step?.id,code:currentCode()}));}catch{}}
     for(const key of Object.keys(localStorage))if(key.startsWith(prefix))localStorage.removeItem(key);
     if(state.courseId===params.courseId&&state.lesson?.lessonId===params.lessonId){const target={courseId:state.courseId,index:state.lessonIdx,depth:state.depth};state.lesson=null;state.edit=null;state.draftDirty=false;state.lastCode='';state.busy=false;state.operationId='';destroyEditor();sessionStorage.removeItem('sparktutor.lastLesson');toast('本课已在另一标签页重置，正在读取新进度。');if(location.hash==='#lesson')await loadLesson(target.courseId,target.index,target.depth);else await route();}
     continue;
@@ -439,5 +505,9 @@ async function pollNotifications(){
  finally{state.polling=false;}
 }
 async function beginOperation(){await pollNotifications();state.operationId=Array.from(crypto.getRandomValues(new Uint8Array(12)),v=>v.toString(16).padStart(2,'0')).join('');state.outputStarted=false;}
+if(window.SparkTutorAccount){
+ window.SparkTutorAccount.beforeLogout=async()=>{rememberDraft();await flushEdits();};
+ window.SparkTutorAccount.afterLogout=()=>{for(const key of Object.keys(localStorage))if(key.startsWith(state.storagePrefix))localStorage.removeItem(key);};
+}
 setInterval(pollNotifications,700);
 route();

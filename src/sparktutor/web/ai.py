@@ -104,6 +104,7 @@ class _SameOriginRedirect(HTTPRedirectHandler):
 class WebAiManager:
     def __init__(self, settings: Settings, *, secret_store=None, opener=None, anthropic_factory=None):
         self.settings = settings
+        self.use_environment = True
         self.path = Path(settings.data_dir) / "ai-settings.json"
         self.secret_store = secret_store or LocalSecretStore(Path(settings.data_dir) / "ai-secrets.dpapi")
         self.opener = opener or build_opener(_SameOriginRedirect()).open
@@ -155,6 +156,9 @@ class WebAiManager:
             "anthropicApiKey": self.settings.claude.get_api_key() or "",
             "remember": False,
         }
+        if not self.use_environment:
+            config.update(provider='auto',baseUrl='',model='',apiKey='',extraHeaders={},
+                          anthropicModel=self.settings.claude.model,anthropicApiKey='',remember=False)
         config.update(deepcopy(self._remembered))
         if config["provider"] not in PROVIDERS:
             config["provider"] = "auto"

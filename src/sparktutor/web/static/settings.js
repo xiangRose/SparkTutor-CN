@@ -57,7 +57,13 @@
           <p id="settings-storage-status" class="disclaimer" role="status"></p>
           <div class="inline-actions"><button class="btn primary" type="submit">保存设置</button><button class="btn" type="button" data-action="settings-test-main">检查导师连接</button><button class="btn" type="button" data-action="settings-test-coach">检查教练连接</button></div>
           <p class="disclaimer">连接检查只发送一条短测试消息，不发送题面或代码，也不计入学习、提交或求助记录。</p><div id="settings-connection-status" role="status" aria-live="polite"></div>
-        </form><aside class="settings-guidance"><section class="panel"><h2>连接状态如何理解</h2><p>返回正文说明接口能够生成回答；空正文、仅思考或截断回复会标记为尚未验证。认证、额度和网络问题会分别提示，可以手动重试。</p><p class="disclaimer">${esc(result.copilotMessage || 'GitHub Copilot 的模型接口属于 VS Code，独立网页请配置 Anthropic 或兼容模型服务。')}</p></section><section class="tool-card"><h3>学习数据与模型配置分开管理</h3><p>代码、进度与学习记录可以在数据管理中备份；模型密钥不会随学习数据导出。</p><a class="text-link" href="#data">管理学习数据 ${icon('arrow')}</a></section></aside></div>`;
+        </form><aside class="settings-guidance"><section class="panel"><h2>连接状态如何理解</h2><p>返回正文说明接口能够生成回答；空正文、仅思考或截断回复会标记为尚未验证。认证、额度和网络问题会分别提示，可以手动重试。</p><p class="disclaimer">${esc(result.copilotMessage || 'GitHub Copilot 的模型接口属于 VS Code，独立网页请配置 Anthropic 或兼容模型服务。')}</p></section></aside></div>`;
+      if (window.SparkTutorAppearance) target.insertAdjacentHTML('afterbegin',window.SparkTutorAppearance.panel());
+      if (window.SparkTutorAccount?.user.id) {
+        const mode=query('#execution-mode-select');
+        mode.value='dry_run';mode.disabled=true;
+        mode.insertAdjacentHTML('afterend','<small>多用户学习空间目前提供语法检查；真实 Spark 运行需要独立执行环境。语法检查不会运行代码，也不能通过要求真实执行的课程题。</small>');
+      }
       storageStatus();
       target.insertAdjacentHTML('beforeend', `<section class="panel settings-tools" aria-labelledby="settings-tools-title">
         <div class="section-title"><h2 id="settings-tools-title">辅助功能</h2></div>
