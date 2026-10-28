@@ -10,6 +10,10 @@ if (sessionStorage.getItem('sparktutor.activeUser') !== accountUser) {
   sessionStorage.setItem('sparktutor.activeUser',accountUser);
 }
 const isStudyTab = new URLSearchParams(location.search).get('study') === '1';
+if (!isStudyTab) {
+  sessionStorage.removeItem('sparktutor.studySession');
+  if (window.name.startsWith('sparktutor-study-')) window.name = '';
+}
 // A newly opened window inherits sessionStorage. Give learning its own server context.
 if (isStudyTab && !sessionStorage.getItem('sparktutor.studySession')) {
   sessionStorage.removeItem('sparktutor.session');
@@ -250,7 +254,7 @@ function showExecution(result, submission = false) {
   const dryRun = result.mode === 'dry_run';
   const explanation = dryRun ? '仅检查 Python 语法，未执行代码或课程测试，不代表答案正确。\n真实运行请在“环境与 AI 设置”中选择可用的 Spark 环境；运行代码不需要模型密钥。' : '';
   output.textContent = [explanation,result.stdout,result.stderr].filter(Boolean).join('\n') || (submission ? '本地检查已完成，请查看左侧反馈。' : '程序执行结束，没有输出。');
-  const mode = {local:'本机 Spark',lakehouse:'Docker Spark',docker:'Docker Spark',databricks:'Databricks',dry_run:'仅语法检查 · 未执行代码'}[result.mode] || result.mode || '本地检查';
+  const mode = {local:'本机 Spark',isolated:'账号隔离 Spark',lakehouse:'Docker Spark',docker:'Docker Spark',databricks:'Databricks',dry_run:'仅语法检查 · 未执行代码'}[result.mode] || result.mode || '本地检查';
   $('#execution-mode').textContent = `${mode}${Number.isInteger(result.exitCode) ? ` · exit ${result.exitCode}` : ''}`;
 }
 async function moveStep(method) {
@@ -343,7 +347,6 @@ async function route(){
 async function action(button) {
   const type = button.dataset.action;
   if (state.busy) return;
-  if (type === 'study-tab') { openStudyTab(); return; }
   if (!isStudyTab && ['resume','load','course-start','recommended'].includes(type)) {
     if (type === 'resume' && state.dashboard.resume) {
       // Focusing the existing study window preserves its unsent answer and cursor.

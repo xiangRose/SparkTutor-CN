@@ -135,6 +135,9 @@ class ServerHandler:
         state = self._runner.state
         task_id = self._task_id()
         payload = dict(data or {})
+        execution = state.last_exec
+        if event_type in {"code_run", "code_submit"} and execution is not None and execution.execution:
+            payload["execution"] = dict(execution.execution)
         step = state.current_step
         if step:
             payload.update({
@@ -469,6 +472,7 @@ class ServerHandler:
             "stderr": result.stderr,
             "mode": result.mode.value,
             "validationPassed": result.validation_passed,
+            **({"execution": dict(result.execution)} if result.execution else {}),
         }
 
     async def _submit(self, params: dict) -> dict:

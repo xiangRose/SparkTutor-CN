@@ -376,7 +376,7 @@ test('settings exposes diagnostic examples while the environment check is still 
  assert.equal(renderComplete,true);
 });
 
-test('account settings retain appearance and diagnostic examples while execution remains syntax-only',async()=>{
+test('account settings retain appearance and diagnostic examples when isolated execution is disabled',async()=>{
  const source=fs.readFileSync(path.join(assets,'settings.js'),'utf8');
  const mode={value:'local',disabled:false,notice:'',insertAdjacentHTML(position,html){this.notice+=html;}};
  const host={isConnected:true,innerHTML:'',querySelector:selector=>selector==='#execution-mode-select'?mode:null,
@@ -394,6 +394,26 @@ test('account settings retain appearance and diagnostic examples while execution
  assert.match(host.innerHTML,/<a\b[^>]*href="#demo"/);
  assert.ok(!host.innerHTML.includes('href="#data"'));
  assert.deepEqual(calls,['webSettings']);
+});
+
+test('managed account settings preserve isolated mode and report execution service readiness',async()=>{
+ const source=fs.readFileSync(path.join(assets,'settings.js'),'utf8');
+ const mode={value:'local',disabled:false,notice:'',insertAdjacentHTML(position,html){this.notice+=html;}};
+ const host={isConnected:true,innerHTML:'',querySelector:selector=>selector==='#execution-mode-select'?mode:null,
+  insertAdjacentHTML(position,html){this.innerHTML+=html;}};
+ const context={window:{location:{hash:'#settings'},SparkTutorAccount:{user:{id:'learner-account'}}},document:{querySelector:()=>null}};
+ vm.runInNewContext(source,context);
+ const calls=[];
+ const api=context.window.createSparkTutorSettings({rpc:async method=>{calls.push(method);
+  if(method==='getExecutionServiceStatus')return{enabled:true,ready:false,message:'隔离执行镜像未就绪'};
+  return{provider:'auto',resolvedProvider:'none',mode:'isolated',accountExecutionManaged:true,isolatedExecutionEnabled:true};
+ },esc:escape});
+ await api.render(host);
+ assert.equal(mode.value,'isolated');assert.equal(mode.disabled,true);
+ assert.ok(mode.notice.includes('每次提交在独立 Spark 环境运行'));
+ assert.ok(mode.notice.includes('隔离执行镜像未就绪'));
+ assert.ok(!mode.notice.includes('目前仅检查语法'));
+ assert.deepEqual(calls,['webSettings','getExecutionServiceStatus']);
 });
 
 test('a direct demo hash keeps the settings parent active and provides a working return route',async()=>{
@@ -421,4 +441,92 @@ test('moving the entry preserves both scenarios and modes and requires an explic
   assert.equal(view.state.busy,false);assert.equal(view.state.operationId,'');
  }
  assert.equal(view.calls.length,4);
+});
+
+function loginNavigationView(href,mustChangePassword=false){
+ const nodes={},events={},navigation=[];
+ for(const selector of ['#login-form','#login-submit','#login-message','#username','#display-name','#password'])nodes[selector]={value:'test-value',textContent:'',disabled:false,addEventListener:(name,handler)=>events[name]=handler};
+ const location={href,reload(){navigation.push({type:'reload',href:this.href});}};
+ vm.runInNewContext(fs.readFileSync(path.join(assets,'login.js'),'utf8'),{
+  document:{querySelector:selector=>nodes[selector],querySelectorAll:()=>[]},location,URL,
+  history:{replaceState(_state,_title,next){location.href=next;navigation.push({type:'replace',href:next});}},
+  localStorage:{setItem(){}},fetch:async()=>({ok:true,json:async()=>({user:{mustChangePassword}})})});
+ return{nodes,navigation,submit:()=>events.submit({preventDefault(){}})};
+}
+for(const scenario of [
+ {name:'ordinary login opens the learning dashboard',href:'http://example.test/#courses',hash:'#home'},
+ {name:'login from a former study tab opens the dashboard and removes study mode',href:'http://example.test/?lang=zh&study=1#lesson',hash:'#home'},
+ {name:'required password changes keep their account landing page without study mode',href:'http://example.test/?study=1#lesson',hash:'#account',mustChange:true},
+])test(scenario.name,async()=>{
+ const view=loginNavigationView(scenario.href,scenario.mustChange);await view.submit();
+ assert.deepEqual(view.navigation.map(item=>item.type),['replace','reload']);
+ const target=new URL(view.navigation[1].href);
+ assert.equal(target.hash,scenario.hash);assert.equal(target.searchParams.has('study'),false);
+ assert.equal(target.searchParams.get('lang'),new URL(scenario.href).searchParams.get('lang'));
+ assert.equal(view.nodes['#login-message'].textContent,'');assert.equal(view.nodes['#login-submit'].disabled,false);
+});
+function studyNavigationView({resume=null,tabHref='about:blank'}={}){
+ const app=fs.readFileSync(path.join(assets,'app.js'),'utf8'),opened=[],navigated=[],toasts=[];let focusCount=0;
+ const tab={location:{get href(){return tabHref;},set href(value){tabHref=value;navigated.push(value);}},focus(){focusCount++;}};
+ const location=new URL('http://example.test/#home');
+ const state={busy:false,depth:'advanced',depthExplicit:false,scopeCourseId:'core',dashboard:{resume,
+  courses:[{id:'core',lessons:[{index:0,status:'completed',depth:'beginner'},{index:1,status:'in_progress',depth:'intermediate'}]},
+   {id:'project',lessons:[{index:2,status:'not_started',depth:'advanced'}]}],
+  diagnosis:{recommendedExercise:{courseId:'project',lessonId:'pipeline',stepId:'filter'}}}};
+ const context=vm.createContext({state,location,isStudyTab:false,accountUser:'test-learner',URL,
+  window:{open:(...args)=>{opened.push(args);return tab;}},toast:(...args)=>toasts.push(args),
+  rpc:()=>{throw Error('The dashboard must leave lesson loading to its study tab.');}});
+ vm.runInContext(app.slice(app.indexOf('function openStudyTab('),app.indexOf('async function loadLesson(')),context);
+ vm.runInContext(app.slice(app.indexOf('async function action('),app.indexOf('async function saveSettings(')),context);
+ return{state,location,opened,navigated,toasts,focusCount:()=>focusCount,act:dataset=>context.action({dataset,disabled:false,innerHTML:'Learn'})};
+}
+test('dashboard learning entry points synchronously open a separate study tab and leave the dashboard in place',async()=>{
+ const cases=[
+  {dataset:{action:'resume'},request:{courseId:'core',lessonIdx:1,depth:'intermediate'}},
+  {dataset:{action:'load',course:'core',index:'4'},request:{courseId:'core',lessonIdx:4,depth:'advanced'}},
+  {dataset:{action:'course-start',course:'project'},request:{courseId:'project',lessonIdx:2,depth:'advanced'}},
+  {dataset:{action:'recommended'},request:{recommended:{courseId:'project',lessonId:'pipeline',stepId:'filter',scopeCourseId:'core'}}},
+ ];
+ for(const item of cases){
+  const view=studyNavigationView();const completion=view.act(item.dataset);
+  // Opening before the returned promise settles preserves browser user activation.
+  assert.equal(view.opened.length,1);assert.deepEqual(view.opened[0],['','sparktutor-study-test-learner']);
+  assert.equal(view.location.hash,'#home');assert.equal(view.navigated.length,1);
+  const target=new URL(view.navigated[0]);assert.equal(target.searchParams.get('study'),'1');
+  assert.deepEqual(JSON.parse(decodeURIComponent(target.hash.slice('#study/'.length))),item.request);
+  await completion;assert.equal(view.location.hash,'#home');assert.equal(view.focusCount(),1);assert.deepEqual(view.toasts,[]);
+ }
+});
+test('continue learning focuses the existing study tab without navigating away from its unsaved answer',async()=>{
+ const view=studyNavigationView({resume:{courseId:'core',lessonIdx:1},tabHref:'http://example.test/?study=1#lesson'});
+ const completion=view.act({action:'resume'});
+ assert.equal(view.opened.length,1);assert.deepEqual(view.navigated,[]);await completion;
+ assert.equal(view.focusCount(),1);assert.equal(view.location.hash,'#home');assert.equal(view.state.busy,false);
+});
+function appSessionView({search='',name='',values={}}={}){
+ const app=fs.readFileSync(path.join(assets,'app.js'),'utf8'),stored=new Map(Object.entries(values));
+ const context=vm.createContext({window:{name},location:{search},URLSearchParams,
+  document:{querySelector:selector=>({content:selector==='meta[name="sparktutor-user"]'?'test-learner':'test-token'})},
+  sessionStorage:{getItem:key=>stored.get(key)??null,setItem:(key,value)=>stored.set(key,String(value)),removeItem:key=>stored.delete(key)},
+  crypto:{getRandomValues:bytes=>{bytes.fill(9);return bytes;}}});
+ vm.runInContext(app.slice(0,app.indexOf('const state =')),context);
+ return{stored,name:context.window.name};
+}
+test('a former named study window releases its name on the dashboard and the next study tab gets an isolated session',()=>{
+ const initial={'sparktutor.activeUser':'test-learner','sparktutor.session':'former-study-session','sparktutor.studySession':'1','sparktutor.lastLesson':'saved-navigation'};
+ const dashboard=appSessionView({name:'sparktutor-study-test-learner',values:initial});
+ assert.equal(dashboard.name,'');assert.equal(dashboard.stored.has('sparktutor.studySession'),false);
+ assert.equal(dashboard.stored.get('sparktutor.session'),'former-study-session');
+ const study=appSessionView({search:'?study=1',name:'sparktutor-study-test-learner',values:Object.fromEntries(dashboard.stored)});
+ assert.notEqual(study.stored.get('sparktutor.session'),dashboard.stored.get('sparktutor.session'));
+ assert.equal(study.stored.get('sparktutor.studySession'),'1');assert.equal(study.stored.has('sparktutor.lastLesson'),false);
+ const refreshed=appSessionView({search:'?study=1',name:study.name,values:Object.fromEntries(study.stored)});
+ assert.equal(refreshed.stored.get('sparktutor.session'),study.stored.get('sparktutor.session'));
+ assert.equal(appSessionView({name:'unrelated-window',values:initial}).name,'unrelated-window');
+});
+test('the main sidebar keeps the dashboard and catalog without a study-tab navigation item',()=>{
+ const index=fs.readFileSync(path.join(assets,'index.html'),'utf8');
+ const primary=index.match(/<nav\b[^>]*aria-label="主导航"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
+ assert.ok(primary);assert.match(primary,/href="#home"[^>]*data-nav="home"/);assert.match(primary,/href="#courses"[^>]*data-nav="courses"/);
+ assert.ok(!primary.includes('data-nav="lesson"'));assert.ok(!primary.includes('data-action="study-tab"'));assert.ok(!primary.includes('学习标签页'));
 });

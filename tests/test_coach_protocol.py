@@ -86,7 +86,7 @@ def test_coach_protocol_ack_probe_and_navigation_preserve_assessment(tmp_path):
     with _server(tmp_path) as request:
         initial = request("getLearningCoach")
         assert initial["available"] is False
-        assert len(initial["exerciseOptions"]) == 2
+        assert len(initial["exerciseOptions"]) >= 5
         option = next(item for item in initial["exerciseOptions"] if item["stepId"] == "15")
         target = {key: option[key] for key in ("courseId", "lessonId", "stepId")}
         loaded = request("openCoachExercise", target)

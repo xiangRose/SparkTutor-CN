@@ -18,7 +18,7 @@ CODE = "def mnm_analysis(spark, file_path):\n    return None\n"
 
 @pytest.fixture
 def handler(tmp_path):
-    return ServerHandler(Settings(data_dir=tmp_path, execution_mode=ExecutionMode.LOCAL))
+    return ServerHandler(Settings(data_dir=tmp_path, execution_mode=ExecutionMode.LOCAL), workspace_path=tmp_path / "workspace")
 
 
 async def open_task(handler, sensor=False):
@@ -49,7 +49,8 @@ async def test_supported_state_has_real_task_metadata_and_unknown_evidence(handl
     manager = LearningCoachManager()
     empty = manager.get_state(handler)
     assert empty["available"] is False and empty["task"] is None and empty["reason"]
-    assert {item["stepId"] for item in empty["exerciseOptions"]} == {"15", "sensor_transfer"}
+    assert {"15", "sensor_transfer", "14", "practice-window-ranking", "13"}.issubset(
+        {item["stepId"] for item in empty["exerciseOptions"]})
     await open_task(handler)
     state = manager.get_state(handler)
     assert state["available"] and state["task"]["taskId"] == "01_getting_started:15"

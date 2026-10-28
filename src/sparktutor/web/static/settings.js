@@ -9,7 +9,7 @@
     let sequence = 0;
     const query = selector => host?.querySelector(selector);
     const providerNames = {auto:'自动选择',anthropic:'Anthropic','openai-compatible':'兼容接口',none:'尚未配置',copilot:'Copilot（仅 VS Code）'};
-    const executionModeNames = {auto:'自动检测',dry_run:'仅检查 Python 语法',local:'本机 Spark',lakehouse:'Docker Lakehouse',databricks:'Databricks Connect'};
+    const executionModeNames = {auto:'自动检测',dry_run:'仅检查 Python 语法',isolated:'账号隔离 Spark',local:'本机 Spark',lakehouse:'Docker Lakehouse',databricks:'Databricks Connect'};
     const selected = (current, value) => current === value ? ' selected' : '';
 
     function storageStatus() {
@@ -61,8 +61,15 @@
       if (window.SparkTutorAppearance) target.insertAdjacentHTML('afterbegin',window.SparkTutorAppearance.panel());
       if (window.SparkTutorAccount?.user.id) {
         const mode=query('#execution-mode-select');
-        mode.value='dry_run';mode.disabled=true;
-        mode.insertAdjacentHTML('afterend','<small>多用户学习空间目前提供语法检查；真实 Spark 运行需要独立执行环境。语法检查不会运行代码，也不能通过要求真实执行的课程题。</small>');
+        mode.value=result.mode||'dry_run';mode.disabled=true;
+        const message=result.isolatedExecutionEnabled
+          ? '执行方式由服务器管理：每次提交在独立 Spark 环境运行，只处理当前账号和题目的作业。环境故障、资源繁忙或超时不会记为通过。'
+          : '管理员尚未启用账号隔离执行服务，目前仅检查语法，不能通过要求真实执行的课程题。';
+        mode.insertAdjacentHTML('afterend',`<small>${esc(message)}</small>`);
+        if(result.isolatedExecutionEnabled){
+          const status=await rpc('getExecutionServiceStatus');
+          mode.insertAdjacentHTML('afterend',`<p class="disclaimer" role="status">${esc(status.message||'执行服务状态尚未确认。')}</p>`);
+        }
       }
       storageStatus();
       target.insertAdjacentHTML('beforeend', `<section class="panel settings-tools" aria-labelledby="settings-tools-title">

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "coach-catalog-protocol-cases-v1",
+  "provenance": {
+    "authorConstructed": true,
+    "realLearnerData": false,
+    "modelCalled": false,
+    "authoredAfterNodeDefinitions": true,
+    "usedToDesignAuthorNodes": false,
+    "purpose": "Fresh routing and contract regression; simulated selections do not measure model diagnosis semantics."
+  },
+  "nodeDefinitionSha256": {
+    "01_getting_started\\coach.yaml": "9b67fb4593a6a6cac2c03498ffa10e935ae3f1644dff9120dc7ed94220091fd2",
+    "02_dataframes_schemas\\coach.yaml": "0e56a1898085e4910b355496bff5959a6bd37d5ee9739a7706b59f000723f4ca",
+    "04_external_sources_hof\\coach.yaml": "150e23e347e56dd0fe948e41a3bb3d6a4df75f7b01b3710b5adc06bb863c13e6",
+    "07_join_strategies\\coach.yaml": "beae9f4127d7b56196ceb1d32402b88eb9dbfe817efbdca858491d702794db22",
+    "11_diagnosis_practice\\coach.yaml": "9f08a08313eb0cf448e2594b3ab4bcce65b7ee15a3194240434537629b9ba5ca"
+  },
+  "cases": [
+    {
+      "id": "schema-preserve-cold-rows",
+      "lessonId": "02_dataframes_schemas",
+      "stepId": "14",
+      "topic": "schema",
+      "code": "def build_blogs_df(spark):\n    return spark.createDataFrame(DATA).where(\"Hits > 10000\")\n",
+      "simulatedSelection": "computed_column_preserves_rows",
+      "foreignSelection": "window_partition_scope",
+      "courseId": "learning_spark"
+    },
+    {
+      "id": "window-new-areas",
+      "lessonId": "04_external_sources_hof",
+      "stepId": "practice-window-ranking",
+      "topic": "window",
+      "code": "def rank_orders(df):\n    from pyspark.sql import functions as f, Window\n    return df.withColumn(\"region_rank\", f.rank().over(Window.orderBy(f.col(\"total\").desc())))\n",
+      "simulatedSelection": "window_partition_scope",
+      "foreignSelection": "schema_column_types",
+      "courseId": "learning_spark"
+    },
+    {
+      "id": "join-unobserved-plan",
+      "lessonId": "07_join_strategies",
+      "stepId": "13",
+      "topic": "join",
+      "code": "def join_comparison(spark):\n    broadcast_plan = \"not observed\"\n    smj_plan = \"not observed\"\n    return None, None, broadcast_plan, smj_plan\n",
+      "simulatedSelection": "join_plan_mismatch",
+      "foreignSelection": "window_tie_semantics",
+      "courseId": "learning_spark"
+    },
+    {
+      "id": "orders-unmatched-new-keys",
+      "lessonId": "07_join_strategies",
+      "stepId": "join-cardinality-lab",
+      "topic": "join",
+      "code": "def enrich_orders(orders, profiles):\n    return orders.join(profiles, \"customer_id\", \"inner\")\n",
+      "simulatedSelection": "left_rows_lost",
+      "foreignSelection": "schema_column_types",
+      "courseId": "learning_spark"
+    },
+    {
+      "id": "plan-same-operator-twice",
+      "lessonId": "07_join_strategies",
+      "stepId": "join-plan-lab",
+      "topic": "join",
+      "code": "def compare_plans(facts, dimension):\n    first = facts.join(dimension, \"customer_id\", \"left\")\n    return first, first\n",
+      "simulatedSelection": "join_plan_mismatch",
+      "foreignSelection": "threshold_boundary",
+      "courseId": "learning_spark"
+    },
+    {
+      "id": "visits-legitimate-identical-facts",
+      "lessonId": "07_join_strategies",
+      "stepId": "join-cardinality-transfer",
+      "topic": "join",
+      "code": "def enrich_visits(visits, page_versions):\n    return visits.join(page_versions, \"page_id\", \"left\").dropDuplicates()\n",
+      "simulatedSelection": "output_deduplication",
+      "foreignSelection": "window_sort_direction",
+      "courseId": "learning_spark"
+    }
+  ]
+}

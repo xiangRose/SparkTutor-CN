@@ -1,0 +1,78 @@
+schemaVersion: coach-catalog-v1
+tasks:
+- stepId: '14'
+  topic: schema
+  contract: build_blogs_df(spark) 用提供的六行 DATA 和显式 schema 构建 DataFrame，保留全部原行和原列，新增 boolean 的 Big_Hitter；Hits 严格大于
+    10000 时为真，Campaigns 为字符串数组。
+  knowledgeComponents:
+  - dataframe.schema
+  - dataframe.with_column
+  - dataframe.array
+  validation:
+    kind: course_tests
+    guidance: 修改后提交当前练习，使用课程保留的原始断言验证；运行成功、小样例或模型判断不能代替课程通过。
+  hypotheses:
+    schema_column_types:
+      summary: 可能需要检查列名、列顺序或显式数据类型
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 题目约定的列名和类型，与实际 schema 哪一项不同？
+        guidance: 将输入字段与实际 DataFrame schema 逐列对照，特别区分单个字符串与字符串数组。
+        reflection: 样例能创建成功，不代表每列类型符合接口约定。
+      - question: 哪一个字段最适合先独立核查类型？
+        guidance: 先检查一个整数列和一个数组列的实际类型，再回到显式 schema 定义。
+        reflection: 不要通过把所有值转成字符串来掩盖类型不符。
+      - question: 如果某字段表示多个活动名，它应是一个值还是一列数组？
+        guidance: 选一行同时包含两个活动名的数据，核对数组元素类型和原值是否保留。
+        reflection: 这是字段级检查；完整返回列和全部数据仍须课程测试验证。
+    computed_column_preserves_rows:
+      summary: 可能把添加布尔列误写成筛选记录
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 这一步要求增加信息，还是删除不满足阈值的行？
+        guidance: 先比较输入与输出行数，确认低点击记录仍然存在。
+        reflection: 增加一列与筛选一部分行是不同的数据变换。
+      - question: 一条不满足条件的记录，在输出中应该去哪？
+        guidance: 保留一条低点击记录，预测它的布尔值，再检查实际输出是否还有这条记录。
+        reflection: 只留下布尔值为真的记录会改变原数据范围。
+      - question: 两行数据一高一低时，输出应有多少行？
+        guidance: 手算新增列的两个布尔值，检查输出是否保留两条原记录和全部原列。
+        reflection: 不要用重新造表或去重替代对原数据的列变换。
+    threshold_boundary:
+      summary: 可能遗漏严格大于阈值的边界
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 题目写的是大于，还是大于等于？
+        guidance: 找到临界值的那条记录，先用自然语言判断它是否符合条件。
+        reflection: 一般样例正确也可能遗漏恰好等于阈值的情况。
+      - question: 能否同时检查阈值之前、恰好阈值和阈值之后？
+        guidance: 只改变一个数值，分别预测三个布尔结果，再核对实际列。
+        reflection: 不要从某一条高值为真推断边界比较正确。
+      - question: 严格大于条件在恰好等于时应该怎样？
+        guidance: 把条件读成一句完整的话，检查临界记录的布尔类型和值。
+        reflection: 局部边界核对后仍需验证列类型和原数据完整性。
+    uncertain:
+      summary: 现有证据不足，先比较预期与实际再提出假设
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: Schema 和计算列任务中，哪项实际结果与题目要求不同？
+        guidance: 先选最小输入，写出预期输出，再查看当前真实执行结果；没有运行结果就保留未知。
+        reflection: 最近输出可能属于旧代码；不能仅凭历史失败断定当前代码仍有同样错误。
+      - question: 如何只改变一个条件，区分两个可能原因？
+        guidance: 保留其他输入和逻辑，选择一个与题目契约直接相关的边界检查。
+        reflection: 一次修改多处会失去定位依据；记录是哪项检查支持或排除了假设。
+      - question: 这次检查已经验证了什么，还有什么未知？
+        guidance: 将手算或小样例观察与课程原始测试结果分开记录，修复后再提交。
+        reflection: 局部样例不等于完整题目通过；不要把代码未报错当作满足任务契约。

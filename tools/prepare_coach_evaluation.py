@@ -31,6 +31,19 @@ REVIEW_FIELDS = (
 )
 
 
+def fingerprint_source_paths() -> tuple[str, ...]:
+    """Freeze prompt/parser, client, tool, and curriculum inputs together."""
+    paths = set(SOURCE_PATHS)
+    paths.update(path.relative_to(ROOT).as_posix() for path in (ROOT / "src/sparktutor/engine").rglob("*")
+                 if path.is_file() and path.suffix in {".py", ".json", ".yaml"})
+    paths.update(path.relative_to(ROOT).as_posix() for path in (ROOT / "src/sparktutor/courses").rglob("*")
+                 if path.is_file() and path.suffix in {".py", ".json", ".yaml"})
+    paths.update(name for name in ("src/sparktutor/web/ai.py", "src/sparktutor/config/settings.py",
+                                 "tools/prepare_coach_evaluation.py", "tools/run_coach_evaluation.py",
+                                 "tools/summarize_coach_evaluation.py") if (ROOT / name).is_file())
+    return tuple(sorted(paths))
+
+
 def _json_bytes(value: object) -> bytes:
     return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
@@ -60,12 +73,15 @@ def _validate_cases(document: dict) -> list[dict]:
     return cases
 
 
-def prepare(output: Path, *, model: str = "unknown", seed: int = 0, repeats: int = 3) -> dict:
+def prepare(output: Path, *, model: str = "unknown", seed: int = 0, repeats: int = 3,
+            include_matched_evidence: bool = False) -> dict:
     """Write a new preparation directory, refusing any existing destination."""
     if type(repeats) is not int or not 1 <= repeats <= 1000:
         raise ValueError("repeats must be an integer from 1 to 1000.")
     if type(seed) is not int:
         raise ValueError("seed must be an integer for plan ordering only.")
+    if type(include_matched_evidence) is not bool:
+        raise ValueError("include_matched_evidence must be boolean.")
     model = model.strip()
     if not model:
         raise ValueError("model must be a nonempty label or 'unknown'.")
@@ -75,11 +91,12 @@ def prepare(output: Path, *, model: str = "unknown", seed: int = 0, repeats: int
     rng = random.Random(seed)
     pairs = [(case["id"], repeat) for repeat in range(1, repeats + 1) for case in cases]
     rng.shuffle(pairs)
-    review_ids = [f"review-{index:04d}" for index in range(1, len(pairs) * 2 + 1)]
+    selected_conditions = ["Tutor", "Coach"] + (["MatchedTutor"] if include_matched_evidence else [])
+    review_ids = [f"review-{index:04d}" for index in range(1, len(pairs) * len(selected_conditions) + 1)]
     rng.shuffle(review_ids)
     plan = []
     for case_id, repeat in pairs:
-        conditions = ["Tutor", "Coach"]
+        conditions = list(selected_conditions)
         rng.shuffle(conditions)
         for condition in conditions:
             index = len(plan) + 1
@@ -105,10 +122,10 @@ def prepare(output: Path, *, model: str = "unknown", seed: int = 0, repeats: int
         "caseSet": {"source": CASES_PATH.relative_to(ROOT).as_posix(),
                     "schemaVersion": document["schemaVersion"], "sha256": _sha256(raw_cases),
                     "caseCount": len(cases)},
-        "sourceFingerprints": {name: _sha256((ROOT / name).read_bytes()) for name in SOURCE_PATHS},
-        "plan": {"requestCount": len(plan), "conditions": ["Tutor", "Coach"],
+        "sourceFingerprints": {name: _sha256((ROOT / name).read_bytes()) for name in fingerprint_source_paths()},
+        "plan": {"requestCount": len(plan), "conditions": selected_conditions,
                  "repeatsPerCaseAndCondition": repeats, "orderingSeed": seed,
-                 "orderPolicy": "shuffle case/repeat pairs; randomize adjacent Tutor/Coach order",
+                 "orderPolicy": "shuffle case/repeat blocks; randomize conditions within each adjacent block",
                  "orderingSeedIsModelSeed": False, "coachStartingLevel": 1},
         "model": {"requestedId": model, "resolvedId": "unknown", "provider": "unknown",
                   "fixedSnapshot": "unknown", "selectionVerified": False},
@@ -152,9 +169,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", default="unknown", help="Unverified model label; default: unknown.")
     parser.add_argument("--seed", type=int, default=0, help="Randomize plan order only; does not set a model seed.")
     parser.add_argument("--repeats", type=int, default=3, help="Repetitions per case per condition; default: 3.")
+    parser.add_argument("--include-matched-evidence", action="store_true",
+                        help="Add a separately labelled same-evidence free-text Tutor condition (108 items by default).")
     args = parser.parse_args(argv)
     try:
-        manifest = prepare(args.output, model=args.model, seed=args.seed, repeats=args.repeats)
+        manifest = prepare(args.output, model=args.model, seed=args.seed, repeats=args.repeats,
+                           include_matched_evidence=args.include_matched_evidence)
     except (ValueError, OSError) as error:
         parser.error(str(error))
     print(f"Prepared {manifest['plan']['requestCount']} planned requests in {args.output}; evaluation not run; no model calls.")

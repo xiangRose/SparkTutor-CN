@@ -339,3 +339,148 @@
     广播、排序合并等策略决定引擎怎样执行，不应改变同一查询的业务结果。
     是否广播取决于统计信息、关联条件和资源；hints 也需要通过计划验证。
     本课小数据用于观察算子，不足以证明生产性能优劣。下一课转向持续到来的数据。
+
+- Class: text
+  Id: join-lab-introduction
+  Depth: all
+  Output: |
+    ## 专题实验：Join 行数为什么突然变多？
+
+    下面用三个独立任务深入一个常见 Spark 问题：事实表关联版本化维表后，记录意外膨胀。
+    先预测行数和构造反例，修复业务语义，再比较真实物理计划，最后换一个业务情境检验迁移。
+
+    假设有两条 customer_id=7 的订单，维表有该客户的两个历史版本。
+    直接关联会让每条订单分别匹配两个版本；broadcast 提示只能改变执行策略，不会帮你选最新版本。
+    也不能对最终结果粗暴去重，因为输入中的重复事实本来就要求保留。
+
+    本实验的业务规则是“使用当前最新维度”，不是按订单发生时间回溯历史版本的 SCD/as-of join。
+    同一键的最新版本按 updated_at 降序、version 降序确定；两者组合在每个键内唯一。
+    SQL 的普通空键不互相匹配，未匹配行要保留。实验只验证正确性和计划，不给出生产性能提升结论。
+
+- Class: mult_question
+  Id: join-cardinality-prediction
+  Depth: all
+  KnowledgeComponents: [dataframe.join]
+  Context: orders_latest_profile
+  Output: |
+    两条订单都属于客户7，客户维表也有该客户的两条历史记录。直接在 customer_id 上做普通等值关联，会得到多少行？
+  AnswerChoices: 4行，每条订单匹配两个维表版本;2行，Spark会自动选择最新记录;0行，重复键会被自动拒绝
+  CorrectAnswer: 4行，每条订单匹配两个维表版本
+  Hint: 对每条左表记录，分别数右表能够匹配的记录数。
+
+- Class: script
+  Id: join-cardinality-lab
+  Depth: all
+  RequiresExecution: true
+  ExerciseTitle: 修复版本维表造成的 Join 行数膨胀
+  KnowledgeComponents: [dataframe.join, dataframe.window]
+  DiagnosisTargets: [knowledge, debugging]
+  Context: orders_latest_profile
+  StarterCode: join_cardinality_starter.py
+  SolutionCode: join_cardinality_solution.py
+  Output: |
+    ## 实验一：保留事实行，先选最新维表
+
+    实现 `enrich_orders(orders, customer_history)`。
+
+    **输入、输出与通过条件**
+
+    orders 列为 order_id、customer_id、amount；customer_history 列为 customer_id、segment、updated_at、version。
+    数值列都是 LONG，segment 为 STRING；customer_id 可以为空。同一客户的 (updated_at, version) 组合唯一。
+    每个客户选择 updated_at 最大的版本，时间相同时选择 version 最大的版本，然后做普通等值左关联。
+    返回列顺序必须为 order_id、customer_id、amount、segment。
+
+    - 每一条订单输入行都要保留，包括完全重复的事实行；输出总行数必须等于订单输入行数。
+    - 未匹配客户与空客户键保留，segment 为 null；普通 null 键不与维表 null 键匹配。
+    - 维表为空、订单为空时，也要保留正确列和类型。
+    - 不允许通过对最终结果 dropDuplicates 来掩盖错误，也不能依赖维表输入的先后顺序。
+
+    先用两条订单和两个历史版本手算直接 Join 的行数，再修改实现。
+    可以用 Window.partitionBy、row_number 与明确的排序规则处理每个维度键。
+    课程原始断言会检查多个数据组合，并输出真实关联行数作为复盘证据。
+  Hint: 先检查右表每个键有几个版本，再定义“最新”的完整排序；选择维度记录和保留左表行是两件事。
+
+- Class: text
+  Id: join-plan-lab-introduction
+  Depth: all
+  Output: |
+    ## 实验二前：同样结果，真实计划可能不同
+
+    业务语义修复之后，才有资格讨论计算策略。对适用的小维表，可提出 broadcast 提示；
+    对等值关联，可对两侧提出 merge 提示。提示不代表任意输入、任意关联条件都保证适用。
+
+    这道题用唯一键小维表隔离策略因素。课程临时关闭 AQE 以固定观察条件，并在结束时恢复。
+    判题会从返回的 DataFrame 读取真实 executedPlan，不能靠返回写有算子名字的字符串通过。
+    两份结果必须内容完全相同，并保留重复事实与未匹配事实；不测量、也不声称速度提升。
+
+- Class: script
+  Id: join-plan-lab
+  Depth: all
+  RequiresExecution: true
+  ExerciseTitle: 相同左关联结果的真实物理计划对照
+  KnowledgeComponents: [dataframe.join, spark.broadcast]
+  DiagnosisTargets: [knowledge, debugging]
+  Context: join_physical_plans
+  Prerequisites:
+    - courseId: learning_spark
+      lessonId: 07_join_strategies
+      stepId: join-cardinality-lab
+  StarterCode: join_plan_starter.py
+  SolutionCode: join_plan_solution.py
+  Output: |
+    ## 实验二：核对 BroadcastHashJoin 与 SortMergeJoin
+
+    实现 `compare_join_plans(orders, profiles)`，返回字典 `{"broadcast": DataFrame, "merge": DataFrame}`。
+
+    **输入、输出与通过条件**
+
+    orders 列为 order_id、customer_id、amount；profiles 列为 customer_id、segment，非空客户键唯一。
+    两份结果都在 customer_id 上做普通等值 left join，列顺序为 order_id、customer_id、amount、segment。
+    broadcast 结果对小维表使用广播提示；merge 结果对两侧使用合并提示。
+
+    - 两份结果与原始事实的左关联内容完全一致，保留重复行、未匹配键与空键。
+    - 从实际 DataFrame 读取的物理计划分别包含 BroadcastHashJoin 和 SortMergeJoin。
+    - 不能返回同一份广播结果充当两种计划，不能修改全局自动广播阈值。
+
+    课程测试只在本题期间关闭 AQE 并恢复原设置，以便稳定观察算子。
+    本地小数据的计划对照不是性能基准；生产成本还需要数据规模、分布、统计信息和真实资源指标。
+  Hint: 先复核业务结果，再分别对小维表使用 broadcast 提示、对两侧使用 merge 提示；不要改全局阈值。
+
+- Class: script
+  Id: join-cardinality-transfer
+  Depth: all
+  RequiresExecution: true
+  ExerciseTitle: 将关联基数约束迁移到页面访问
+  KnowledgeComponents: [dataframe.join, dataframe.window]
+  DiagnosisTargets: [transfer, knowledge, debugging]
+  Context: visits_latest_page
+  Prerequisites:
+    - courseId: learning_spark
+      lessonId: 07_join_strategies
+      stepId: join-cardinality-lab
+  Transfer:
+    sources:
+      - courseId: learning_spark
+        lessonId: 07_join_strategies
+        stepId: join-cardinality-lab
+    context: visits_latest_page
+  StarterCode: join_transfer_starter.py
+  SolutionCode: join_transfer_solution.py
+  Output: |
+    ## 新情境：访问记录与页面最新分类
+
+    实现 `enrich_visits(visits, page_versions)`，把来源题中的基数与版本约束应用到新业务。
+
+    **输入、输出与通过条件**
+
+    visits 列为 visit_id、page_id、dwell_seconds；page_versions 列为 page_id、category、updated_at、version。
+    数值列都是 LONG，category 为 STRING；page_id 可为空。同一页面的 (updated_at, version) 组合唯一。
+    对每个页面选择 updated_at 最大、同一时间 version 最大的分类，普通等值左关联到访问事实。
+    返回列顺序为 visit_id、page_id、dwell_seconds、category。
+
+    保留输入的每一条访问行，包括完全重复行；未匹配和空键的分类为 null，普通空键不互相匹配。
+    空访问、空页面维表也要保留正确列类型。不能写死示例键、依赖输入排序或对输出粗暴去重。
+
+    先完成来源任务再首次提交，才构成迁移机会。首次失败后重试可以改善最近知识与调试证据，
+    不能将这次重试改写为新的首次迁移成功。参考答案查看的影响继续按既有规则记录。
+  Hint: 把来源题的“事实行应保留”和“每个维度键选一个最新版本”分别映射到当前列名。

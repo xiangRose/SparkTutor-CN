@@ -1,0 +1,137 @@
+schemaVersion: coach-catalog-v1
+tasks:
+- stepId: sensor_transfer
+  topic: aggregation
+  contract: '## 迁移：按站点和类型汇总传感器上报
+
+
+    M&M 练习按州和颜色汇总数量。现在，每条输入记录表示某站点某类传感器
+
+    的一个批次，其中 `reading_count` 是这个批次包含的上报条数。
+
+    请把分组、求和、筛选和排序应用到这个新业务场景。
+
+
+    **输入、输出与通过条件**
+
+
+    函数签名：`transfer_sensor_aggregation(spark, readings, target_site)`。
+
+    `readings` 是 `(site, sensor_type, reading_count)` 三元组列表，类型分别为
+
+    string、string、int；上报条数为非负整数。`target_site` 是要保留的站点字符串。
+
+    请以显式 Schema 创建 DataFrame，按 `site` 和 `sensor_type` 分组，
+
+    对 `reading_count` 求和，保留目标站点。
+
+
+    返回三列，顺序为 `site`（string）、`sensor_type`（string）、
+
+    `total_readings`（long）。按总上报条数降序排列；总数相同时，按类型名字升序排列。
+
+    找不到目标站点或输入为空时，返回具有相同列和类型的空 DataFrame。
+
+    注意：一行代表一个批次，统计行数不等于累计上报条数。
+
+
+    主样例中 north 的 temperature 为 10，humidity 和 pressure 都为 9，
+
+    因此输出类型顺序为 temperature、humidity、pressure。
+
+    测试还检查 south 站点、缺失站点、空输入及另一组数据，不能写死 north 或主样例结果。
+
+
+    请保留函数名、参数和测试区；用真实 Spark 运行全部断言。'
+  knowledgeComponents:
+  - dataframe.group_by
+  - dataframe.aggregate
+  validation:
+    kind: course_tests
+    guidance: 修改后提交当前练习，使用课程保留的原始断言验证；运行成功、小样例或模型判断不能代替课程通过。
+  hypotheses:
+    missing_group_key:
+      summary: 可能需要重新检查分组键是否完整
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 题目中，哪些属性共同决定一组数据？
+        guidance: 先用自然语言写出“一组”的含义，再对照输入列。
+        reflection: 是否存在地点相同但类别不同、仍应分开的记录？
+      - question: 只保留一个分组属性，会把哪些原本不同的组放到一起？
+        guidance: 手工画两行地点相同、类别不同的数据，比较预计组数与实际输出组数。
+        reflection: 把组数变化与某一个分组属性对应起来，再做一次局部修改。
+      - question: 例如（区域甲，类型 X）和（区域甲，类型 Y）应属于几组？
+        guidance: 这两行地点相同但类别不同；用这个局部例子检查分组是否保留了两种角色。
+        reflection: 示例不是完整答案；回到当前代码只修改分组相关部分，再用课程测试验证。
+    row_count_vs_quantity:
+      summary: 可能混淆了记录行数与每行代表的数量
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 一行表示一个对象，还是一个批次包含的数量？
+        guidance: 先区分“有几条记录”和“这些记录合计代表多少数量”。
+        reflection: 输出单位应该是行、批次，还是题目要求的数量？
+      - question: 如果两行记录中的数量都不是 1，统计行数和累计数量还会相同吗？
+        guidance: 选择一个很小的数量列表，先手算两种结果，再检查当前聚合表达式的含义。
+        reflection: 不要因为某一组巧合相等，就认定两种统计方式等价。
+      - question: 局部例子中两个批次各有 3 和 7 个对象，总共有几条记录、多少对象？
+        guidance: 记录行数是 2，数量之和是 10。用单位差异检查当前聚合，不需要重写整道题。
+        reflection: 可运行下方参考探针核查手算；它不会运行你的 Spark 实现或证明题目通过。
+    target_site_parameter:
+      summary: 可能需要检查筛选是否使用了目标站点参数
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 调用者改变目标站点参数时，输出应怎样变化？
+        guidance: 先辨认哪个输入来自函数参数，哪个只是题面示例里的取值。
+        reflection: 当前筛选是否意外依赖了固定的示例站点？
+      - question: 保持输入数据不变，只更换目标站点，会得到不同结果吗？
+        guidance: 列出两个不同目标站点的预期组，再检查筛选条件取值的来源。
+        reflection: 如果两次结果总相同，先查参数使用，再查聚合。
+      - question: 假设数据同时包含站点甲和乙，请求乙时应留下哪一组？
+        guidance: 这个局部例子只改变目标参数；不应把题面中的某个站点名字当成永远不变的规则。
+        reflection: 只修正参数与筛选的对应关系，然后验证另一个站点和缺失站点。
+    tie_break_order:
+      summary: 可能遗漏了总数相同时的排序规则
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 当两个类型的总数量相同时，题目是否还规定了先后顺序？
+        guidance: 先把主要排序规则和并列时的规则分开写出来。
+        reflection: 只比较总数，是否足以唯一确定输出顺序？
+      - question: 能否构造两个总数量相同、类型名字不同的组？
+        guidance: 先预测这两个组的顺序，再检查当前排序条件是否包含并列规则。
+        reflection: 一次碰巧符合预期，不等于已经定义了稳定的并列顺序。
+      - question: 两个类型的总数都为 9，名字分别为 alpha 和 beta，谁应先出现？
+        guidance: 按题目规定的名字升序，应先看到 alpha；该例只验证并列时的第二条排序规则。
+        reflection: 保留主要排序要求，只检查并列条件；完整通过仍由课程测试确认。
+    uncertain:
+      summary: 现有信息不足以定位问题，先收集可区分的证据
+      evidenceRequirements:
+        anyOf:
+        - task
+        - event
+      levels:
+      - question: 目前哪一条输出与题目要求不一致？
+        guidance: 先选一个最小输入，写出预期列、组数和数量；没有真实运行时，请把结果标为未知。
+        reflection: 不要从一次环境故障推断知识错误，也不要把运行成功当作提交通过。
+      - question: 怎样设计一次只改变一个条件的检查？
+        guidance: 在分组、数量单位、筛选和排序中先选一项核查，保留其他条件。
+        reflection: 记录具体差异后再请求下一层提示，避免同时修改多处而丢失判断依据。
+      - question: 能否用两行小数据说明预期与实际的差别？
+        guidance: 例如两个批次各含 3 和 7 个对象，可分别检查批次数和数量之和；这只是一个局部检查思路。
+        reflection: 若尚无可信运行结果，请先获取结果；该局部示例不能定位所有类型的错误。
+  probe:
+    kind: row_count_vs_quantity
+    allowedHypotheses:
+    - row_count_vs_quantity
+    - uncertain

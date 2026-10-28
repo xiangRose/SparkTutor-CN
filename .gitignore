@@ -6,6 +6,7 @@ node_modules/
 
 # Learning records, learner code, model secrets and machine-specific settings
 .sparktutor-web/
+.sparktutor-trusted-local/
 .sparktutor/
 .env
 .env.*
@@ -28,6 +29,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+/.trusted-local-*-tmp/
 .mypy_cache/
 .ruff_cache/
 .coverage
@@ -44,6 +46,7 @@ build/
 # Generated demonstration/evaluation reports and local editor files
 demo-output/
 coach-evaluation-output/
+output/
 .vscode/
 .idea/
 *.swp

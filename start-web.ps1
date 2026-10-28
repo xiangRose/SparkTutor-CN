@@ -3,22 +3,62 @@ param(
     [string]$ListenAddress = '0.0.0.0',
     [string]$PythonPath = '',
     [string]$DataDir = '',
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$TrustedLocal,
+    [switch]$IsolatedExecution,
+    [ValidateSet('Auto', 'Windows', 'WSL')][string]$Runtime = 'Auto'
 )
 
 $ErrorActionPreference = 'Stop'
+if ($IsolatedExecution -and ($TrustedLocal -or $DryRun)) { throw '-IsolatedExecution cannot be combined with -TrustedLocal or -DryRun.' }
+if ($TrustedLocal) {
+    if ($DryRun) { throw '-TrustedLocal cannot be combined with -DryRun.' }
+    if (-not $PSBoundParameters.ContainsKey('ListenAddress')) { $ListenAddress = '127.0.0.1' }
+    $trustedAddress = $null
+    $trustedLoopback = $ListenAddress -eq 'localhost' -or (
+        [Net.IPAddress]::TryParse($ListenAddress, [ref]$trustedAddress) -and
+        $trustedAddress.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetwork -and
+        [Net.IPAddress]::IsLoopback($trustedAddress)
+    )
+    if (-not $trustedLoopback) { throw '-TrustedLocal only accepts localhost or an IPv4 loopback address.' }
+}
 Set-Location -LiteralPath $PSScriptRoot
 $runtimeConfigurationPath = Join-Path $PSScriptRoot '.sparktutor-web/runtime.json'
+$runtimeConfiguration = $null
 if (-not $PythonPath -and (Test-Path -LiteralPath $runtimeConfigurationPath -PathType Leaf)) {
     try {
         $runtimeConfiguration = Get-Content -LiteralPath $runtimeConfigurationPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($runtimeConfiguration.pythonPath -isnot [string] -or [string]::IsNullOrWhiteSpace($runtimeConfiguration.pythonPath)) {
-            throw 'pythonPath must be a non-empty string.'
-        }
-        $PythonPath = $runtimeConfiguration.pythonPath
     } catch {
-        throw 'The saved Python configuration in .sparktutor-web/runtime.json is invalid. Correct it or use -PythonPath.'
+        throw 'The saved runtime configuration in .sparktutor-web/runtime.json is invalid. Correct it or use an explicit -Runtime and -PythonPath.'
     }
+}
+$selectedRuntime = $Runtime
+if ($Runtime -eq 'Auto') {
+    $selectedRuntime = if (-not $PythonPath -and $runtimeConfiguration.runtime -eq 'wsl') { 'WSL' } else { 'Windows' }
+}
+if ($selectedRuntime -eq 'WSL') {
+    $wslOptions = @{Port=$Port; ListenAddress=$ListenAddress; DryRun=$DryRun; TrustedLocal=$TrustedLocal}
+    $wslFields = @{
+        wslDistribution='Distribution'; wslPythonPath='PythonPath'; wslProjectPath='ProjectPath';
+        wslDockerHost='DockerHost'; wslDockerExecutable='DockerExecutable'; wslDockerService='DockerService';
+        wslExecutable='WslExecutable'; executorImage='ExecutorImage'
+    }
+    foreach ($field in $wslFields.Keys) {
+        if ($runtimeConfiguration -and $runtimeConfiguration.PSObject.Properties.Name -contains $field) {
+            if ($runtimeConfiguration.$field -isnot [string]) { throw "The runtime setting $field must be a string." }
+            $wslOptions[$wslFields[$field]] = $runtimeConfiguration.$field
+        }
+    }
+    if ($PythonPath) { $wslOptions.PythonPath = $PythonPath }
+    if ($DataDir) { $wslOptions.DataDir = $DataDir }
+    & (Join-Path $PSScriptRoot 'start-web-wsl.ps1') @wslOptions
+    exit $LASTEXITCODE
+}
+if (-not $PythonPath -and $runtimeConfiguration -and $runtimeConfiguration.PSObject.Properties.Name -contains 'pythonPath') {
+    if ($runtimeConfiguration.pythonPath -isnot [string] -or [string]::IsNullOrWhiteSpace($runtimeConfiguration.pythonPath)) {
+        throw 'The saved pythonPath must be a non-empty string.'
+    }
+    $PythonPath = $runtimeConfiguration.pythonPath
 }
 $candidates = @(
     (Join-Path $PSScriptRoot '.venv/Scripts/python.exe'),
@@ -57,6 +97,8 @@ try {
     $webArgs = @('-X', 'utf8', '-m', 'sparktutor', 'web', '--port', "$Port", '--host', $ListenAddress)
     if ($DryRun) { $webArgs = @('-X', 'utf8', '-m', 'sparktutor', '--dry-run', 'web', '--port', "$Port", '--host', $ListenAddress) }
     if ($DataDir) { $webArgs += @('--data-dir', $DataDir) }
+    if ($TrustedLocal) { $webArgs += '--trusted-local' }
+    if ($IsolatedExecution) { $webArgs += '--isolated-execution' }
     & $webPython @webArgs
     exit $LASTEXITCODE
 } finally {
