@@ -4,15 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="sparktutor-token" content="__API_TOKEN__">
+  <meta name="sparktutor-user" content="__USER_ID__">
+  <meta name="sparktutor-role" content="__USER_ROLE__">
+  <meta name="sparktutor-name" content="__USER_NAME__">
+  <meta name="sparktutor-password-change" content="__MUST_CHANGE_PASSWORD__">
   <meta name="theme-color" content="#172a27">
   <title>SparkTutor · Spark 学习工作台</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/features.css">
   <link rel="stylesheet" href="/settings.css">
+  <link rel="stylesheet" href="/appearance.css">
+  <link rel="stylesheet" href="/account.css">
+  <link rel="stylesheet" href="/checkin.css">
+  <script src="/appearance.js"></script>
   <script src="/vendor/editor.bundle.js" defer></script>
   <script src="/features.js" defer></script>
   <script src="/settings.js" defer></script>
+  <script src="/account.js" defer></script>
+  <script src="/checkin.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -22,14 +32,13 @@
     <nav aria-label="主导航">
       <a href="#home" data-nav="home"><span class="nav-icon" data-icon="grid" aria-hidden="true"></span>学习工作台</a>
       <a href="#courses" data-nav="courses"><span class="nav-icon" data-icon="book" aria-hidden="true"></span>课程目录<span class="nav-count">19</span></a>
+      <a href="?study=1#lesson" data-action="study-tab" data-nav="lesson"><span class="nav-icon" data-icon="code" aria-hidden="true"></span>学习标签页<span class="nav-count">↗</span></a>
       <a href="#diagnosis" data-nav="diagnosis"><span class="nav-icon" data-icon="chart" aria-hidden="true"></span>学习画像</a>
       <a href="#history" data-nav="history"><span class="nav-icon" data-icon="clock" aria-hidden="true"></span>学习历史</a>
       <a href="#events" data-nav="events"><span class="nav-icon" data-icon="code" aria-hidden="true"></span>行为记录</a>
-      <a href="#data" data-nav="data"><span class="nav-icon" data-icon="layers" aria-hidden="true"></span>数据与备份</a>
-      <a href="#demo" data-nav="demo"><span class="nav-icon" data-icon="play" aria-hidden="true"></span>诊断演示</a>
     </nav>
     <div class="sidebar-guide"><span class="tiny-star" data-icon="sprout" aria-hidden="true"></span><strong>给进步，一点生长的空间。</strong><p>不用一次掌握全部。<br>今天，比昨天多懂一点。</p><a href="#courses">去发现新的知识 <span data-icon="arrow" aria-hidden="true"></span></a></div>
-    <div class="sidebar-bottom"><a href="#settings" data-nav="settings"><span class="nav-icon" data-icon="settings" aria-hidden="true"></span>环境与 AI 设置</a><div class="profile"><span class="avatar">学</span><div>自主学习者<small>保持好奇，持续探索</small></div><span class="online-dot"></span></div></div>
+    <div class="sidebar-bottom"><a href="#settings" data-nav="settings"><span class="nav-icon" data-icon="settings" aria-hidden="true"></span>设置</a><div class="profile"><span class="avatar">学</span><div>自主学习者<small>保持好奇，持续探索</small></div><span class="online-dot"></span></div></div>
   </aside>
   <div class="workspace">
     <header class="topbar"><button id="menu-toggle" class="icon-button mobile-menu" aria-label="展开导航" aria-expanded="false"><span data-icon="menu" aria-hidden="true"></span></button><div class="breadcrumb">我的学习空间 <span>/</span> <strong id="breadcrumb">学习工作台</strong></div><div class="header-right"><button class="header-search" data-action="open-search" aria-label="搜索课程"><span data-icon="search" aria-hidden="true"></span><span>搜索课程</span><kbd>Ctrl K</kbd></button><span class="local-tag"><i></i> 学习空间已就绪</span><span class="mini-avatar">学</span></div></header>
