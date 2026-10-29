@@ -1,0 +1,49 @@
+:root{font-family:"Microsoft YaHei","PingFang SC",sans-serif;color:#2e2d29;background:#f5eee1}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+button,input{font:inherit}
+button{cursor:pointer}
+.login-page{min-height:100vh;background:#f5eee1}
+.login-shell{position:relative;isolation:isolate;display:flex;flex-direction:column;min-height:100vh;overflow:hidden;background:#f5eee1 url('/assets/guofeng-hero.png') center center/cover no-repeat}
+.login-shell::before{content:"";position:absolute;z-index:-1;inset:0;background:linear-gradient(90deg,#f8f1e8 0%,#f8f1e8ed 26%,#f8f1e8b0 40%,#f8f1e824 61%,transparent 78%)}
+.login-header,.login-footer{display:flex;align-items:center;justify-content:space-between;width:min(1480px,calc(100% - 120px));margin:0 auto}
+.login-header{min-height:88px}
+.login-brand{display:inline-flex;align-items:center;gap:10px;color:#282b28;text-decoration:none;font-size:1.42rem;letter-spacing:-.04em}
+.login-brand span{color:#d45b2f;font-size:2rem;line-height:1}
+.login-header-note{color:#776f62;font-family:"STSong","Songti SC",serif;font-size:.95rem;letter-spacing:.13em}
+.login-main{display:flex;align-items:center;flex:1;width:min(1480px,calc(100% - 120px));margin:0 auto;padding:20px 0 36px}
+.login-content{width:min(472px,45vw)}
+.login-introduction{margin:0 0 30px}
+.eyebrow,.login-card-kicker{color:#aa694d;font-size:.69rem;font-weight:700;letter-spacing:.22em}
+.login-introduction h1{margin:13px 0 11px;color:#2d2c28;font-family:"STSong","Songti SC","Noto Serif SC",Georgia,serif;font-size:clamp(2.8rem,4.3vw,4.3rem);font-weight:700;letter-spacing:-.045em;line-height:1.22}
+.login-introduction h1 em{font-style:normal;color:#bd552f}
+.login-introduction p{margin:0;color:#6f6b61;font-size:.9rem;line-height:1.9}
+.login-card{padding:25px 30px 24px;border:1px solid #dbcbb4;border-radius:16px;background:#fffcf5ee;box-shadow:0 20px 52px #64472b21,0 1px 1px #fff inset;backdrop-filter:blur(8px)}
+.login-card-header{display:flex;align-items:center;justify-content:space-between}
+.login-card-kicker{color:#bd8e72;font-size:.6rem;letter-spacing:.18em}
+.login-card h2{margin:6px 0 0;color:#2f2e2a;font-family:"STSong","Songti SC",Georgia,serif;font-size:1.78rem;line-height:1.3}
+.login-card-mark{display:grid;place-items:center;width:42px;height:42px;border:1px solid #e8d2b8;border-radius:50%;color:#d0643c;font-size:1.5rem}
+.login-intro{margin:7px 0 18px;color:#8b8378;font-size:.78rem;line-height:1.6}
+.login-tabs{display:flex;gap:24px;margin-bottom:20px;border-bottom:1px solid #e7ddce}
+.login-tabs button{padding:0 2px 11px;border:0;border-bottom:2px solid transparent;background:transparent;color:#90877b;font-size:.8rem;font-weight:600}
+.login-tabs button[aria-selected="true"]{border-color:#c85830;color:#b24c2b}
+.field{display:flex;flex-direction:column;gap:6px;margin:0 0 14px}
+.field[hidden]{display:none}
+.field label{color:#544d44;font-size:.77rem;font-weight:600}
+.field input{width:100%;height:43px;padding:0 13px;border:1px solid #dfd2c0;border-radius:8px;outline:0;background:#fffdf9;color:#302e29;font-size:.82rem;transition:border-color .16s,box-shadow .16s}
+.field input::placeholder{color:#aaa196}
+.field input:focus{border-color:#ca744f;box-shadow:0 0 0 3px #d87b4b23}
+.field small{color:#9c9182;font-size:.66rem}
+.account-message{min-height:1.3em;margin:0 0 8px;color:#b7492b;font-size:.72rem;line-height:1.5}
+.login-submit{display:flex;align-items:center;justify-content:space-between;width:100%;height:46px;padding:0 16px;border:1px solid #bc4e29;border-radius:8px;background:#c4542d;color:#fff9ef;font-size:.84rem;font-weight:700;letter-spacing:.06em;box-shadow:0 8px 18px #b24b2b30;transition:transform .16s,background .16s}
+.login-submit:hover{background:#af4223;transform:translateY(-1px)}
+.login-submit:disabled{opacity:.65;cursor:wait}
+.login-submit span{font-size:1.15rem;font-weight:400}
+.login-note{margin:13px 0 0;color:#968b7c;font-size:.68rem}
+.login-footer{min-height:54px;padding-bottom:15px;color:#8c8071;font-size:.69rem;letter-spacing:.04em}
+.login-footer span:last-child{font-size:.6rem;letter-spacing:.22em}
+@media(min-width:1600px){.login-shell{background-position:center 48%}.login-content{width:495px}.login-main{padding-bottom:50px}}
+@media(max-height:950px) and (min-width:1001px){.login-header{min-height:66px}.login-main{padding:0 0 8px}.login-introduction{margin-bottom:18px}.login-introduction h1{font-size:3.25rem;margin:9px 0 6px}.login-introduction p{line-height:1.65}.login-card{padding:20px 26px}.login-card .field{margin-bottom:10px}.login-tabs{margin-bottom:14px}.login-footer{min-height:38px;padding-bottom:7px}}
+@media(max-height:760px) and (min-width:1001px){.login-header{min-height:60px}.login-main{padding:4px 0 12px}.login-introduction{margin-bottom:16px}.login-introduction h1{font-size:2.9rem}.login-card{padding:19px 26px}.login-card .field{margin-bottom:9px}.login-tabs{margin-bottom:13px}.login-footer{min-height:36px;padding-bottom:5px}}
+@media(max-width:1000px){.login-shell{background-position:62% center}.login-shell::before{background:linear-gradient(90deg,#f8f1e8 0%,#f8f1e8ec 45%,#f8f1e877 72%,transparent)}.login-header,.login-footer,.login-main{width:calc(100% - 60px)}.login-content{width:min(460px,62vw)}.login-header-note{display:none}}
+@media(max-width:680px){.login-shell{min-height:100dvh;background-position:66% top;background-size:auto 430px}.login-shell::before{background:linear-gradient(180deg,#f8f1e8b0 0%,#f8f1e8d9 220px,#f8f1e8 410px)}.login-header,.login-footer,.login-main{width:calc(100% - 36px)}.login-header{min-height:66px}.login-main{display:block;padding:90px 0 30px}.login-content{width:100%}.login-introduction{margin-bottom:22px}.login-introduction h1{font-size:2.65rem}.login-introduction p{font-size:.82rem}.login-card{padding:23px 21px}.login-footer{gap:20px}.login-footer span:last-child{display:none}}

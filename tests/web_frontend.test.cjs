@@ -286,11 +286,11 @@ test('failed saving does not mark an unsaved execution selection as active',asyn
  assert.equal(view.toasts.length,0);
 });
 
-test('diagnostic examples are removed from primary navigation while settings keeps a discoverable parent link',()=>{
+test('diagnostic examples and behavior records stay out of primary navigation while settings lives in the account menu',()=>{
  const index=fs.readFileSync(path.join(assets,'index.html'),'utf8');
  const primary=index.match(/<nav\b[^>]*aria-label="主导航"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
- assert.ok(primary);assert.ok(!primary.includes('href="#demo"'));assert.ok(!index.includes('data-nav="demo"'));
- const settings=index.match(/<a\b[^>]*data-nav="settings"[^>]*>([\s\S]*?)<\/a>/)?.[1];
+ assert.ok(primary);assert.ok(!primary.includes('href="#demo"'));assert.ok(!primary.includes('href="#events"'));assert.ok(!index.includes('data-nav="demo"'));
+ const settings=index.match(/<div\b[^>]*id="account-popover"[^>]*>([\s\S]*?)<\/div>/)?.[1]?.match(/<a\b[^>]*href="#settings"[^>]*>([\s\S]*?)<\/a>/)?.[1];
  assert.equal(settings?.replace(/<[^>]+>/g,'').trim(),'设置');
 });
 

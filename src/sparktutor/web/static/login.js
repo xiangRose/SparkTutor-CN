@@ -10,8 +10,8 @@
   $('#confirm-password').required=mode==='register';$('#password').minLength=mode==='register'?10:1;
   $('#password').autocomplete=mode==='register'?'new-password':'current-password';
   $('#login-title').textContent=mode==='register'?'开启你的学习旅程':'欢迎回来';
-  $('#login-intro').textContent=mode==='register'?'创建账号，保存属于你的每一步进步。':'你的课程进度与练习代码，已为你留好位置。';
-  $('#login-submit').textContent=mode==='register'?'创建账号 →':'登录学习空间 →';$('#login-message').textContent='';
+  $('#login-intro').textContent=mode==='register'?'创建账号，保存属于你的每一步进步。':'继续上次的探索，接着写下你的答案。';
+  $('#login-submit').innerHTML=mode==='register'?'创建账号 <span aria-hidden="true">→</span>':'进入学习空间 <span aria-hidden="true">→</span>';$('#login-message').textContent='';
  }));
  $('#login-form').addEventListener('submit',async event=>{
   event.preventDefault();const button=$('#login-submit'),message=$('#login-message');

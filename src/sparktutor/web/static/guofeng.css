@@ -1,0 +1,36 @@
+:root{
+  --bg:#f6f0e3;--panel:#fffaf0;--ink:#282724;--muted:#776f63;--line:#ded3bf;
+  --green:#cb512a;--accent:#cb512a;--accent-soft:#f4dfce;--accent-deep:#9e371d;
+  --paper:#fbf5e8;--pine:#214a48;--gold:#cda260;--shadow-card:0 10px 28px #5b432016;
+}
+html,body{background:#f6f0e3;color:var(--ink)}
+body{background-image:radial-gradient(circle at 18% 12%,#fffaf3b8,transparent 34%),linear-gradient(90deg,#a66d3107 1px,transparent 1px),linear-gradient(#a66d3105 1px,transparent 1px);background-size:auto,44px 44px,44px 44px}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.32;z-index:-1;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.08'/%3E%3C/svg%3E")}
+h1,h2,h3,.brand,.course-card h3,.lesson-header h1{font-family:"STSong","Songti SC","Noto Serif SC",Georgia,serif}
+.sidebar{background:#f2eadb;color:#37342f;border-right:1px solid #d8cebc;box-shadow:none}
+.brand{color:#272724}.brand-mark{color:#db562e}.brand small,.space-label,.profile small{color:#81786b}.space-label span{border-color:#cbbca5;color:#9e603e}
+.sidebar nav{align-content:start}.sidebar nav a{min-height:44px!important;padding:11px 12px!important}
+nav a,.sidebar-bottom>a{color:#403c36}nav a:hover,.sidebar-bottom>a:hover{background:#eadfcd}nav a.active{background:#f0dac7;color:#b84021;box-shadow:inset 3px 0 #d14e29}
+.nav-count{background:#e4d7c3;color:#765f48}.sidebar-guide{background:linear-gradient(145deg,#efe2cd,#e8dbc5);border-color:#d3c2a7}.tiny-star,.sidebar-guide a{color:#bb4828}.sidebar-guide strong{color:#40382e}.sidebar-guide p{color:#827766}
+.profile{border-color:#d7c9b5;color:#36332e}.avatar,.mini-avatar{background:#d95831;color:#fff}.online-dot{background:#c95732}.account-popover{background:#fff9ec;color:#342f29;border-color:#d8c8af}.account-popover a:hover,.account-popover button:hover{background:#f3e2d0}
+.workspace,.topbar{background:transparent}.topbar{border-color:#ded3bf;background:#f8f2e7e8;backdrop-filter:blur(12px)}.breadcrumb strong{color:#4a4239}.header-search{background:#fffaf0;border-color:#d9cdb9;color:#766d61}.header-search:hover{border-color:#c95732}.header-search kbd{background:#efe5d4;border-color:#d8ccb8;color:#8c7b68}
+main{max-width:1540px}.page-heading .eyebrow,.section-kicker{color:#a66c48;letter-spacing:2.4px}.page-heading h1{color:#252421;font-weight:700}.page-heading p{color:#776f63}
+.hero{min-height:330px;padding:45px 48px;border-color:#dbcdb6;background:#f8f0e1 url('/assets/guofeng-hero.png') center/cover no-repeat;box-shadow:0 18px 50px #50381618}
+.hero::after{display:none}.hero-copy{max-width:54%;align-self:center}.hero .pill{background:#fff7e9c9;color:#a94728;border-color:#d8b89a}.hero .pill i{background:#d6532d}.hero h2{color:#252421;font-family:"STSong","Songti SC","Noto Serif SC",Georgia,serif;font-size:2.65rem;font-weight:700;line-height:1.28;text-shadow:0 1px #fff8}.hero h2 em{color:#c74b27}.hero p{color:#615b52;font-size:.85rem}.hero .btn.primary,.btn.primary{background:#cb512a;border-color:#cb512a;color:#fff8ee;box-shadow:0 6px 16px #a53f2527}.hero .btn.primary:hover,.btn.primary:hover{background:#b94323;border-color:#b94323}.hero .btn.subtle{color:#6d5748;background:#fff8eb91;border:1px solid #d8c9b4}.hero-art{visibility:hidden}
+.panel,.stat,.course-card,.lesson-item,.editor-panel{background:#fffaf0;border-color:#dfd3c0;box-shadow:var(--shadow-card)}.stats{margin-top:24px}.stat{border-radius:4px}.stat-icon{background:#f4dfce;color:#c14c28;border-color:#e7c7ae}.stat:nth-child(2) .stat-icon{background:#e6eee9;color:#2e655e;border-color:#ceded6}.stat:nth-child(3) .stat-icon{background:#f2e5c7;color:#a5782e;border-color:#e4d2aa}.stat:nth-child(4) .stat-icon{background:#e3eceb;color:#2e6660;border-color:#cbdcda}.stat-value{color:#332f2a}
+.course-card{border-radius:5px}.course-art{background:linear-gradient(135deg,#f0dfc4,#f8efdf)}.course-art.purple{background:linear-gradient(135deg,#dfe8df,#eef1e5)}.course-art .art-symbol{color:#cf5b33}.course-art.purple .art-symbol{color:#32625a}.course-art::after{border-color:#caa97a}.course-card-kicker{color:#a46c48}.course-card .btn{background:#f9ead8;border-color:#e6cbae;color:#a94425}.progress-track{background:#e8dece}.progress-track span{background:#cf552f}
+.checkin-card,.diagnosis-mini{background:#fffaf0}.aside-icon{background:#f2ddc8;color:#bf4928}.dimension-meter{background:#e7ddcd}.dimension-meter span{background:#cc552f}.tool-card{background:#eee2cf;border-color:#ddceb6}.tool-card .tool-icon,.tool-card .text-link{color:#ba4b2b}
+.catalog-resume{background:#f0dfcc;border-color:#dfc3a7}.catalog-resume-art .art-symbol{color:#c94e2a}.chip{background:#f7efe2;border-color:#dfd2bf;color:#70675a}.chip.active{background:#cc542f;color:#fff;border-color:#cc542f}.search,.field input,.field select,.scope-controls select{background:#fffaf0;border-color:#d9cdb9;color:#403a33}
+.lesson-item:hover{border-color:#ce6b49;transform:translateY(-1px)}.lesson-number{background:#f0dfcc;color:#b64626}.badge{background:#eadfca;color:#745f43}.badge.purple{background:#dfe9e4;color:#34625d}
+.dimension-card .score,.review-change strong{color:#bd4728}.notice{background:#f0e4d0;border-color:#dfc9aa;color:#6b5743}.notice.warning{background:#f6e0d1;border-color:#e4b89e;color:#85432e}.diagnosis-radar{background:linear-gradient(135deg,#fffaf0,#eee1cb)}.radar-value{fill:#cb512a35;stroke:#cb512a}.diagnosis-radar circle{fill:#cb512a}
+.history-motivation{background:linear-gradient(125deg,#253f3d,#315953);box-shadow:0 14px 35px #173d2c20}.history-motivation h2 strong{color:#f0b36d}.motivation-stats .btn{background:#d95b32;border-color:#d95b32;color:#fff}
+.editor-panel,.output-panel{border-radius:5px}.editor-toolbar,.output-heading,.help-tabs{background:#242b2d;color:#eee6d8;border-color:#343c3e}.editor-wrap,.code-editor,.cm-editor,.output-panel pre{background:#202629!important;color:#e6dfd1!important}.editor-actions .btn{border-color:#dacbb5}.feedback{background:#f1e6d4;border-color:#ddc5a6}
+.quick-search{background:#fffaf0;border-color:#d7c7b0}.quick-search>div:first-of-type{background:#f8efe1}.quick-search-results>button:hover{background:#f1dfcd}
+footer{border-color:#ddd0bd;color:#8b7e6c}
+
+/* The guofeng art direction stays parchment-led in both appearance modes. */
+html[data-theme="dark"]{color-scheme:light;--bg:#f6f0e3;--panel:#fffaf0;--ink:#282724;--muted:#776f63;--line:#ded3bf;--green:#cb512a;--accent:#cb512a;--accent-soft:#f4dfce;--accent-deep:#9e371d}
+html[data-theme="dark"] body{background:#f6f0e3;color:#282724}
+.login-page{background:#f5eddf!important}
+@media(max-width:980px){.hero{min-height:300px;background-position:62% center}.hero-copy{max-width:68%}.hero h2{font-size:2.1rem}}
+@media(max-width:700px){.sidebar{background:#f2eadb}.hero{min-height:390px;padding:30px 25px;background-position:70% center}.hero::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#f8f0e5f2 0 58%,#f8f0e566 82%,transparent)}.hero-copy{max-width:88%;position:relative;z-index:1}.hero h2{font-size:1.85rem}.hero p{max-width:75%}.course-art{height:120px}}

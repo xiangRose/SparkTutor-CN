@@ -1,6 +1,6 @@
 'use strict';
 
-window.createSparkTutorFeatures = function ({rpc,esc,state,heading,date,pct,toast,refresh,rotateSession,currentCode}) {
+window.createSparkTutorFeatures = function ({rpc,esc,state,date,pct,toast,refresh,rotateSession,currentCode}) {
   let sequence = 0;
   const label = {knowledge:'知识任务表现',debugging:'失败过程修复率',transfer:'首次迁移通过率',hint_dependency:'提示使用覆盖率'};
   const num = value => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -59,22 +59,6 @@ window.createSparkTutorFeatures = function ({rpc,esc,state,heading,date,pct,toas
     const blob=body instanceof Blob?body:new Blob([typeof body==='string'?body:JSON.stringify(body,null,2)],{type});
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
   }
-  async function renderEvents() {
-    const own=++sequence;
-    const [data,dashboard]=await Promise.all([rpc('getLearningEvents',{courseId:state.eventsCourse||'',latest:true,limit:200}),rpc('getLearningDashboard')]);
-    if(own!==sequence)return;
-    const eventLabels={session_start:'开始会话',session_end:'结束会话',lesson_loaded:'进入课程',task_start:'开始题目',task_complete:'完成题目',code_edit:'编辑代码',code_run:'运行代码',code_submit:'提交判题',hint_request:'请求提示',solution_view:'查看答案',chat_request:'导师问答',coach_probe:'核查教练样例'};
-    const metadataLabels={changeCount:'修改次数',addedChars:'新增字符',removedChars:'删除字符',burstDurationMs:'编辑时长',exitCode:'退出码',mode:'执行模式',assessmentSource:'评估来源',assessmentEligible:'有效评估',failureKind:'问题类型',passed:'是否通过',hintType:'提示类型',level:'提示层级',durationMs:'用时',reason:'说明'};
-    const format=(key,value)=>key.endsWith('Ms')&&typeof value==='number'?`${(value/1000).toFixed(1)} 秒`:typeof value==='boolean'?(value?'是':'否'):value;
-    const items=data.events.map(event=>{
-      const course=dashboard.courses.find(item=>item.id===event.courseId);
-      const lesson=course?.lessons?.find(item=>item.id===event.lessonId);
-      const identity=[course?.title||event.courseId,lesson?.title||event.lessonId].filter(Boolean).join(' · ');
-      const metadata=Object.keys(metadataLabels).filter(key=>Object.hasOwn(event.data||{},key)&&event.data[key]!==null&&event.data[key]!=='');
-      return `<article class="event-item behavior-item"><div class="behavior-heading"><strong>${esc(eventLabels[event.eventType]||event.eventType)}</strong><time>${date(event.timestamp)}</time></div>${identity?`<p class="behavior-context">${esc(identity)}</p>`:''}${metadata.length?`<dl class="event-metadata">${metadata.map(key=>`<div><dt>${esc(metadataLabels[key])}</dt><dd>${esc(format(key,event.data[key]))}</dd></div>`).join('')}</dl>`:''}</article>`;
-    }).join('');
-    document.querySelector('#content').innerHTML=heading('学习行为记录','查看必要的过程元数据，不展示代码、聊天原文或凭据。','<button class="btn" data-action="feature-events-refresh">刷新记录</button>')+`<div class="scope-controls"><label for="events-course">课程</label><select id="events-course">${options(dashboard.courses,state.eventsCourse||'')}</select><span>最近 ${data.events.length} / ${num(data.totalCount)} 条${data.hasMore?'；更多历史可在学习历史中按题目查看':''}</span></div><section class="panel behavior-panel"><div class="event-list behavior-list">${items||'<p class="disclaimer">尚无记录。</p>'}</div></section>`;
-  }
   function comparison(student,solution) {
     const left=String(student).split('\n'),right=String(solution).split('\n');
     // Bounded line diff: large exercises retain the side-by-side view without
@@ -111,7 +95,6 @@ window.createSparkTutorFeatures = function ({rpc,esc,state,heading,date,pct,toas
     if(type==='feature-trend')await loadTrend();
     if(type==='feature-trend-point')await trendPoint(Number(button.dataset.index));
     if(type==='feature-environment')await refreshEnvironment();
-    if(type==='feature-events-refresh')await renderEvents();
     if(type==='feature-editor-search')window.activeSparkTutorEditor?.search();
     if(type==='feature-editor-download')download(currentCode(),'sparktutor-exercise.py','text/x-python;charset=utf-8');
     if(type==='feature-reset-lesson'){
@@ -127,8 +110,7 @@ window.createSparkTutorFeatures = function ({rpc,esc,state,heading,date,pct,toas
   }
   async function handleChange(event) {
     if(event.target.id==='diagnosis-scope'){state.scopeCourseId=event.target.value;sessionStorage.setItem('sparktutor.scope',state.scopeCourseId);await refresh();return true;}
-    if(event.target.id==='events-course'){state.eventsCourse=event.target.value;await renderEvents();return true;}
     return false;
   }
-  return {scopeControls,knowledgeSection,historySupplement,renderEnvironment,renderEvents,comparison,coachDetails,coachEvidence,demoStage,difficultySelect,handleAction,handleChange,download,invalidate:()=>{sequence++;}};
+  return {scopeControls,knowledgeSection,historySupplement,renderEnvironment,comparison,coachDetails,coachEvidence,demoStage,difficultySelect,handleAction,handleChange,download,invalidate:()=>{sequence++;}};
 };

@@ -1,0 +1,42 @@
+.spark-pet{position:fixed;left:calc(100vw - 124px);top:calc(100dvh - 185px);width:var(--pet-width,112px);z-index:60;touch-action:none;user-select:none;filter:drop-shadow(0 8px 10px #59412638)}
+.spark-pet[hidden],.spark-pet-show[hidden],.spark-pet-menu[hidden],.spark-pet-tools[hidden]{display:none!important}
+.spark-pet-figure{position:relative;width:100%;aspect-ratio:174/248;cursor:grab;outline-offset:3px;touch-action:none}
+.spark-pet-figure:active,.spark-pet.is-dragging .spark-pet-figure{cursor:grabbing}
+.spark-pet-image{width:100%;height:100%;object-fit:contain;pointer-events:none;animation:pet-bob 3.4s ease-in-out infinite;transform-origin:50% 90%}
+.spark-pet[data-pose="wave"] .spark-pet-image{animation:pet-wave .65s ease-in-out 3}
+.spark-pet[data-pose="cheer"] .spark-pet-image{animation:pet-cheer .55s ease-in-out 4}
+.spark-pet[data-pose="sleep"] .spark-pet-image{animation:pet-sleep 2.8s ease-in-out infinite}
+.spark-pet-sparkle{position:absolute;right:6px;top:48px;color:#db8a3a;font-size:21px;opacity:0;pointer-events:none}
+.spark-pet[data-pose="cheer"] .spark-pet-sparkle{animation:pet-sparkle .9s ease-in-out infinite}
+.spark-pet-speech{position:absolute;right:calc(100% + 8px);top:20px;width:max-content;max-width:min(210px,55vw);padding:9px 13px;border:1px solid #dfc7a7;border-radius:14px 14px 3px 14px;background:#fff9ed;color:#694733;font-size:12px;line-height:1.5;box-shadow:0 5px 16px #5941261d;transition:opacity .25s,transform .25s}
+.spark-pet-speech.is-quiet{opacity:0;transform:translateY(6px);pointer-events:none}
+.spark-pet-menu{position:absolute;right:calc(100% + 10px);bottom:54px;z-index:5;display:flex;gap:5px;padding:5px;border:1px solid #e0cdb2;border-radius:12px;background:#fff9ee;box-shadow:0 8px 20px #533a2226}
+.spark-pet-menu button,.spark-pet-controls button{border:0;background:transparent;color:#79513b;font-size:12px;white-space:nowrap}
+.spark-pet-menu button{padding:7px 9px}.spark-pet-menu button:hover,.spark-pet-menu button:focus-visible{background:#f2dfc9}
+.spark-pet-controls{position:relative;z-index:4;display:flex;justify-content:center;margin-top:-8px}
+.spark-pet-controls button{display:grid;place-items:center;width:38px;height:38px;padding:0;border:1px solid #d6baa0;border-radius:50%;background:#fff8ebf2;color:#754c36;box-shadow:0 4px 11px #694c2d26}
+.spark-pet-controls button:hover,.spark-pet-controls button:focus-visible{background:#f3ddc4;border-color:#c88e68}
+.spark-pet-controls button svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.spark-pet-tools-toggle{position:relative;z-index:2}
+.spark-pet-tools{position:absolute;right:calc(100% + 8px);bottom:0;display:flex;gap:7px;align-items:center;padding:7px;border:1px solid #dcc4a5;border-radius:24px;background:#fff9ee;box-shadow:0 9px 24px #533a222b}
+.spark-pet-tools button{width:36px;height:36px;box-shadow:none}
+#spark-pet-unread{display:inline-block;width:6px;height:6px;margin-left:2px;border-radius:50%;background:#d1532f}
+#spark-pet-unread[hidden]{display:none}
+.spark-pet[data-status="running"] .spark-pet-image{animation:pet-cheer .8s ease-in-out infinite}
+.spark-pet[data-status="needs-input"] .spark-pet-sparkle,.spark-pet[data-status="ready"] .spark-pet-sparkle{animation:pet-sparkle 1.1s ease-in-out infinite}
+.spark-pet[data-status="blocked"] .spark-pet-speech{border-color:#c87364;color:#934534}
+.spark-pet-panel{position:absolute;right:calc(100% + 10px);bottom:0;z-index:6;width:min(300px,80vw);padding:14px;border:1px solid #ddc9ae;border-radius:14px;background:#fff9ed;color:#42382d;box-shadow:0 12px 34px #38261338;filter:none;touch-action:auto;user-select:text}
+.spark-pet-panel[hidden]{display:none}.spark-pet-panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;font-size:13px}.spark-pet-panel-head button{background:transparent;color:#6b5b4d;font-size:19px}
+#spark-pet-form{display:flex;gap:5px}#spark-pet-form[hidden],#spark-pet-activity-list[hidden]{display:none}#spark-pet-form input{min-width:0;flex:1;padding:8px;background:#fff;border:1px solid #dac7af;color:#42382d;font-size:12px}#spark-pet-form button,.spark-pet-size button{padding:7px 9px;border-radius:7px;background:#c8542d;color:white;font-size:12px}
+#spark-pet-activity-list{max-height:180px;overflow:auto;font-size:11px}#spark-pet-activity-list a{display:block;padding:7px 0;border-bottom:1px solid #e9ddcd;color:#5d4939}#spark-pet-activity-list small{display:block;color:#9b7e67}
+.spark-pet-size{display:flex;align-items:center;gap:7px;margin-top:12px;padding-top:10px;border-top:1px solid #eadcc7;font-size:11px}.spark-pet-size input{min-width:0;flex:1;accent-color:#c8542d}.spark-pet-size button{padding:4px 7px}
+#spark-pet-status{margin:8px 0 0;font-size:11px;color:#856d59}
+.spark-pet-show{position:fixed;right:18px;bottom:18px;z-index:60;display:flex;align-items:center;gap:5px;padding:4px 11px 4px 4px;border:1px solid #d6baa0;border-radius:40px;background:#fff8eb;color:#8a4b2e;box-shadow:0 6px 20px #59412630;font-size:12px}
+.spark-pet-show img{width:38px;height:42px;object-fit:contain}
+@keyframes pet-bob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-8px) rotate(2deg)}}
+@keyframes pet-wave{0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg)}65%{transform:rotate(7deg)}}
+@keyframes pet-cheer{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-18px) scale(1.045)}}
+@keyframes pet-sleep{0%,100%{transform:translateY(2px) rotate(-5deg)}50%{transform:translateY(5px) rotate(-7deg)}}
+@keyframes pet-sparkle{0%,100%{opacity:0;transform:scale(.5) rotate(0)}50%{opacity:1;transform:scale(1.3) rotate(45deg)}}
+@media(max-width:700px){.spark-pet{--pet-width:88px;left:calc(100vw - 100px);top:calc(100dvh - 145px)}.spark-pet-speech{top:12px;max-width:150px;font-size:11px}.spark-pet-tools{display:grid;grid-template-columns:repeat(3,36px);right:calc(100% + 5px);bottom:0}.spark-pet-menu{right:calc(100% + 5px);bottom:96px}.spark-pet-panel{right:0;bottom:45px}}
+@media(prefers-reduced-motion:reduce){.spark-pet-image,.spark-pet-sparkle{animation:none!important}.spark-pet-speech{transition:none}}
