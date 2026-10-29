@@ -34,10 +34,15 @@ def main() -> None:
             assert b"__API_TOKEN__" not in get("/")
             assets = (
                 "/app.js", "/style.css", "/features.js", "/features.css", "/settings.js",
-                "/settings.css", "/vendor/editor.bundle.js", "/vendor/EDITOR-LICENSES.txt",
+                "/settings.css", "/appearance.js", "/appearance.css", "/account.js", "/account.css",
+                "/login.js", "/login.css", "/guofeng.css", "/pet.js", "/pet.css",
+                "/vendor/editor.bundle.js", "/vendor/EDITOR-LICENSES.txt",
             )
             for path in assets:
                 assert get(path), f"Empty or missing installed browser resource: {path}"
+            images = ("/assets/guofeng-hero.png", "/assets/pet-idle.png", "/assets/pet-cheer.png", "/assets/pet-sleep.png")
+            for path in images:
+                assert get(path).startswith(b"\x89PNG\r\n\x1a\n"), f"Missing or invalid installed image: {path}"
 
             def call(method, params=None):
                 request = Request(base + "/api/rpc", data=json.dumps({"method": method, "params": params or {}}).encode(), headers={
@@ -57,7 +62,7 @@ def main() -> None:
             assert result["mode"] == "dry_run" and result["exitCode"] == 0
             assert "Syntax OK" in result["stdout"] and "WHEEL_SMOKE_NOT_EXECUTED" not in result["stdout"]
             print(json.dumps({"installedWeb": "passed", "courses": len(courses), "lessons": lesson_count,
-                              "browserAssets": len(assets), "modelCalls": 0, "sparkJobs": 0}))
+                              "browserAssets": len(assets), "images": len(images), "modelCalls": 0, "sparkJobs": 0}))
         finally:
             server.shutdown()
             server.server_close()

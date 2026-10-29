@@ -165,15 +165,19 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         assets = {"/": ("index.html", "text/html; charset=utf-8"),
                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                   "/style.css": ("style.css", "text/css; charset=utf-8"),
-                  "/favicon.svg": ("favicon.svg", "image/svg+xml")}
+                  "/favicon.svg": ("favicon.svg", "image/svg+xml"),
+                  "/assets/guofeng-hero.png": ("assets/guofeng-hero.png", "image/png"),
+                  "/assets/pet-idle.png": ("assets/pet-idle.png", "image/png"),
+                  "/assets/pet-cheer.png": ("assets/pet-cheer.png", "image/png"),
+                  "/assets/pet-sleep.png": ("assets/pet-sleep.png", "image/png")}
         if path == "/api/health":
             return self.reply(200, {"status": "ok", "port": self.server.server_port,
                                     "accessMode": "trusted_local" if self.server.trusted_local else
                                     "accounts" if self.server.accounts else "local",
                                     "executionMode": ("isolated" if self.server.isolated_pool else "dry_run") if self.server.accounts else
                                     self.server.settings.execution_mode.value})
-        extra = {"/features.js", "/features.css", "/settings.js", "/settings.css", "/appearance.js", "/appearance.css",
-                 '/account.js', '/account.css', '/login.js', '/checkin.js', '/checkin.css',
+        extra = {"/features.js", "/features.css", "/settings.js", "/settings.css", "/appearance.js", "/appearance.css", "/guofeng.css", "/pet.css", "/pet.js",
+                 '/account.js', '/account.css', '/login.js', '/login.css', '/checkin.js', '/checkin.css',
                  "/vendor/editor.bundle.js", "/vendor/EDITOR-LICENSES.txt"}
         if path in assets:
             filename, mime = assets[path]
@@ -197,8 +201,8 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             content = content.replace(b'__MUST_CHANGE_PASSWORD__', str(bool(user and user['mustChangePassword'])).lower().encode())
             if self.server.trusted_local:
                 content = content.replace(
-                    b'<span class="local-tag"><i></i> ',
-                    '<span class="local-tag"><i></i> 本机实操 · '.encode(), 1)
+                    b'<div class="header-right">',
+                    '<div class="header-right"><span class="local-tag"><i></i> 本机实操</span>'.encode(), 1)
         self.reply(200, content, mime)
 
     def do_POST(self):

@@ -1,7 +1,7 @@
 """Historical task views must preserve chronology and evidence boundaries."""
 
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import shutil
 
@@ -396,3 +396,119 @@ def test_window_end_rejects_ambiguous_or_invalid_timestamps(value):
 
 def test_window_end_normalizes_offsets_to_utc():
     assert resolve_window_end("2026-01-01T08:00:00+08:00").isoformat() == "2026-01-01T00:00:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_today_summary_keeps_early_passes_beyond_200_events_and_counts_retries(handler):
+    handler.events.clear()
+    for second, task, passed in ((1, TASK, True), (2, TASK, True), (3, f"{LESSON}:2", True), (4, TASK, False)):
+        record(handler, task=task, when=f"2026-10-28T16:00:0{second}Z", passed=passed)
+    start = datetime(2026, 10, 28, 16, 1, tzinfo=timezone.utc)
+    for index in range(225):
+        record(handler, "code_edit", when=(start + timedelta(seconds=index)).isoformat(), data={"changeCount": 1})
+    before = handler.events.list_events(limit=None)
+    latest = await call(handler, "getLearningEvents", latest=True, limit=200)
+    assert not any(event["eventType"] == "code_submit" for event in latest["events"])
+    result = await call(handler, limit=1, window="7d", windowEnd="2026-10-29T02:00:00Z")
+    summary = result["todaySummary"]
+    assert summary["date"] == "2026-10-29" and summary["timeZone"] == "Asia/Shanghai"
+    assert summary["eventCount"] == 229
+    assert summary["eligibleSubmissionCount"] == 4
+    assert summary["passedSubmissionCount"] == 3
+    assert summary["passedTaskCount"] == 2
+    assert handler.events.list_events(limit=None) == before
+    assert handler.progress.get_course_progress(COURSE) == []
+    assert "events" not in summary and "tasks" not in summary
+
+
+def test_today_summary_uses_beijing_midnight_course_scope_and_frozen_snapshot(handler):
+    handler.events.clear()
+    record(handler, when="2026-10-28T15:59:59Z")
+    record(handler, when="2026-10-29T00:00:00+08:00")
+    record(handler, when="2026-10-28T16:01:00Z", course="archived_course")
+    boundary = record(handler, when="2026-10-28T16:02:00Z")
+    record(handler, when="2026-10-28T16:03:00Z")
+    record(handler, when="2026-10-30T00:00:00+08:00")
+    frozen = LearningHistory(handler.registry, handler.events, snapshot_event_id=boundary.event_id)
+    as_of = "2026-10-29T00:04:00+08:00"
+    selected = frozen.get_history(course_id=COURSE, window_end=as_of)["todaySummary"]
+    all_courses = frozen.get_history(window_end=as_of)["todaySummary"]
+    assert selected["courseId"] == COURSE and selected["date"] == "2026-10-29"
+    assert selected["eventCount"] == selected["passedSubmissionCount"] == 2
+    assert all_courses["courseId"] == "" and all_courses["passedSubmissionCount"] == 3
+    paged = frozen.get_history(course_id=COURSE, window="30d", offset=1, limit=1, window_end=as_of)
+    assert paged["todaySummary"] == selected
+    current = LearningHistory(handler.registry, handler.events).get_history(course_id=COURSE, window_end=as_of)
+    assert current["todaySummary"]["passedSubmissionCount"] == 3
+
+
+@pytest.mark.parametrize("kind,task_type,task,data", [
+    ("code_run", "cmd_question", TASK, {}),
+    ("code_submit", "cmd_question", TASK, {"assessmentEligible": False}),
+    ("code_submit", "cmd_question", TASK, {"assessmentSource": "ai_review"}),
+    ("code_submit", "cmd_question", TASK, {"assessmentSource": "syntax"}),
+    ("code_submit", "cmd_question", TASK, {"mode": "dry_run"}),
+    ("code_submit", "cmd_question", TASK, {"executionMode": "dry_run"}),
+    ("code_submit", "cmd_question", TASK, {"failureKind": "infrastructure"}),
+    ("code_submit", "cmd_question", TASK, {"failureKind": "ai_failure"}),
+    ("code_submit", "cmd_question", TASK, {"failureKind": "dry_run"}),
+    ("code_submit", "text", TASK, {}),
+    ("code_submit", "cmd_question", "", {}),
+    ("code_submit", "cmd_question", TASK, {"passed": "true"}),
+])
+def test_today_summary_does_not_count_execution_or_ineligible_results_as_passes(handler, kind, task_type, task, data):
+    handler.events.clear()
+    payload = {"passed": True, "assessmentEligible": True, "assessmentSource": "course_tests", "mode": "isolated"}
+    payload.update(data)
+    record(handler, kind, task_type=task_type, task=task, when="2026-10-29T00:00:00Z", data=payload)
+    result = LearningHistory(handler.registry, handler.events).get_history(window_end="2026-10-29T01:00:00Z")
+    assert result["todaySummary"]["eventCount"] == 1
+    assert result["todaySummary"]["passedSubmissionCount"] == 0
+    assert result["todaySummary"]["passedTaskCount"] == 0
+
+
+def test_today_summary_estimates_short_same_session_gaps_and_merges_parallel_intervals(handler):
+    handler.events.clear()
+    for session, times in (("one", ("00:00", "00:05", "00:30", "00:40")), ("two", ("00:02", "00:07"))):
+        for minute in times:
+            handler.events.record("code_edit", course_id=COURSE, lesson_id=LESSON, task_id=TASK,
+                                  session_id=session, timestamp=f"2026-10-29T{minute}:00Z", data={"changeCount": 1})
+    summary = LearningHistory(handler.registry, handler.events).get_history(
+        course_id=COURSE, window_end="2026-10-29T01:00:00Z")["todaySummary"]
+    # Seven minutes merged across both sessions plus one ten-minute interval.
+    # The 25-minute gap contributes nothing, not a capped ten minutes.
+    assert summary["estimatedActiveSeconds"] == 17 * 60
+    assert summary["estimatedActiveMinutes"] == 17
+    assert summary["inactivityGapSeconds"] == 600
+    assert summary["durationBasis"] == "same_session_event_gaps"
+    assert "不是在线" in summary["disclaimer"]
+
+
+def test_today_summary_does_not_connect_unrelated_sessions_or_invent_later_time(handler):
+    handler.events.clear()
+    for session, minute in (("one", "00:00"), ("two", "00:09")):
+        handler.events.record("code_edit", course_id=COURSE, lesson_id=LESSON, task_id=TASK,
+                              session_id=session, timestamp=f"2026-10-29T{minute}:00Z")
+    summary = LearningHistory(handler.registry, handler.events).get_history(window_end="2026-10-29T02:00:00Z")["todaySummary"]
+    assert summary["estimatedActiveSeconds"] == summary["estimatedActiveMinutes"] == 0
+
+
+def test_today_summary_keeps_unattributed_activity_and_pass_counts_without_inventing_session_time(handler):
+    handler.events.clear()
+    record(handler, when="2026-10-29T00:00:00Z")
+    record(handler, when="2026-10-29T00:05:00Z")
+    summary = LearningHistory(handler.registry, handler.events).get_history(window_end="2026-10-29T01:00:00Z")["todaySummary"]
+    assert summary["eventCount"] == summary["passedSubmissionCount"] == 2
+    assert summary["estimatedActiveSeconds"] == summary["estimatedActiveMinutes"] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["isolated", "lakehouse"])
+async def test_real_execution_modes_remain_identifiable_in_history_and_review(handler, mode):
+    event = record(handler, data={"mode": mode, "assessmentSource": "course_tests"})
+    history = await call(handler)
+    detail = await call(handler, "getTaskHistory", courseId=COURSE, lessonId=LESSON, taskId=TASK)
+    review = await call(handler, "getLearningReview", courseId=COURSE, lessonId=LESSON, taskId=TASK, eventId=event.event_id)
+    assert history["tasks"][0]["latestAssessment"]["mode"] == mode
+    assert detail["events"][0]["mode"] == mode
+    assert review["event"]["mode"] == mode

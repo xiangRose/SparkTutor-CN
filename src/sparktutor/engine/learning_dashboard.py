@@ -26,6 +26,7 @@ def _course_snapshot(course, registry, progress, depth: str, warnings: list) -> 
     lessons = []
     resumable = []
     unstarted = []
+    exercise_count = 0
     for index, lesson_id in enumerate(course.lessons):
         try:
             lesson = load_lesson(registry.courses_dir / course.id / "lessons" / lesson_id)
@@ -37,6 +38,7 @@ def _course_snapshot(course, registry, progress, depth: str, warnings: list) -> 
                 "currentStep": 0, "currentStepId": "", "totalSteps": 0, "depth": depth,
             })
             continue
+        exercise_count += sum(step.cls == "script" for step in lesson.steps)
         entry = saved.get(lesson_id)
         valid_depth = entry is None or entry.depth in _DEPTHS
         if not valid_depth:
@@ -87,7 +89,8 @@ def _course_snapshot(course, registry, progress, depth: str, warnings: list) -> 
     }
     return {
         "id": course.id, "title": course.title, "description": course.description,
-        "lessonCount": len(lessons), "requiresLakehouse": course.requires_lakehouse,
+        "lessonCount": len(lessons), "exerciseCount": exercise_count,
+        "requiresLakehouse": course.requires_lakehouse,
         "prerequisites": list(course.prerequisites), "lessons": lessons, "progress": summary,
     }, resumable, unstarted
 

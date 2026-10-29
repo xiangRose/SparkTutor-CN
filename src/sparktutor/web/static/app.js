@@ -30,9 +30,11 @@ if (!session) {
 const state = { storagePrefix, dashboard: null, lesson: null, courseId: '', lessonIdx: 0, depth: sessionStorage.getItem('sparktutor.depth') || 'beginner', choice: '', passed: false,
   busy: false, routeVersion: 0, courseFilter: '', query: '', historyOffset: 0, historyWindow: 'all', historyCourse: '',
   helpTab: 'tutor', chats: [], coach: null, coachMessage: null, edit: null, draftTimer: null, lastCode: '', draftDirty: false, scopeCourseId: sessionStorage.getItem('sparktutor.scope') || '', notificationCursor: 0, operationId: '', depthExplicit: sessionStorage.getItem('sparktutor.depth') !== null };
-const names = { home: '学习工作台', courses: '课程目录', lesson: '课程学习', diagnosis: '学习画像', history: '学习历史', demo: '学习诊断示例', settings: '设置', events: '学习行为记录', account:'我的账号', admin:'管理后台' };
+const names = { home: '学习工作台', courses: '课程目录', lesson: '课程学习', diagnosis: '学习画像', history: '学习历史', demo: '学习诊断示例', settings: '设置', account:'我的账号', admin:'管理后台' };
 const eventNames = { code_submit: '提交判题', code_run: '运行代码', hint_request: '查看提示', code_edit: '编辑代码', task_start: '开始练习', task_complete: '完成步骤', solution_view: '查看答案', chat_request: '导师问答', lesson_loaded: '进入课程' };
 const statusNames = { not_started: '尚未开始', in_progress: '学习中', completed: '已完成', unavailable: '暂不可用' };
+const petActionNames={run:'运行代码',submit:'提交练习',hint:'查看提示','coach-request':'调试教练分析',resume:'继续学习',load:'进入课节',next:'完成学习步骤'};
+function petActivity(status,label,href='#lesson'){window.dispatchEvent(new CustomEvent('sparkpet:activity',{detail:{status,label,href}}))}
 let toastTimer;
 
 const iconPaths = {
@@ -117,25 +119,35 @@ function markdown(text = '') {
   flush(); closeList(); return html;
 }
 
-async function dashboard(courseId=state.scopeCourseId) { state.dashboard=await rpc('getLearningDashboard',{courseId}); return state.dashboard; }
+async function dashboard(courseId=state.scopeCourseId) {
+  state.dashboard=await rpc('getLearningDashboard',{courseId});
+  const lessonCount=state.dashboard.courses.reduce((total,course)=>total+course.lessonCount,0);
+  const navCount=document.querySelector('[data-nav="courses"] .nav-count');
+  if(navCount)navCount.textContent=String(lessonCount);
+  return state.dashboard;
+}
 function dimensions() { return state.dashboard?.diagnosis?.dimensions || []; }
+function exerciseCount() {
+  const courses=state.dashboard?.courses;
+  if(!courses?.length||courses.some(course=>!Number.isInteger(course.exerciseCount)||course.exerciseCount<0))return null;
+  return courses.reduce((total,course)=>total+course.exerciseCount,0);
+}
 function courseCard(course, index) {
   const progress = course.progress || {}; const done = progress.lessonsCompleted || 0; const started = progress.started;
   return `<article class="course-card"><div class="course-art ${index ? 'purple' : ''}"><span class="course-type">${index ? '02 / 项目实战' : '01 / 核心基础'}</span>${courseArtwork(index)}</div><div class="course-card-body"><div class="course-card-kicker">${index ? 'BUILD YOUR DATA PIPELINE' : 'YOUR FOUNDATION IN SPARK'}</div><h3>${esc(course.title)}</h3><p>${esc(course.description)}</p><div class="course-meta"><span>${icon('book')}${course.lessonCount} 个课节</span><span>${icon('clock')}${course.lessons.reduce((sum, lesson) => sum + (lesson.estimatedMinutes || 0), 0)} 分钟</span></div><div class="course-progress-label"><span>${started ? '正在积累的进步' : '等待你的第一步'}</span><span><b>${done}</b> / ${course.lessonCount} 课节</span></div><div class="progress-track" role="progressbar" aria-label="${esc(course.title)}完成进度" aria-valuenow="${Number(progress.completionPercent || 0)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${Number(progress.completionPercent || 0)}%"></span></div><button class="btn" data-action="course-start" data-course="${esc(course.id)}">${started ? '继续这门课程' : '开始学习'} ${icon('arrow')}</button></div></article>`;
 }
 function renderHome() {
   const d = state.dashboard; const total = d.courses.reduce((n,c) => n + c.lessonCount, 0); const done = d.courses.reduce((n,c) => n + (c.progress?.lessonsCompleted || 0), 0); const resume = d.resume;
+  const exercises=exerciseCount();
   const hasHistory = resume?.action === 'resume'; const diagnosis = d.diagnosis;
   $('#content').innerHTML = heading('每一步，都更懂 Spark。', '保持好奇，把今天学到的，变成明天做得到的。', `<span class="date-label">${icon('calendar')}${date(null, true)}<span class="date-divider"></span>今天也有新收获</span>`) +
-    `<section class="hero"><div class="hero-copy"><span class="pill"><i></i>${hasHistory ? '接着上一次的探索' : '一段新的学习旅程，正在展开'}</span><h2>${hasHistory ? esc(resume.lessonTitle) : '从第一行 <em>PySpark</em> 开始。'}</h2><p>${hasHistory ? esc(resume.courseTitle) + '<br>进度和练习代码已经保存，随时接着往下探索。' : '理解分布式计算，动手处理真实数据。<br>让每一个「原来如此」，都来自你自己的实践。'}</p><div class="hero-actions"><button class="btn primary" data-action="resume">${hasHistory ? '继续学习' : '开启第一课'} ${icon('arrow')}</button><a class="btn subtle" href="#courses">浏览全部课程 ${icon('arrowUp')}</a></div></div>${heroArtwork()}</section>` +
+    `<section class="hero"><div class="hero-copy"><span class="pill"><i></i>${hasHistory ? '接着上一次的探索' : '教材 1.2.0 · 学习内容已更新'}</span><h2>${hasHistory ? esc(resume.lessonTitle) : '从第一行 <em>PySpark</em> 开始。'}</h2><p>${hasHistory ? esc(resume.courseTitle) + '<br>进度和练习代码已按账号保存，随时接着往下探索。' : `${d.courses.length} 条学习路径、${total} 个课节${exercises===null?'':`与 ${exercises} 道可执行练习`}。<br>从核心概念出发，亲手完成一条数据管道。`}</p><div class="hero-actions"><button class="btn primary" data-action="resume">${hasHistory ? '继续学习' : '开启第一课'} ${icon('arrow')}</button><a class="btn subtle" href="#courses">浏览全部课程 ${icon('arrowUp')}</a></div></div>${heroArtwork()}</section>` +
     `<section class="stats" aria-label="学习概览">${[
-      ['book','可探索课节',total,'课节'], ['check','已完成课节',done,'课节'], ['target','完成进度',`${Math.round(done / Math.max(total,1) * 100)}%`,''], ['route','学习路径',d.courses.length,'条路径']
+      ['book','可探索课节',total,'课节'], ['check','已完成课节',done,'课节'], ['target','完成进度',`${Math.round(done / Math.max(total,1) * 100)}%`,''], ['route','可执行练习',exercises??'—','道练习']
     ].map(([symbol,label,value,unit]) => `<div class="stat"><span class="stat-icon">${icon(symbol)}</span><div><div class="stat-label">${label}</div><div class="stat-value">${value}<small>${unit}</small></div></div></div>`).join('')}</section>` +
-    `<div class="home-grid"><section><div class="section-title"><div><span class="section-kicker">CURATED LEARNING PATHS</span><h2>找到你的下一步</h2><p>从核心概念出发，在实践中串起知识。</p></div><a class="text-link" href="#courses">全部课程 ${icon('arrowUp')}</a></div><div class="course-cards">${d.courses.map(courseCard).join('')}</div><div class="path-help"><span class="path-icon">${icon('route')}</span><div><strong>看懂，是开始。做出来，才是你的。</strong><p>阅读理解 <span>→</span> 动手编程 <span>→</span> 提交判题 <span>→</span> 回顾改进</p></div><a class="text-link" href="#history">学习足迹 ${icon('arrow')}</a></div></section><aside class="home-aside"><section class="panel diagnosis-mini"><div class="aside-heading"><span class="aside-icon">${icon('chart')}</span><h3>你的学习画像</h3><a class="icon-button" href="#diagnosis" aria-label="查看完整学习画像">${icon('arrowUp')}</a></div><p>每次练习，都让自己更清晰一点。</p><div class="dimension-overview">${dimensions().map((dim,i) => `<div class="dimension-summary"><div class="dimension-row"><span class="dimension-dot dot-${i}"></span>${esc(dim.name)}<strong>${pct(dim.score)}</strong></div><div class="dimension-meter ${dim.score == null ? 'no-evidence' : ''}"><span style="width:${dim.score == null ? 0 : Math.max(0,Math.min(100,dim.score))}%"></span></div></div>`).join('')}</div><p class="diagnosis-note">${diagnosis?.eventCount ? esc(diagnosis.diagnosis) : '画像随练习逐步建立。没有记录的维度保留「证据不足」，每一次进步都有迹可循。'}</p><a class="text-link" href="#diagnosis">了解我的学习状态 ${icon('arrow')}</a></section><section class="tool-card"><span class="tool-icon">${icon('spark')}</span><span class="tool-kicker">A LITTLE HELP GOES A LONG WAY</span><h3>卡住了？<br>换个角度，就有新思路。</h3><p>让 AI 导师陪你拆解问题，<br>在恰到好处的提示中找到答案。</p><a class="text-link" href="#settings">认识你的 AI 导师 ${icon('arrowUp')}</a></section></aside></div>`;
+    `<div class="home-grid"><section><div class="section-title"><div><span class="section-kicker">CURATED LEARNING PATHS</span><h2>找到你的下一步</h2><p>从核心概念出发，在实践中串起知识。</p></div><a class="text-link" href="#courses">全部课程 ${icon('arrowUp')}</a></div><div class="course-cards">${d.courses.map(courseCard).join('')}</div></section><aside class="home-aside"><section class="panel diagnosis-mini"><div class="aside-heading"><span class="aside-icon">${icon('chart')}</span><h3>你的学习画像</h3><a class="icon-button" href="#diagnosis" aria-label="查看完整学习画像">${icon('arrowUp')}</a></div><p>每次练习，都让自己更清晰一点。</p><div class="dimension-overview">${dimensions().map((dim,i) => `<div class="dimension-summary"><div class="dimension-row"><span class="dimension-dot dot-${i}"></span>${esc(dim.name)}<strong>${pct(dim.score)}</strong></div><div class="dimension-meter ${dim.score == null ? 'no-evidence' : ''}"><span style="width:${dim.score == null ? 0 : Math.max(0,Math.min(100,dim.score))}%"></span></div></div>`).join('')}</div><p class="diagnosis-note">${diagnosis?.eventCount ? esc(diagnosis.diagnosis) : '画像随练习逐步建立。没有记录的维度保留「证据不足」，每一次进步都有迹可循。'}</p><a class="text-link" href="#diagnosis">了解我的学习状态 ${icon('arrow')}</a></section><section class="tool-card"><span class="tool-icon">${icon('spark')}</span><span class="tool-kicker">A LITTLE HELP GOES A LONG WAY</span><h3>卡住了？<br>换个角度，就有新思路。</h3><p>让 AI 导师陪你拆解问题，<br>在恰到好处的提示中找到答案。</p><a class="text-link" href="#settings">认识你的 AI 导师 ${icon('arrowUp')}</a></section></aside></div>`;
   const primary=$('.home-grid > section');
   primary.classList.add('home-primary');
-  const knowledge=d.knowledgeComponents||diagnosis?.knowledgeComponents||{};
-  if(Object.values(knowledge).some(item=>item.evaluatedTasks>0)) primary.insertAdjacentHTML('beforeend',features.knowledgeSection());
   const help=$('.home-aside > .tool-card');
   if(help){help.classList.add('home-help-card');primary.append(help);}
   const aside=$('.home-aside');
@@ -144,12 +156,15 @@ function renderHome() {
   else $('#learning-checkin').innerHTML = `<div class="aside-heading"><span class="aside-icon">${icon('calendar')}</span><h3>学习签到</h3></div><p class="disclaimer">签到功能暂不可用，请管理员更新服务后再试。</p>`;
 }
 function renderCourses() {
-  $('#content').innerHTML = heading('找到你的学习路径', '19 个课节，从 Spark 核心概念走向完整数据管道。') + `<div class="catalog-toolbar"><div class="chips"><button class="chip ${!state.courseFilter ? 'active' : ''}" data-action="course-filter" data-course="">全部课程</button>${state.dashboard.courses.map(c => `<button class="chip ${state.courseFilter === c.id ? 'active' : ''}" data-action="course-filter" data-course="${esc(c.id)}">${esc(c.title)}</button>`).join('')}</div><input class="search" id="course-search" type="search" placeholder="搜索课节…" aria-label="搜索课节" value="${esc(state.query)}"></div><div id="catalog-results"></div>`;
+  const lessonCount=state.dashboard.courses.reduce((total,course)=>total+course.lessonCount,0);
+  const exercises=exerciseCount();
+  $('#content').innerHTML = heading('找到你的学习路径', `${lessonCount} 个课节${exercises===null?'':`、${exercises} 道可执行练习`}，从 Spark 核心概念走向完整数据管道。`) + `<div class="catalog-toolbar"><div class="chips"><button class="chip ${!state.courseFilter ? 'active' : ''}" data-action="course-filter" data-course="">全部课程</button>${state.dashboard.courses.map(c => `<button class="chip ${state.courseFilter === c.id ? 'active' : ''}" data-action="course-filter" data-course="${esc(c.id)}">${esc(c.title)}</button>`).join('')}</div><input class="search" id="course-search" type="search" placeholder="搜索课节…" aria-label="搜索课节" value="${esc(state.query)}"></div><div id="catalog-results"></div>`;
   const resume = state.dashboard.resume;
-  $('.catalog-toolbar').insertAdjacentHTML('beforebegin',`<section class="panel catalog-resume"><div><strong>${resume ? '接着上次的进度学习' : '开始你的第一课'}</strong><p>${resume ? `${esc(resume.courseTitle)} · ${esc(resume.lessonTitle)}` : '在独立学习标签页阅读、做题与编程，随时切回查看其他页面。'}</p></div><button class="btn primary" data-action="resume">${resume ? '继续学习' : '开始学习'} ${icon('arrowUp')}</button></section>`);
+  $('.catalog-toolbar').insertAdjacentHTML('beforebegin',`<section class="panel catalog-resume"><div><strong>${resume ? '接着上次的进度学习' : '开始你的第一课'}</strong><p>${resume ? `${esc(resume.courseTitle)} · ${esc(resume.lessonTitle)}` : '在独立学习标签页阅读、做题与编程。'}</p></div><div class="catalog-resume-art" aria-hidden="true">${courseArtwork(resume?.courseId==='spark_declarative_pipelines'?1:0)}</div><button class="btn primary" data-action="resume">${resume ? '继续学习' : '开始学习'} ${icon('arrowUp')}</button></section>`);
   const depthSelect = document.createElement('select'); depthSelect.id = 'depth-select'; depthSelect.className = 'search'; depthSelect.setAttribute('aria-label','练习难度');
   depthSelect.innerHTML = [['beginner','入门 · 详细引导'],['intermediate','进阶 · 适量引导'],['advanced','挑战 · 独立完成']].map(([value,label])=>`<option value="${value}" ${state.depth === value ? 'selected' : ''}>${label}</option>`).join('');
-  $('.catalog-toolbar').insertBefore(depthSelect,$('#course-search'));
+  const depthWrap=document.createElement('div');depthWrap.className='depth-filter';depthWrap.innerHTML='<span>选择引导强度</span><small>详细引导适合首次学习；进阶和挑战会逐步减少提示。</small>';depthWrap.append(depthSelect);
+  $('.catalog-toolbar').insertBefore(depthWrap,$('#course-search'));
   renderCatalogResults();
   if (state.focusSearch) { $('#course-search').focus(); state.focusSearch = false; }
 }
@@ -161,6 +176,18 @@ function renderCatalogResults() {
     return `<section class="course-section"><div class="course-section-header"><div><h2>${esc(course.title)}</h2><p>${esc(course.description)}</p></div><span class="badge">${course.lessonCount} 个课节</span></div><div class="lesson-list">${lessons.map(l => `<button class="lesson-item ${esc(l.status)}" data-action="load" data-course="${esc(course.id)}" data-index="${l.index}" ${l.available === false ? 'disabled' : ''}><span class="lesson-number">${l.status === 'completed' ? '✓' : String(l.index + 1).padStart(2,'0')}</span><div><h3>${esc(l.title)}</h3><p>${l.estimatedMinutes || '—'} 分钟 <span>·</span> ${esc(statusNames[l.status] || l.status)}${l.status === 'in_progress' ? ` · ${l.currentStep + 1}/${l.totalSteps} 步` : ''}</p></div><span class="lesson-chevron">↗</span></button>`).join('')}</div></section>`;
   }).join('');
   if (!count) $('#catalog-results').innerHTML = empty('没有找到相关课节', '试试其他关键词，或查看全部课程。', '');
+}
+function closeQuickSearch(){const panel=$('#quick-search');if(!panel)return;panel.hidden=true;$('.header-search')?.setAttribute('aria-expanded','false');}
+function renderQuickSearch(query=''){
+  const host=$('#quick-search-results');if(!host||!state.dashboard)return;
+  const needle=query.trim().toLowerCase();
+  if(!needle){host.innerHTML='<p>输入关键词，可在当前页面直接查找课程与课节。</p>';return;}
+  const matches=[];
+  for(const course of state.dashboard.courses){
+    if(`${course.title} ${course.description}`.toLowerCase().includes(needle))matches.push({course,title:course.title,subtitle:`${course.lessonCount} 个课节`,index:null});
+    for(const lesson of course.lessons)if(lesson.title.toLowerCase().includes(needle))matches.push({course,title:lesson.title,subtitle:course.title,index:lesson.index});
+  }
+  host.innerHTML=matches.length?matches.slice(0,8).map(item=>`<button type="button" data-action="${item.index==null?'course-start':'load'}" data-course="${esc(item.course.id)}"${item.index==null?'':` data-index="${item.index}"`}><span>${esc(item.title)}</span><small>${esc(item.subtitle)}</small><b>↗</b></button>`).join(''):'<p>没有找到相关课程或课节。</p>';
 }
 
 function dimensionCard(dim) {
@@ -174,11 +201,20 @@ function dimensionCard(dim) {
   const outcomes = {passed:'通过',failed:'未通过',repaired:'已确认修复',unresolved:'尚未确认修复',hinted:'使用过提示',not_hinted:'未使用提示'};
   return `<article class="panel dimension-card"><h3>${esc(dim.name)}</h3><div class="score">${dim.score == null ? '—' : Number(dim.score.toFixed(1)) + '<small>%</small>'}</div><span class="badge ${dim.score == null ? 'purple' : ''}">${dim.score == null ? '证据不足' : `${dim.sampleSize ?? dim.evidenceCount} 个样本`}</span><p>${esc(dim.summary)}</p><details><summary>查看计算依据与证据</summary><div class="evidence-list"><p>${esc(calculation || '')}${dim.score == null ? '；当前样本不足，暂不计算比例。' : ' × 100%'}</p>${(dim.evidence?.items || []).map(item => `<p>${esc(item.title || item.taskId)} · ${esc(outcomes[item.outcome] || (item.passed ? '通过' : '未通过'))}</p>`).join('')}</div></details></article>`;
 }
+function diagnosisRadar(items) {
+  const dims=(items||[]).slice(0,4), center=120, radius=78;
+  const point=(index,value=100)=>{const angle=-Math.PI/2+index*Math.PI/2;const r=radius*Math.max(0,Math.min(100,value??0))/100;return `${center+Math.cos(angle)*r},${center+Math.sin(angle)*r}`;};
+  const rings=[25,50,75,100].map(level=>`<polygon points="${dims.map((_,i)=>point(i,level)).join(' ')}"></polygon>`).join('');
+  const axes=dims.map((_,i)=>`<line x1="${center}" y1="${center}" x2="${point(i).split(',')[0]}" y2="${point(i).split(',')[1]}"></line>`).join('');
+  const values=dims.map((dim,i)=>point(i,dim.score)).join(' ');
+  const labels=[['120','20'],['220','124'],['120','232'],['20','124']];
+  return `<section class="panel diagnosis-radar" aria-label="四维学习画像雷达图"><div><span class="section-kicker">LEARNING PROFILE</span><h2>四维能力一眼看清</h2><p>越靠近外圈，表示该维度已有更多有效学习证据。</p><div class="radar-legend">${dims.map((dim,i)=>`<span><i class="dot-${i}"></i>${esc(dim.name)} <strong>${pct(dim.score)}</strong></span>`).join('')}</div></div><svg viewBox="0 0 240 245" role="img" aria-label="${esc(dims.map(dim=>`${dim.name} ${pct(dim.score)}`).join('，'))}"><g class="radar-grid">${rings}${axes}</g><polygon class="radar-value" points="${values}"></polygon>${dims.map((dim,i)=>`<circle cx="${point(i,dim.score).split(',')[0]}" cy="${point(i,dim.score).split(',')[1]}" r="4"></circle><text x="${labels[i]?.[0]}" y="${labels[i]?.[1]}" text-anchor="middle">${esc(dim.name)}</text>`).join('')}</svg></section>`;
+}
 function renderDiagnosis() {
   const diagnosis = state.dashboard.diagnosis;
   $('#content').innerHTML = heading('让每次练习，都留下线索', '基于实际学习记录的四维观察，帮助你选择下一步练习。', '<button class="btn" data-action="refresh">↻ 刷新画像</button>') +
-    `<div class="notice">${esc(diagnosis?.diagnosis || '开始练习后，画像将随有效评估逐步建立。')}</div><div class="dimension-grid">${dimensions().map(dimensionCard).join('')}</div>` +
-    `<section class="panel"><div class="section-title"><h2>下一道，练得更有方向</h2><span class="badge">推荐练习</span></div>${diagnosis?.recommendedExercise ? `<h3>${esc(diagnosis.recommendedExercise.title)}</h3><p class="disclaimer">${esc(diagnosis.recommendedExercise.reason)}</p><button class="btn primary" data-action="recommended">开始推荐练习 →</button>` : `<p class="disclaimer">${esc(diagnosis?.recommendationReason || '完成课程练习后，这里会给出适合当前记录的建议。')}</p><a class="btn" href="#courses">浏览课程</a>`}</section><p class="disclaimer">${esc(diagnosis?.disclaimer || '')}</p>`;
+    `${diagnosisRadar(dimensions())}<div class="notice">${esc(diagnosis?.diagnosis || '开始练习后，画像将随有效评估逐步建立。')}</div><div class="dimension-grid">${dimensions().map(dimensionCard).join('')}</div>` +
+    `<section class="panel recommendation-row"><div><div class="section-title"><h2>下一道，练得更有方向</h2><span class="badge">推荐练习</span></div>${diagnosis?.recommendedExercise ? `<h3>${esc(diagnosis.recommendedExercise.title)}</h3><p class="disclaimer">${esc(diagnosis.recommendedExercise.reason)}</p>` : `<p class="disclaimer">${esc(diagnosis?.recommendationReason || '完成课程练习后，这里会给出适合当前记录的建议。')}</p>`}</div><div>${diagnosis?.recommendedExercise ? '<button class="btn primary" data-action="recommended">开始推荐练习 →</button>' : '<a class="btn" href="#courses">浏览课程</a>'}</div></section><p class="disclaimer">${esc(diagnosis?.disclaimer || '')}</p>`;
   $('#content').insertAdjacentHTML('afterbegin',features.scopeControls()); $('#content').insertAdjacentHTML('beforeend',features.knowledgeSection());
 }
 
@@ -201,16 +237,18 @@ async function flushEdits() {
  draftFlush=draftFlush.catch(()=>{}).then(work);return draftFlush;
 }
 function draftIdentity(){return{courseId:state.courseId,lessonId:state.lesson?.lessonId,stepId:state.lesson?.step?.id,depth:state.depth,contextToken:state.lesson?.contextToken,draftRevision:state.lesson?.draftRevision};}
-function saveNavigation(){if(state.lesson)sessionStorage.setItem('sparktutor.lastLesson',JSON.stringify({courseId:state.courseId,lessonIdx:state.lessonIdx,depth:state.depth,practiceMode:Boolean(state.lesson.practiceMode),stepId:state.lesson.step?.id}));}
+function saveNavigation(){if(state.lesson)sessionStorage.setItem('sparktutor.lastLesson',JSON.stringify({courseId:state.courseId,lessonIdx:state.lessonIdx,depth:state.depth,practiceMode:Boolean(state.lesson.practiceMode),stepId:state.lesson.step?.id}));publishPetStudyContext();}
 function openStudyTab(request = null) {
-  if (isStudyTab && !request) { location.hash='lesson'; return; }
+  if (isStudyTab && !request) { location.hash='lesson'; return {tab:window,fresh:false}; }
   const tab = window.open('', `sparktutor-study-${accountUser||'local'}`);
   if (!tab) { toast('浏览器拦截了学习标签页，请允许此网站打开新标签页后重试。',true); return; }
   const url = new URL(location.pathname,location.origin);
   url.searchParams.set('study','1');
   url.hash = request ? `study/${encodeURIComponent(JSON.stringify(request))}` : 'lesson';
-  if (request || tab.location.href === 'about:blank') tab.location.href=url.href;
+  const fresh=tab.location.href==='about:blank';
+  if (request || fresh) tab.location.href=url.href;
   tab.focus();
+  return {tab,fresh};
 }
 async function loadLesson(courseId, index, depth = state.depth) {
   await flushEdits();
@@ -219,6 +257,104 @@ async function loadLesson(courseId, index, depth = state.depth) {
   acceptLesson(result,true); saveNavigation();
   if (location.hash === '#lesson') renderLesson(); else location.hash = 'lesson';
 }
+const petQuestionPrefix=`${storagePrefix}pet.question.`;
+const petStudyContextKey=`${storagePrefix}pet.studyContext`;
+const petNotices=new Set();
+const petQuestionLifetime=24*60*60*1000;
+let petQuestionSequence=0;
+function petTaskContext(){
+  if(!state.lesson?.step?.id)return null;
+  return {courseId:state.courseId,lessonId:state.lesson.lessonId,stepId:state.lesson.step.id,depth:state.depth};
+}
+function samePetTask(left,right){return Boolean(left&&right&&['courseId','lessonId','stepId','depth'].every(key=>left[key]===right[key]));}
+function publishPetStudyContext(){
+  if(!isStudyTab)return;
+  try{localStorage.setItem(petStudyContextKey,JSON.stringify({userId:accountUser,sessionId:session,task:petTaskContext()}));}catch{}
+}
+function pendingPetQuestions(){
+  const result=[];
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const key=localStorage.key(i);if(!key?.startsWith(petQuestionPrefix))continue;
+      let item;try{item=JSON.parse(localStorage.getItem(key));}catch{continue;}
+      if(item?.userId===accountUser&&item.status==='pending'&&typeof item.id==='string'&&Number.isFinite(item.time)&&typeof item.question==='string'&&item.question.trim())result.push({...item,key});
+    }
+  }catch{}
+  return result.sort((a,b)=>a.time-b.time||(a.sequence||0)-(b.sequence||0)||a.id.localeCompare(b.id));
+}
+function petQuestionExpired(item){return Date.now()-item.time>petQuestionLifetime;}
+function resumePetWork(){
+  if(state.busy)return;
+  if(state.routePending){state.routePending=false;void route();return;}
+  consumePetQuestion();
+}
+function consumePetQuestion(){
+  if(!isStudyTab||state.busy)return;
+  for(const pending of pendingPetQuestions()){
+    if(pending.sessionId&&pending.sessionId!==session)continue;
+    if(petQuestionExpired(pending)){
+      if(!petNotices.has(pending.id)){petNotices.add(pending.id);toast('超过 24 小时的待发问题不会自动发送，可在桌宠中恢复后确认。');}
+      continue;
+    }
+    // Only the named learning window may claim a question sent before it opened.
+    if(!pending.sessionId&&window.name!==`sparktutor-study-${accountUser||'local'}`)continue;
+    const task=petTaskContext();
+    if(!task){if(location.hash!=='#lesson')location.hash='lesson';return;}
+    if(pending.task&&!samePetTask(pending.task,task)){
+      if(!petNotices.has(pending.id)){petNotices.add(pending.id);toast('桌宠问题已保留，回到提问时的练习后再发送。');}
+      continue;
+    }
+    if(!pending.sessionId||!pending.task){
+      pending.sessionId=session;pending.task=task;
+      try{localStorage.setItem(pending.key,JSON.stringify(pending));}catch{toast('暂时无法保存问题，请保留桌宠中的文字后重试。',true);return;}
+    }
+    if(location.hash!=='#lesson'){location.hash='lesson';return;}
+    if(state.helpTab!=='tutor'){state.helpTab='tutor';renderHelp();}
+    const input=$('#chat-question');if(!input)return;
+    if(input.value.trim()){
+      if(!petNotices.has(pending.id)){petNotices.add(pending.id);toast('桌宠问题已排队，请先发送或清空导师输入框中的文字。');}
+      return;
+    }
+    return submitTutorQuestion(pending.question,()=>{
+      // Persist acceptance before removing the queue entry. A failed write keeps
+      // the request pending; a failed removal cannot make it run twice.
+      const latest=JSON.parse(localStorage.getItem(pending.key)||'null');
+      if(latest?.status!=='pending')throw new Error('这个问题已由学习页接收，请勿重复发送。');
+      localStorage.setItem(pending.key,JSON.stringify({...pending,status:'accepted'}));
+      try{localStorage.removeItem(pending.key);}catch{}
+    });
+  }
+}
+window.addEventListener('sparkpet:ask',event=>{
+  const question=String(event.detail?.question||'').trim();if(!question)return;
+  if(question.length>10000){toast('问题过长，请缩短后再发送。',true);return;}
+  const questions=pendingPetQuestions(),restoreId=event.detail?.restoreId;
+  const restored=restoreId?questions.find(item=>item.id===restoreId):null;
+  if(restoreId&&!restored){toast('这个待发问题已被处理，请查看导师记录；当前文字仍保留。',true);return;}
+  const opened=isStudyTab?null:openStudyTab();if(!isStudyTab&&!opened)return;
+  let target=isStudyTab?{sessionId:session,task:petTaskContext()}:null;
+  if(!isStudyTab&&!opened.fresh){try{const saved=JSON.parse(localStorage.getItem(petStudyContextKey)||'null');if(saved?.userId===accountUser)target=saved;}catch{}}
+  const sameQueue=item=>item.id!==restoreId&&!petQuestionExpired(item)&&item.sessionId===(target?.sessionId||null)
+    &&(samePetTask(item.task,target?.task)||!item.task&&!target?.task);
+  if(questions.filter(sameQueue).length>=20){toast('当前练习的待发送问题较多，请先等待导师处理；当前文字仍保留。',true);return;}
+  const id=Array.from(crypto.getRandomValues(new Uint8Array(12)),value=>value.toString(16).padStart(2,'0')).join('');
+  const pending={id,userId:accountUser,sessionId:target?.sessionId||null,task:target?.task||null,question,time:Date.now(),sequence:petQuestionSequence++,status:'pending'};
+  try{localStorage.setItem(petQuestionPrefix+id,JSON.stringify(pending));}catch{toast('浏览器无法暂存问题，请保留文字后重试。',true);return;}
+  if(restored){
+    try{
+      const previous=JSON.parse(localStorage.getItem(restored.key)||'null');
+      if(previous?.status==='pending')localStorage.setItem(restored.key,JSON.stringify({...previous,status:'moved'}));
+      localStorage.removeItem(restored.key);
+    }catch{}
+  }
+  event.detail.accepted=true;
+  if(isStudyTab)consumePetQuestion();
+});
+window.addEventListener('sparkpet:pending',event=>{
+  if(!event.detail)return;
+  event.detail.items=pendingPetQuestions().slice().reverse().map(item=>({id:item.id,question:item.question,time:item.time,expired:petQuestionExpired(item)}));
+});
+window.addEventListener('storage',event=>{if(event.key?.startsWith(petQuestionPrefix)&&isStudyTab)consumePetQuestion();});
 function acceptLesson(result, fresh = false) {
   state.lesson = fresh ? result : {...state.lesson, ...result};
   state.choice = ''; state.passed = false; state.coachMessage = null; state.coach = null; state.helpTab = 'tutor';
@@ -234,6 +370,7 @@ function renderLesson() {
   const step = lesson.step; const isQuestion = ['script','cmd_question','mult_question'].includes(step.cls); const isCode = ['script','cmd_question'].includes(step.cls);
   $('#content').innerHTML = `<div class="lesson-header"><div><p class="eyebrow">${lesson.practiceMode ? 'FOCUSED PRACTICE / 单题练习' : 'LEARNING BY DOING'}</p><h1>${esc(lesson.lessonTitle)}</h1></div><div class="inline-actions">${features.difficultySelect()}<button class="btn small" data-action="feature-reset-lesson">重置本课</button><a class="btn" href="#home">学习首页</a><a class="btn" href="#courses">课程目录</a></div></div><div class="lesson-layout"><section class="panel lesson-reading"><div class="lesson-step-meta"><span>${{text:'阅读与理解',mult_question:'概念自测',cmd_question:'动手练习',script:'综合编程'}[step.cls] || '学习步骤'}</span><span>步骤 ${lesson.currentIndex + 1} / ${lesson.totalSteps}</span></div><div class="progress-track"><span style="width:${(lesson.currentIndex + 1) / lesson.totalSteps * 100}%"></span></div><div class="markdown">${markdown(step.output)}</div>${step.cls === 'mult_question' ? `<div class="choice-list">${choices(step).map((choice, index) => `<button class="choice ${state.choice === choice ? 'selected' : ''}" data-action="choice" data-choice="${esc(choice)}" aria-pressed="${state.choice === choice}"><span>${'ABCD'[index] || index + 1}</span>${esc(choice)}</button>`).join('')}</div>` : ''}<div id="feedback" aria-live="polite"></div><div id="hint-area" aria-live="polite"></div><div class="lesson-controls"><button class="btn small" data-action="back" ${lesson.currentIndex === 0 || lesson.practiceMode ? 'disabled' : ''}>← 上一步</button><div>${isQuestion ? '<button class="btn small" data-action="hint">✧ 提示</button>' : ''}${step.cls === 'mult_question' ? '<button class="btn small primary" data-action="submit">提交答案</button>' : ''}<button class="btn small primary" id="next-button" data-action="next" ${isQuestion && !state.passed ? 'disabled' : ''}>${lesson.practiceMode ? '完成练习' : '下一步'} →</button></div></div></section><div class="lesson-tools">${isCode ? `<section class="editor-panel"><div class="editor-toolbar"><span>● &nbsp; ${step.cls === 'script' ? esc(step.starterCode || 'exercise.py') : 'exercise.py'}</span><div class="editor-tool-buttons"><button class="btn small" data-action="feature-editor-search">搜索 / 替换</button><span>Python · 基础补全</span></div></div><div class="editor-wrap"><div class="line-numbers" id="line-numbers" aria-hidden="true"></div><textarea id="code-editor" class="code-editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Python 代码编辑器">${esc(state.lastCode)}</textarea></div><div class="editor-footer"><span id="save-state">自动保存草稿</span><span>UTF-8 &nbsp; · &nbsp; 4 空格缩进</span></div></section><div class="editor-actions"><button class="btn small" data-action="feature-editor-download">下载代码</button><button class="btn small" data-action="solution">查看参考答案</button><button class="btn small" data-action="run">▷ 运行代码</button><button class="btn small primary" data-action="submit">提交判题 →</button></div><section class="panel output-panel"><div class="output-heading"><span>运行输出</span><span class="muted" id="execution-mode">等待运行</span></div><pre id="run-output" role="log">运行代码后，结果会显示在这里。</pre></section>` : ''}<section class="panel help-panel"><div class="help-tabs"><button class="active" data-action="help-tab" data-tab="tutor">✦ 导师问答</button><button data-action="help-tab" data-tab="coach">调试教练</button></div><div id="help-content"></div></section></div></div>`;
   renderHelp(); if(isCode){updateLines();if(window.SparkTutorEditor)window.activeSparkTutorEditor=window.SparkTutorEditor.create($('#code-editor'));}
+  if(isQuestion&&!state.passed)petActivity('needsInput','');
 }
 function choices(step) {
   const items = (Array.isArray(step.answerChoices) ? step.answerChoices : (step.answerChoices || '').split(';')).filter(Boolean);
@@ -263,7 +400,7 @@ async function moveStep(method) {
   if (result.atStart) return;
   if (result.finished) {
     $('#content').innerHTML = `<section class="panel empty-state"><div class="finish-art">✳</div><p class="eyebrow">ONE MORE STEP FORWARD</p><h2>${result.practiceMode ? '这道练习，完成了。' : '这一课，学完了。'}</h2><p>将刚刚的收获带进下一次实践。<br>你可以回看学习画像，找到下一步的方向。</p><div class="inline-actions" style="justify-content:center"><a class="btn primary" href="#courses">继续探索课程 →</a><a class="btn" href="#diagnosis">查看学习画像</a></div></section>`;
-    state.lesson = null; await dashboard(); return;
+    state.lesson = null; publishPetStudyContext(); await dashboard(); return;
   }
   acceptLesson(result);saveNavigation();renderLesson(); window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -279,12 +416,56 @@ function renderHelp() {
   }
   if(state.helpTab==='coach'&&state.coach)host.insertAdjacentHTML('beforeend',features.coachDetails(state.coach));
 }
+async function submitTutorQuestion(question,onAccepted) {
+  question=String(question||'').trim();
+  const form=$('#chat-form');
+  if(state.busy||!state.lesson||!form||!question||!$('#chat-question'))return false;
+  const button=$('button[type="submit"]',form);
+  let accepted=false,completed=false;
+  state.busy=true;if(button)button.disabled=true;
+  try{
+    onAccepted?.();accepted=true;
+    state.chats.push({role:'user',text:question});renderHelp();$('#chat-question').disabled=true;
+    petActivity('running','AI 导师正在回答');
+    await flushEdits();
+    const result=await rpc('webChat',{question,code:currentCode()});
+    state.chats.push({role:'tutor',text:result.answer});renderHelp();petActivity('ready','AI 导师已回答');completed=true;
+  }catch(error){
+    petActivity('blocked','AI 导师暂时无法回答');toast(error.message,true);
+    const input=$('#chat-question');
+    if(input){input.disabled=false;if(!input.value.trim())input.value=question;}
+  }finally{
+    state.busy=false;if(button?.isConnected)button.disabled=false;
+    if(completed||state.routePending)resumePetWork();
+  }
+  return accepted;
+}
+function historyTodaySummary(data,courseId) {
+  const summary=data.todaySummary;
+  const counts=['eventCount','eligibleSubmissionCount','passedSubmissionCount'];
+  if(!summary||summary.timeZone!=='Asia/Shanghai'||summary.courseId!==courseId
+    ||!/^\d{4}-\d{2}-\d{2}$/.test(summary.date||'')
+    ||counts.some(key=>!Number.isInteger(summary[key])||summary[key]<0)
+    ||!Number.isFinite(summary.estimatedActiveMinutes)||summary.estimatedActiveMinutes<0
+    ||summary.passedSubmissionCount>summary.eligibleSubmissionCount||summary.eligibleSubmissionCount>summary.eventCount)return null;
+  return summary;
+}
 
 async function renderHistory() {
-  const version=state.routeVersion;
-  const data = await rpc('getLearningHistory', {offset:state.historyOffset, limit:15, window:state.historyWindow, courseId:state.historyCourse});
-  if(version!==state.routeVersion||location.hash!=='#history')return;
-  $('#content').innerHTML = heading('回看走过的每一步', '运行、提交、求助与修复，都可以成为理解学习过程的线索。') + `<div class="section-title"><div class="history-filters"><select id="history-course" aria-label="筛选课程"><option value="">全部课程</option>${data.courses.map(c => `<option value="${esc(c.id)}" ${state.historyCourse === c.id ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}</select><select id="history-window" aria-label="时间范围">${[['all','全部历史'],['7d','近 7 天'],['30d','近 30 天']].map(([value,label]) => `<option value="${value}" ${state.historyWindow === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div><span class="muted">${data.total} 道题目</span></div>` + (data.tasks.length ? `<section class="panel"><div class="history-wrap"><table class="history-table"><thead><tr><th>练习题目</th><th>最近评估</th><th>运行 / 提交</th><th>求助</th><th>最近活动</th></tr></thead><tbody>${data.tasks.map((task,i) => `<tr><td><button class="text-link" data-action="task-history" data-index="${i}">${esc(task.title)}</button><small>${esc(task.lessonTitle)}</small></td><td>${task.latestAssessment ? (task.latestAssessment.passed ? '<span class="badge">已通过</span>' : '<span class="badge purple">待改进</span>') : '暂无有效评估'}</td><td>${task.counts.runs} / ${task.counts.submissions}</td><td>${task.counts.hints} 次提示</td><td>${date(task.lastActivityAt)}</td></tr>`).join('')}</tbody></table></div><div class="pagination"><button class="btn small" data-action="history-prev" ${!state.historyOffset ? 'disabled' : ''}>← 上一页</button><span>${Math.floor(state.historyOffset / 15) + 1}</span><button class="btn small" data-action="history-next" ${!data.hasMore ? 'disabled' : ''}>下一页 →</button></div></section><div id="history-detail" class="history-detail"></div>` : empty('学习足迹，等待你的第一笔', '完成一次练习、提交或求助后，就能在这里回顾自己的学习过程。')) + `<p class="disclaimer">${esc(data.disclaimer)}</p>`;
+  const version=state.routeVersion,request=(state.historyRequest||0)+1;state.historyRequest=request;
+  const filters={offset:state.historyOffset,limit:15,window:state.historyWindow,courseId:state.historyCourse};
+  let data;
+  try{data=await rpc('getLearningHistory',filters);}catch(error){
+    if(request!==state.historyRequest||version!==state.routeVersion||location.hash!=='#history')return;
+    throw error;
+  }
+  if(request!==state.historyRequest||version!==state.routeVersion||location.hash!=='#history')return;
+  const summary=historyTodaySummary(data,filters.courseId),activeMinutes=summary?.estimatedActiveMinutes??'—';
+  const passedToday=summary?.passedSubmissionCount??'—',eventCount=summary?.eventCount??'—';
+  const scope=filters.courseId?(data.courses.find(course=>course.id===filters.courseId)?.title||'所选课程'):'全部课程';
+  const motivation=!summary?'完整统计暂不可用，请刷新后重试。':activeMinutes>=30?'专注正在积累，记得适时休息。':eventCount?'今天已经迈出一步，再完成一个小目标吧。':'从 10 分钟开始，也是一段值得记录的学习。';
+  const summaryNote=summary?`北京时间 ${summary.date} · ${scope}。同一学习会话中不超过 10 分钟的事件间隔估算活跃时长，重叠区间合并；不代表在线时长。通过次数含同题重试，不代表独立掌握。`:`北京时间 · ${scope}。尚未取得完整统计，暂不显示次数与时长。`;
+  $('#content').innerHTML = heading('回看走过的每一步', '运行、提交、求助与修复，都可以成为理解学习过程的线索。') + `<section class="history-motivation"><div><span class="section-kicker">TODAY'S MOMENTUM</span><h2>${summary?'今日估算活跃':'今日统计暂不可用'} <strong>${activeMinutes}</strong>${summary?' 分钟':''}</h2><p>${esc(motivation)}</p><small>${esc(summaryNote)}</small></div><div class="motivation-stats"><span><strong>${eventCount}</strong>次活动</span><span><strong>${passedToday}</strong>次通过</span><a class="btn primary" href="#courses">继续学习 →</a></div></section><div class="section-title"><div class="history-filters"><select id="history-course" aria-label="筛选课程"><option value="">全部课程</option>${data.courses.map(c => `<option value="${esc(c.id)}" ${state.historyCourse === c.id ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}</select><select id="history-window" aria-label="时间范围">${[['all','全部历史'],['7d','近 7 天'],['30d','近 30 天']].map(([value,label]) => `<option value="${value}" ${state.historyWindow === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div><span class="muted">${data.total} 道题目</span></div>` + (data.tasks.length ? `<section class="panel"><div class="history-wrap"><table class="history-table"><thead><tr><th>练习题目</th><th>最近评估</th><th>运行 / 提交</th><th>求助</th><th>最近活动</th></tr></thead><tbody>${data.tasks.map((task,i) => `<tr><td><button class="text-link" data-action="task-history" data-index="${i}">${esc(task.title)}</button><small>${esc(task.lessonTitle)}</small></td><td>${task.latestAssessment ? (task.latestAssessment.passed ? '<span class="badge">已通过</span>' : '<span class="badge purple">待改进</span>') : '暂无有效评估'}</td><td>${task.counts.runs} / ${task.counts.submissions}</td><td>${task.counts.hints} 次提示</td><td>${date(task.lastActivityAt)}</td></tr>`).join('')}</tbody></table></div><div class="pagination"><button class="btn small" data-action="history-prev" ${!state.historyOffset ? 'disabled' : ''}>← 上一页</button><span>${Math.floor(state.historyOffset / 15) + 1}</span><button class="btn small" data-action="history-next" ${!data.hasMore ? 'disabled' : ''}>下一页 →</button></div></section><div id="history-detail" class="history-detail"></div>` : empty('学习足迹，等待你的第一笔', '完成一次练习、提交或求助后，就能在这里回顾自己的学习过程。')) + `<p class="disclaimer">${esc(data.disclaimer)}</p>`;
   state.historyData=data;$('#content').insertAdjacentHTML('beforeend',features.historySupplement());
 }
 async function taskHistory(index, offset = 0) {
@@ -306,7 +487,8 @@ async function renderSettings(){if(!settingsPanel)throw new Error('设置页面�
 async function route(){
  const version=++state.routeVersion;
  try{
-  if(state.busy){toast('当前操作正在进行，请等待完成。');return;}
+  if(state.busy){state.routePending=true;toast('当前操作正在进行，完成后将打开所选页面。');return;}
+  state.routePending=false;
   const localCopy=rememberDraft();
   try{await flushEdits();}catch(error){if(!localCopy){toast('服务端与浏览器均未能保存，当前代码仍留在编辑器中。请先下载代码再离开。',true);return;}toast(`${error.message} 浏览器副本已保留，请回到练习页重试保存或下载当前代码。`,true);}
   const rawName=location.hash.slice(1)||'home';
@@ -338,14 +520,19 @@ async function route(){
       if(resume)await loadLesson(resume.courseId,resume.lessonIdx,resume.depth);
       else if(first)await loadLesson(first.id,0);
      }
-    }renderLesson();break;
+    }renderLesson();consumePetQuestion();break;
    }
-   case 'history':await renderHistory();break;case 'settings':await renderSettings();break;case 'data':location.hash='home';break;case 'events':await features.renderEvents();break;case 'demo':renderDemo();break;case 'account':window.SparkTutorAccount.renderAccount();break;case 'admin':await window.SparkTutorAccount.renderAdmin();break;default:location.hash='home';
+   case 'history':await renderHistory();break;case 'settings':await renderSettings();break;case 'data':location.hash='home';break;case 'demo':renderDemo();break;case 'account':window.SparkTutorAccount.renderAccount();break;case 'admin':await window.SparkTutorAccount.renderAdmin();break;default:location.hash='home';
   }
+   consumePetQuestion();
  }catch(error){if(version===state.routeVersion)$('#content').innerHTML=`<div class="panel route-error"><h2>这一步暂时没有完成</h2><p>${esc(error.message)}</p><button class="btn" data-action="refresh">重新加载</button></div>`;}
 }
 async function action(button) {
   const type = button.dataset.action;
+  if(type==='account-menu'){
+    const menu=$('#account-popover'),open=menu.hidden;menu.hidden=!open;button.setAttribute('aria-expanded',String(open));return;
+  }
+  if(type==='close-search'){closeQuickSearch();return;}
   if (state.busy) return;
   if (!isStudyTab && ['resume','load','course-start','recommended'].includes(type)) {
     if (type === 'resume' && state.dashboard.resume) {
@@ -359,8 +546,8 @@ async function action(button) {
     openStudyTab(request); return;
   }
   if (type === 'open-search') {
-    if (location.hash === '#courses') $('#course-search')?.focus();
-    else { state.focusSearch = true; location.hash = 'courses'; }
+    const panel=$('#quick-search'),opening=panel.hidden;panel.hidden=!opening;button.setAttribute('aria-expanded',String(opening));
+    if(opening){if(!state.dashboard)await dashboard('');renderQuickSearch('');$('#quick-search-input').focus();}
     return;
   }
   if (type === 'choice') {
@@ -369,6 +556,7 @@ async function action(button) {
   if (type === 'course-filter') { state.courseFilter = button.dataset.course; renderCourses(); return; }
   if (type === 'refresh') { await route(); return; }
   state.busy = true; button.disabled = true; const oldMarkup = button.innerHTML; button.textContent = '处理中…';
+  if(typeof petActionNames!=='undefined'&&petActionNames[type])petActivity('running',`${petActionNames[type]}进行中`);
   const lockedEditor = $('#code-editor'); if (lockedEditor) lockedEditor.readOnly = true;
   try {
     if(settingsPanel && await settingsPanel.handleAction(button))return;
@@ -412,7 +600,9 @@ async function action(button) {
       case 'test-ai': { await saveSettings(); const r = await rpc('webChat',{question:'请用一句简短中文确认你已连接。',code:''}); toast(r.answer); break; }
       case 'clear-key': { await rpc('configureWebSettings',{baseUrl:$('#ai-base').value,model:$('#ai-model').value,clearKey:true}); $('#ai-key').value = ''; $('#ai-key').placeholder = '密钥已清除'; toast('已清除当前标签页中的密钥。'); break; }
     }
+    if(typeof petActionNames!=='undefined'&&petActionNames[type])petActivity('ready',`${petActionNames[type]}已完成`);
   } catch (error) {
+    if(typeof petActionNames!=='undefined'&&petActionNames[type])petActivity('blocked',`${petActionNames[type]}失败`);
     toast(error.message,true); if (type === 'run-demo' && $('#demo-result')) $('#demo-result').innerHTML = `<div class="feedback">${esc(error.message)}</div>`;
   } finally {
     state.operationId='';
@@ -421,17 +611,22 @@ async function action(button) {
     if (button.isConnected) { button.innerHTML = oldMarkup; button.disabled = false; }
     if ($('#next-button')) $('#next-button').disabled = ['script','cmd_question','mult_question'].includes(state.lesson?.step?.cls) && !state.passed;
     if (['load','resume','course-start','recommended'].includes(type) && location.hash === '#lesson' && !$('#code-editor') && !$('.lesson-reading')) await route();
+    resumePetWork();
   }
 }
 async function saveSettings(){return settingsPanel.save();}
 
 document.addEventListener('click', event => {
   if (!event.target.closest('.sidebar') && !event.target.closest('#menu-toggle')) { $('.sidebar').classList.remove('open'); $('#menu-toggle').setAttribute('aria-expanded','false'); }
+  if(!event.target.closest('.sidebar-bottom')){const menu=$('#account-popover');if(menu){menu.hidden=true;$('.profile')?.setAttribute('aria-expanded','false');}}
+  if(!event.target.closest('.quick-search')&&!event.target.closest('.header-search'))closeQuickSearch();
   const button = event.target.closest('[data-action]'); if (button) { if(button.tagName==='A')event.preventDefault(); action(button); return; }
   if (state.busy && event.target.closest('a[href^="#"]')) { event.preventDefault(); toast('当前操作正在进行，请等待完成。'); }
 });
 document.addEventListener('input', event => {
   if (event.target.id === 'course-search') { state.query = event.target.value; renderCatalogResults(); }
+  if(event.target.id==='quick-search-input'){renderQuickSearch(event.target.value);return;}
+  if(event.target.id==='chat-question'){if(!event.target.value.trim())consumePetQuestion();return;}
   if (event.target.id !== 'code-editor') return;
   const code = event.target.value; const old = state.lastCode; state.lastCode = code; rememberDraft(); updateLines();
   state.draftDirty = true; if ($('#save-state')) $('#save-state').textContent = '正在保存…';
@@ -445,28 +640,28 @@ document.addEventListener('input', event => {
 document.addEventListener('change', async event => {
   if(state.busy)return;
   try{if(await features.handleChange(event))return;}catch(error){toast(error.message,true);return;}
-  if(event.target.id==='lesson-depth'){state.depthExplicit=true;sessionStorage.setItem('sparktutor.depth',event.target.value);state.busy=true;try{await loadLesson(state.courseId,state.lessonIdx,event.target.value);}catch(error){toast(error.message,true);}finally{state.busy=false;}return;}
+  if(event.target.id==='lesson-depth'){state.depthExplicit=true;sessionStorage.setItem('sparktutor.depth',event.target.value);state.busy=true;try{await loadLesson(state.courseId,state.lessonIdx,event.target.value);}catch(error){toast(error.message,true);}finally{state.busy=false;resumePetWork();}return;}
   if (event.target.id === 'depth-select') { state.depth = event.target.value; state.depthExplicit=true; sessionStorage.setItem('sparktutor.depth',state.depth); return; }
   if (event.target.id === 'history-course' || event.target.id === 'history-window') {
     state.historyCourse = $('#history-course').value; state.historyWindow = $('#history-window').value; state.historyOffset = 0;
-    try { await renderHistory(); } catch(error) { toast(error.message,true); }
+    try { await renderHistory(); } catch(error) { toast(`历史刷新失败，仍显示上次结果：${error.message}`,true); }
   }
 });
 document.addEventListener('scroll', event => { if (event.target.id === 'code-editor') $('#line-numbers').scrollTop = event.target.scrollTop; },true);
 document.addEventListener('keydown', event => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); action($('.header-search')); return; }
-  if (event.key === 'Escape') { $('.sidebar').classList.remove('open'); $('#menu-toggle').setAttribute('aria-expanded','false'); }
+  if (event.key === 'Escape') { $('.sidebar').classList.remove('open'); $('#menu-toggle').setAttribute('aria-expanded','false'); closeQuickSearch();const menu=$('#account-popover');if(menu)menu.hidden=true; }
   if (event.target.id === 'code-editor' && event.key === 'Tab') { event.preventDefault(); const editor = event.target; const a = editor.selectionStart, b = editor.selectionEnd; editor.setRangeText('    ',a,b,'end'); editor.dispatchEvent(new Event('input',{bubbles:true})); }
   if ((event.ctrlKey || event.metaKey) && event.shiftKey && ['R','S','N','B','H'].includes(event.key.toUpperCase()) && location.hash === '#lesson') { event.preventDefault(); const types = {R:'run',S:'submit',N:'next',B:'back',H:'hint'}; const button = $(`[data-action="${types[event.key.toUpperCase()]}"]`); if (button && !button.disabled) action(button); }
 });
 document.addEventListener('submit', async event => {
   if (!['chat-form','settings-form'].includes(event.target.id)) return; event.preventDefault(); if (state.busy) return;
+  if(event.target.id==='chat-form'){await submitTutorQuestion($('#chat-question').value);return;}
   const button = $('button[type="submit"]',event.target); state.busy = true; button.disabled = true;
   try {
-    if(event.target.id==='settings-form'){await settingsPanel.handleSubmit(event);}
-    else { const question = $('#chat-question').value.trim(); if (!question) return; state.chats.push({role:'user',text:question}); renderHelp(); $('#chat-question').disabled = true; await flushEdits(); const r = await rpc('webChat',{question,code:currentCode()}); state.chats.push({role:'tutor',text:r.answer}); renderHelp(); }
-  } catch(error) { toast(error.message,true); if ($('#chat-question')) $('#chat-question').disabled = false; }
-  finally { state.busy = false; if (button.isConnected) button.disabled = false; }
+    await settingsPanel.handleSubmit(event);
+  } catch(error) { toast(error.message,true); }
+  finally { state.busy = false; if (button.isConnected) button.disabled = false;resumePetWork(); }
 });
 $('#menu-toggle').addEventListener('click',()=>{ const open = $('.sidebar').classList.toggle('open'); $('#menu-toggle').setAttribute('aria-expanded',String(open)); });
 window.addEventListener('hashchange',route);

@@ -17,6 +17,8 @@
   <link rel="stylesheet" href="/appearance.css">
   <link rel="stylesheet" href="/account.css">
   <link rel="stylesheet" href="/checkin.css">
+  <link rel="stylesheet" href="/guofeng.css">
+  <link rel="stylesheet" href="/pet.css">
   <script src="/appearance.js"></script>
   <script src="/vendor/editor.bundle.js" defer></script>
   <script src="/features.js" defer></script>
@@ -24,6 +26,7 @@
   <script src="/account.js" defer></script>
   <script src="/checkin.js" defer></script>
   <script src="/app.js" defer></script>
+  <script src="/pet.js" defer></script>
 </head>
 <body>
   <aside class="sidebar">
@@ -34,16 +37,31 @@
       <a href="#courses" data-nav="courses"><span class="nav-icon" data-icon="book" aria-hidden="true"></span>课程目录<span class="nav-count">19</span></a>
       <a href="#diagnosis" data-nav="diagnosis"><span class="nav-icon" data-icon="chart" aria-hidden="true"></span>学习画像</a>
       <a href="#history" data-nav="history"><span class="nav-icon" data-icon="clock" aria-hidden="true"></span>学习历史</a>
-      <a href="#events" data-nav="events"><span class="nav-icon" data-icon="code" aria-hidden="true"></span>行为记录</a>
     </nav>
     <div class="sidebar-guide"><span class="tiny-star" data-icon="sprout" aria-hidden="true"></span><strong>给进步，一点生长的空间。</strong><p>不用一次掌握全部。<br>今天，比昨天多懂一点。</p><a href="#courses">去发现新的知识 <span data-icon="arrow" aria-hidden="true"></span></a></div>
-    <div class="sidebar-bottom"><a href="#settings" data-nav="settings"><span class="nav-icon" data-icon="settings" aria-hidden="true"></span>设置</a><div class="profile"><span class="avatar">学</span><div>自主学习者<small>保持好奇，持续探索</small></div><span class="online-dot"></span></div></div>
+    <div class="sidebar-bottom"><button class="profile" type="button" data-action="account-menu" aria-expanded="false" aria-controls="account-popover"><span class="avatar">学</span><span class="profile-copy">自主学习者<small>保持好奇，持续探索</small></span><span class="profile-chevron" aria-hidden="true">⋯</span></button><div class="account-popover" id="account-popover" hidden><a href="#account"><span>◉</span>我的账号</a><a href="#settings"><span data-icon="settings" aria-hidden="true"></span>设置</a><a href="#admin" data-admin-link hidden><span>⚙</span>管理后台</a><button type="button" data-account-action="logout"><span>↗</span>退出登录</button></div></div>
   </aside>
   <div class="workspace">
-    <header class="topbar"><button id="menu-toggle" class="icon-button mobile-menu" aria-label="展开导航" aria-expanded="false"><span data-icon="menu" aria-hidden="true"></span></button><div class="breadcrumb">我的学习空间 <span>/</span> <strong id="breadcrumb">学习工作台</strong></div><div class="header-right"><button class="header-search" data-action="open-search" aria-label="搜索课程"><span data-icon="search" aria-hidden="true"></span><span>搜索课程</span><kbd>Ctrl K</kbd></button><span class="local-tag"><i></i> 学习空间已就绪</span><span class="mini-avatar">学</span></div></header>
+    <header class="topbar"><button id="menu-toggle" class="icon-button mobile-menu" aria-label="展开导航" aria-expanded="false"><span data-icon="menu" aria-hidden="true"></span></button><div class="breadcrumb">我的学习空间 <span>/</span> <strong id="breadcrumb">学习工作台</strong></div><div class="header-right"><button class="header-search" data-action="open-search" aria-label="搜索课程" aria-expanded="false"><span data-icon="search" aria-hidden="true"></span><span>搜索课程与课节</span><kbd>Ctrl K</kbd></button></div><div class="quick-search" id="quick-search" hidden><label for="quick-search-input">搜索课程与课节</label><div><span data-icon="search" aria-hidden="true"></span><input id="quick-search-input" type="search" placeholder="输入课程或课节名称…" autocomplete="off"><button type="button" data-action="close-search" aria-label="关闭搜索">×</button></div><div id="quick-search-results" class="quick-search-results"></div></div></header>
     <main id="content" tabindex="-1"><div class="loading-page"><span class="spinner"></span>正在准备学习空间…</div></main>
     <footer><span>SparkTutor <span class="footer-dot">·</span> 每一次动手，都是一次进步。</span><span>MADE FOR YOUR NEXT STEP <span class="footer-spark" data-icon="spark" aria-hidden="true"></span></span></footer>
   </div>
   <div id="toast" class="toast" role="status" hidden></div>
+  <div id="spark-pet" class="spark-pet" data-pose="idle" aria-label="Spark 桌宠">
+    <div class="spark-pet-speech is-quiet" role="status" aria-live="polite">今天也一起学点新东西吧！</div>
+    <div class="spark-pet-menu" id="spark-pet-menu" hidden>
+      <button type="button" data-pet-pose="wave">招手</button>
+      <button type="button" data-pet-pose="cheer">开心</button>
+      <button type="button" data-pet-pose="sleep">休息</button>
+    </div>
+    <div class="spark-pet-figure" id="spark-pet-figure" role="button" tabindex="0" aria-label="摸摸 Spark，切换动作；拖动可移动位置" aria-describedby="spark-pet-help">
+      <img class="spark-pet-image" src="/assets/pet-idle.png" alt="火焰吉祥物 Spark" draggable="false">
+      <span class="spark-pet-sparkle" aria-hidden="true">✦</span>
+    </div>
+    <div class="spark-pet-controls"><button type="button" id="spark-pet-tools-toggle" class="spark-pet-tools-toggle" aria-label="展开桌宠功能" aria-expanded="false" aria-controls="spark-pet-tools" title="桌宠功能"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 13.9 10l6.6 2-6.6 2L12 20.5 10.1 14l-6.6-2 6.6-2L12 3.5Z"/></svg></button><div class="spark-pet-tools" id="spark-pet-tools" hidden><button type="button" id="spark-pet-chat" aria-label="向 AI 导师提问" title="向 AI 导师提问"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v11H9l-5 4v-15Z"/><path d="M8 9h8M8 12.5h5"/></svg></button><button type="button" id="spark-pet-voice" aria-label="语音提问" title="语音提问"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4m-4 0h8"/></svg></button><button type="button" id="spark-pet-activity" aria-label="最近活动" title="最近活动"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg><span id="spark-pet-unread" hidden></span></button><button type="button" id="spark-pet-actions" aria-label="动作与表情" title="动作与表情" aria-expanded="false" aria-controls="spark-pet-menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15c2-3 4-3 6 0s4 3 6 0 4-3 4-3M6 7h.01M12 5h.01M18 7h.01"/></svg></button><button type="button" id="spark-pet-hide" aria-label="收起桌宠" title="收起桌宠"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button></div></div>
+    <section class="spark-pet-panel" id="spark-pet-panel" hidden aria-label="Spark 桌宠面板"><div class="spark-pet-panel-head"><strong id="spark-pet-panel-title">向 AI 导师提问</strong><button type="button" id="spark-pet-panel-close" aria-label="关闭桌宠面板">×</button></div><form id="spark-pet-form"><input id="spark-pet-question" maxlength="10000" placeholder="想问 Spark 什么？" aria-label="向 AI 导师提问"><button type="submit">发送</button></form><div id="spark-pet-activity-list" hidden></div><div class="spark-pet-size"><span>宠物大小</span><input id="spark-pet-size" type="range" min="80" max="200" value="112" aria-label="宠物大小"><button type="button" id="spark-pet-size-reset">重置</button></div><p id="spark-pet-status">准备就绪</p></section>
+    <span class="sr-only" id="spark-pet-help">点击切换动作，或通过动作按钮选择表情；可以拖动桌宠。</span>
+  </div>
+  <button type="button" id="spark-pet-show" class="spark-pet-show" hidden aria-label="唤回 Spark 桌宠"><img src="/assets/pet-idle.png" alt="" draggable="false"><span>唤回 Spark</span></button>
 </body>
 </html>

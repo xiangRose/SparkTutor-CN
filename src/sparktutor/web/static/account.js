@@ -46,8 +46,8 @@
  window.addEventListener('storage',event=>{if(event.key==='sparktutor.auth.changed')location.reload();});
  window.SparkTutorAccount={user,renderAccount,renderAdmin};
  if(user.id){
-  const name=$('.profile > div');if(name)name.innerHTML=`${esc(user.name)}<small>${user.role==='admin'?'管理员':'专属学习空间'}</small>`;
-  const nav=document.querySelector('.sidebar nav');
-  nav?.insertAdjacentHTML('beforeend',`<a href="#account" data-nav="account"><span class="nav-icon">◉</span>我的账号</a>${user.role==='admin'?'<a href="#admin" data-nav="admin"><span class="nav-icon">⚙</span>管理后台</a>':''}`);
+  const name=$('.profile-copy');if(name)name.innerHTML=`${esc(user.name)}<small>${user.role==='admin'?'管理员':'专属学习空间'}</small>`;
+  const avatar=$('.profile .avatar');if(avatar)avatar.textContent=user.name.slice(0,1);
+  const adminLink=$('[data-admin-link]');if(adminLink&&user.role==='admin')adminLink.hidden=false;
  }
 })();
