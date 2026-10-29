@@ -23,7 +23,9 @@ _NUMERATORS = {"knowledge": "latestPassedTasks", "debugging": "confirmedRepairs"
                "hint_dependency": "hintedBeforeFirstAssessment", "transfer": "firstPassedTasks"}
 _EDIT_FIELDS = {"changeCount", "addedChars", "removedChars", "documentVersion", "burstDurationMs"}
 _SOURCES = {"choice", "exact", "course_tests", "structural", "syntax", "ai_review", "execution"}
-_MODES = {"local", "docker", "databricks", "dry_run", "local_check"}
+_MODES = {"local", "docker", "lakehouse", "isolated", "databricks", "dry_run", "local_check"}
+_BEIJING = timezone(timedelta(hours=8), name="Asia/Shanghai")
+_ACTIVITY_GAP_SECONDS = 600
 
 
 def event_timestamp(event):
@@ -273,7 +275,59 @@ class LearningHistory:
             "tasks": [self.task_summary(key, display_events=visible) for _, key, visible in selected[offset:offset + limit]],
             "offset": offset, "limit": limit, "total": len(selected), "hasMore": offset + limit < len(selected),
             "snapshotEventId": self.snapshot_event_id, "dataQuality": self.data_quality,
+            "todaySummary": self._today_summary(course_id, now),
             "disclaimer": DISCLAIMER, "warnings": self.warnings,
+        }
+
+    def _today_summary(self, course_id, now):
+        """Summarize the complete snapshot without sending event payloads."""
+        local_now = now.astimezone(_BEIJING)
+        start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        selected = [event for event in self.events
+                    if (not course_id or event.course_id == course_id)
+                    and start <= event_timestamp(event) <= now]
+        assessments = [event for event in selected if _assessment(event)]
+        passed = [event for event in assessments if event.data["passed"]]
+
+        # Event gaps are an estimate, never a timer for time online. Only nearby
+        # observations from the same session are connected; parallel sessions
+        # share elapsed time instead of counting it more than once.
+        previous, intervals = {}, []
+        for event in selected:
+            if not isinstance(event.session_id, str) or not event.session_id:
+                continue  # Unknown sessions cannot establish a continuous interval.
+            timestamp = event_timestamp(event)
+            prior = previous.get(event.session_id)
+            if prior is not None and 0 < (timestamp - prior).total_seconds() <= _ACTIVITY_GAP_SECONDS:
+                intervals.append((prior, timestamp))
+            previous[event.session_id] = timestamp
+        active_seconds = 0.0
+        merged_start = merged_end = None
+        for left, right in sorted(intervals):
+            if merged_end is not None and left <= merged_end:
+                merged_end = max(merged_end, right)
+            else:
+                if merged_end is not None:
+                    active_seconds += (merged_end - merged_start).total_seconds()
+                merged_start, merged_end = left, right
+        if merged_end is not None:
+            active_seconds += (merged_end - merged_start).total_seconds()
+
+        return {
+            "date": local_now.date().isoformat(), "timeZone": "Asia/Shanghai",
+            "courseId": course_id, "asOf": now.isoformat(), "eventCount": len(selected),
+            "eligibleSubmissionCount": len(assessments), "passedSubmissionCount": len(passed),
+            "passedTaskCount": len({_key(event) for event in passed}),
+            "estimatedActiveSeconds": round(active_seconds, 3),
+            "estimatedActiveMinutes": round(active_seconds / 60, 1),
+            "inactivityGapSeconds": _ACTIVITY_GAP_SECONDS, "durationBasis": "same_session_event_gaps",
+            "disclaimer": (
+                "按北京时间及所选课程汇总当前历史快照，不受题目分页或7天、30天展示范围裁剪。"
+                "通过次数统计有效判题提交，同题重复通过按多次计；通过题数按课程、课节和题目去重。"
+                "查看答案后的测试通过不代表独立掌握，本汇总不改变四维画像。"
+                "时长仅估算当天同一会话相邻事件不超过10分钟的间隔，较长间隔不计；"
+                "缺少会话标识的事件不计时；多个会话的重叠区间只计一次，不是在线或专注时长。"
+            ),
         }
 
     def get_task_history(self, course_id, lesson_id, task_id, *, offset=0, limit=50):

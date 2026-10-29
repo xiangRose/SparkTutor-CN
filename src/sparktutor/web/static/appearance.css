@@ -1,7 +1,7 @@
 /* Readable sizing follows the root font preference, without zooming the layout. */
 body { font-family:var(--ui-font); font-size:1rem; }
 button,input,select,textarea { font-family:inherit; }
-.sidebar { height:100dvh; overflow:hidden; padding-top:24px; padding-bottom:12px; }
+.sidebar { height:100dvh; overflow:hidden; padding-top:24px; padding-bottom:12px; z-index:70; }
 .sidebar > * { flex-shrink:0; }
 .sidebar .brand { margin-bottom:20px; }
 .sidebar nav { margin-top:12px; min-height:0; flex:1 1 auto; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
@@ -118,6 +118,32 @@ html[data-spacing="compact"] .sidebar nav a { padding-top:8px; padding-bottom:8p
  .lesson-layout .lesson-tools { min-width:0; }
  .lesson-layout .browser-code-editor .cm-editor { min-height:clamp(360px,45dvh,600px); }
  .lesson-layout .browser-code-editor .cm-scroller { max-height:clamp(360px,60dvh,760px); }
+}
+
+/* Let the page shrink; long code remains scrollable inside its editor. */
+.lesson-layout > .lesson-tools,.editor-wrap,.browser-code-editor,.browser-code-editor .cm-editor {
+ min-width:0; max-width:100%;
+}
+.editor-toolbar { gap:10px; }
+.editor-toolbar > span { flex:1 1 12rem; min-width:0; max-width:100%; }
+.editor-tool-buttons { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0; max-width:100%; }
+.editor-tool-buttons > span { min-width:0; max-width:100%; white-space:normal; }
+.editor-actions { flex-wrap:wrap; }
+.browser-code-editor .cm-scroller { overflow:auto; max-width:100%; }
+.field,.settings-grid > *,.account-layout > *,.environment-checks > * { min-width:0; }
+.field input,.field select,.field textarea,.chat-form input,.history-filters select { min-width:0; max-width:100%; }
+.chat-form { min-width:0; }
+.chat-form input { flex:1 1 0; }
+.chat-form button { flex-shrink:0; }
+.markdown pre,.output-panel pre { max-width:100%; overflow:auto; }
+.account-popover { max-height:calc(100dvh - 130px); overflow:auto; overscroll-behavior:contain; }
+@media(max-width:700px) {
+ .catalog-resume { flex-wrap:wrap; overflow:visible; }
+ .catalog-resume > div:first-child { min-width:0; flex:1 1 100%; }
+ .catalog-resume > .btn { max-width:100%; }
+ .lesson-header .inline-actions { min-width:0; }
+ .lesson-header .inline-actions .btn { padding-inline:10px; }
+ .quick-search { max-height:calc(100dvh - 100px); overflow:auto; }
 }
 @media(min-width:1024px) and (max-height:800px){
  .sidebar:has([data-nav="account"]) nav { gap:2px; }

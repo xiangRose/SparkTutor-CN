@@ -7,6 +7,7 @@ import yaml
 
 from sparktutor.config.settings import Settings
 from sparktutor.courses.registry import CourseRegistry
+from sparktutor.engine.learning_dashboard import build_learning_dashboard
 from sparktutor.server.handler import ServerHandler
 
 
@@ -410,3 +411,36 @@ async def test_opening_and_advancing_an_unfinished_lesson_does_not_mark_it_compl
     await call(handler, "advance")
     assert handler.progress.get("a", "lesson_1").completed is False
     assert (await call(handler))["courses"][0]["progress"]["lessonsCompleted"] == 0
+
+
+def add_script_exercise(handler, course, lesson, identifier, depth="all"):
+    directory = handler.registry.courses_dir / course / "lessons" / lesson
+    path = directory / "lesson.yaml"
+    steps = yaml.safe_load(path.read_text(encoding="utf-8"))
+    steps.append({"Class": "script", "Id": identifier, "Depth": depth,
+                  "Output": "Run this independent exercise.",
+                  "StarterCode": "exercise.py", "SolutionCode": "exercise.py"})
+    (directory / "exercise.py").write_text("value = 1\n", encoding="utf-8")
+    path.write_text(yaml.safe_dump(steps, allow_unicode=True), encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_dashboard_counts_registered_executable_exercises_independently_of_saved_progress(handler):
+    add_script_exercise(handler, "a", "lesson_1", "practice")
+    add_script_exercise(handler, "a", "lesson_2", "advanced_practice", depth="advanced")
+    save(handler, course="a", completed=True)
+    before = handler.events.count_events()
+    beginner = await call(handler, courseId="a")
+    advanced = build_learning_dashboard(handler.registry, handler.progress, handler.events,
+                                        course_id="b", depth="advanced")
+    for dashboard in (beginner, advanced):
+        assert {course["id"]: course["exerciseCount"] for course in dashboard["courses"]} == {"a": 2, "b": 0}
+    assert handler.events.count_events() == before
+
+
+@pytest.mark.asyncio
+async def test_dashboard_exercise_count_follows_new_curriculum_configuration(handler):
+    assert all(course["exerciseCount"] == 0 for course in (await call(handler))["courses"])
+    add_script_exercise(handler, "b", "lesson_1", "new_practice")
+    report = await call(handler)
+    assert {course["id"]: course["exerciseCount"] for course in report["courses"]} == {"a": 0, "b": 1}

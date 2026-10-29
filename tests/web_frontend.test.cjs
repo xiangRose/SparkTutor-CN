@@ -321,6 +321,8 @@ function demoNavigationView(){
   $:selector=>nodes[selector]||null,heading:(title,subtitle)=>`<h1>${escape(title)}</h1><p>${escape(subtitle)}</p>`,
   rememberDraft:()=>true,flushEdits:async()=>{},destroyEditor(){},loading:()=>'<p>加载中</p>',toast(){},
   beginOperation:async()=>{state.operationId='test-demo-operation';},
+  consumePetQuestion(){},
+  resumePetWork(){},
   features:{invalidate(){},handleAction:async()=>false,demoStage:()=>''},
  });
  vm.runInContext(settingsSource,context);
@@ -529,4 +531,346 @@ test('the main sidebar keeps the dashboard and catalog without a study-tab navig
  const primary=index.match(/<nav\b[^>]*aria-label="主导航"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
  assert.ok(primary);assert.match(primary,/href="#home"[^>]*data-nav="home"/);assert.match(primary,/href="#courses"[^>]*data-nav="courses"/);
  assert.ok(!primary.includes('data-nav="lesson"'));assert.ok(!primary.includes('data-action="study-tab"'));assert.ok(!primary.includes('学习标签页'));
+});
+
+function historySummary(values={}){
+ return{date:'2026-10-29',timeZone:'Asia/Shanghai',courseId:'',eventCount:1,eligibleSubmissionCount:1,
+  passedSubmissionCount:1,estimatedActiveMinutes:0,...values};
+}
+function historyPayload(todaySummary){return{courses:[{id:'core',title:'核心基础'},{id:'project',title:'项目实战'}],tasks:[],total:0,disclaimer:'',todaySummary};}
+function historyMomentumView(summary,respond){
+ const app=fs.readFileSync(path.join(assets,'app.js'),'utf8'),calls=[];
+ const content={innerHTML:'',insertAdjacentHTML(){}};
+ const state={routeVersion:0,historyOffset:0,historyWindow:'all',historyCourse:''},location={hash:'#history'};
+ const context=vm.createContext({Date,Promise,state,location,
+  rpc:async(method,params)=>{calls.push({method,params});assert.equal(method,'getLearningHistory');return respond?respond(params):historyPayload(summary);},
+  $:()=>content,heading:()=>'',esc:escape,empty:()=>'',features:{historySupplement:()=>''}});
+ vm.runInContext(app.slice(app.indexOf('function renderHelp()'),app.indexOf('async function taskHistory(')),context);
+ return{content,state,location,calls,render:()=>context.renderHistory()};
+}
+
+test('history displays the full backend daily summary without fetching a latest-event sample',async()=>{
+ const view=historyMomentumView(historySummary({courseId:'core',eventCount:420,eligibleSubmissionCount:30,passedSubmissionCount:27,estimatedActiveMinutes:95}));
+ view.state.historyCourse='core';view.state.historyWindow='7d';view.state.historyOffset=15;await view.render();
+ assert.match(view.content.innerHTML,/<strong>420<\/strong>次活动/);
+ assert.match(view.content.innerHTML,/<strong>27<\/strong>次通过/);
+ assert.match(view.content.innerHTML,/今日估算活跃 <strong>95<\/strong>/);
+ assert.ok(view.content.innerHTML.includes('北京时间 2026-10-29 · 核心基础'));
+ assert.ok(view.content.innerHTML.includes('不代表在线时长'));
+ assert.ok(view.content.innerHTML.includes('同题重试'));
+ assert.deepEqual(view.calls.map(call=>({method:call.method,...call.params})),[{method:'getLearningHistory',courseId:'core',window:'7d',offset:15,limit:15}]);
+});
+
+test('a missing or inconsistent daily summary stays unknown while a confirmed empty day displays zero',async()=>{
+ for(const summary of [undefined,null,historySummary({timeZone:'UTC'}),historySummary({courseId:'other'}),historySummary({eventCount:-1}),historySummary({estimatedActiveMinutes:NaN}),historySummary({eligibleSubmissionCount:0})]){
+  const view=historyMomentumView(summary);await view.render();
+  assert.ok(view.content.innerHTML.includes('今日统计暂不可用'));
+  assert.match(view.content.innerHTML,/<strong>—<\/strong>次通过/);
+  assert.ok(!view.content.innerHTML.includes('<strong>0</strong>次通过'));
+ }
+ const view=historyMomentumView(historySummary({eventCount:0,eligibleSubmissionCount:0,passedSubmissionCount:0,estimatedActiveMinutes:0}));
+ await view.render();assert.match(view.content.innerHTML,/<strong>0<\/strong>次通过/);
+ assert.ok(!view.content.innerHTML.includes('今日统计暂不可用'));
+});
+
+test('a late history filter response or failure cannot replace the newer filter results',async()=>{
+ let resolveOld,resolveNew,rejectOld;
+ const view=historyMomentumView(null,params=>new Promise((resolve,reject)=>{if(params.courseId==='core'){resolveOld=resolve;rejectOld=reject;}else resolveNew=resolve;}));
+ view.state.historyCourse='core';const old=view.render();
+ view.state.historyCourse='project';const current=view.render();
+ resolveNew(historyPayload(historySummary({courseId:'project',eventCount:9,eligibleSubmissionCount:3,passedSubmissionCount:2})));
+ await current;const newest=view.content.innerHTML;
+ resolveOld(historyPayload(historySummary({courseId:'core',eventCount:20,eligibleSubmissionCount:10,passedSubmissionCount:8})));
+ await old;assert.equal(view.content.innerHTML,newest);
+ view.state.historyCourse='core';const failedOld=view.render();
+ view.state.historyCourse='project';const newer=view.render();
+ resolveNew(historyPayload(historySummary({courseId:'project'})));await newer;
+ rejectOld(new Error('Old request failed'));await failedOld;
+ assert.ok(view.content.innerHTML.includes('项目实战'));
+});
+
+test('current history failures remain errors and navigation prevents a late history repaint',async()=>{
+ const failed=historyMomentumView(null,()=>{throw new Error('History unavailable');});
+ await assert.rejects(failed.render(),/History unavailable/);
+ assert.equal(failed.content.innerHTML,'');
+ let resolve;const late=historyMomentumView(null,()=>new Promise(done=>{resolve=done;}));
+ const loading=late.render();late.location.hash='#home';resolve(historyPayload(historySummary()));
+ await loading;assert.equal(late.content.innerHTML,'');
+});
+
+test('home exercise totals follow the actual dashboard response and change with the course configuration',async()=>{
+ const app=fs.readFileSync(path.join(assets,'app.js'),'utf8'),calls=[],nodes={};
+ const element=()=>({innerHTML:'',textContent:'',classList:{add(){}},append(){},insertAdjacentHTML(){}});
+ for(const selector of ['#content','.home-grid > section','.home-aside > .tool-card','.home-aside','#learning-checkin','[data-nav="courses"] .nav-count'])nodes[selector]=element();
+ const payload={courses:[
+  {id:'core',title:'Core',description:'',lessonCount:2,exerciseCount:19,lessons:[],progress:{}},
+  {id:'project',title:'Project',description:'',lessonCount:3,exerciseCount:8,lessons:[],progress:{}},
+ ],diagnosis:{dimensions:[]}};
+ const context=vm.createContext({state:{scopeCourseId:''},document:{querySelector:selector=>nodes[selector]},$:selector=>nodes[selector],
+  rpc:async(method,params)=>{calls.push({method,params});return payload;},heading:()=>'',icon:()=>'',date:()=>'',pct:String,
+  esc:escape,heroArtwork:()=>'',courseArtwork:()=>'',checkinPanel:null});
+ vm.runInContext(app.slice(app.indexOf('async function dashboard('),app.indexOf('function renderCourses(')),context);
+ await context.dashboard();context.renderHome();
+ assert.match(nodes['#content'].innerHTML,/27 道可执行练习/);
+ assert.match(nodes['#content'].innerHTML,/>27<small>道练习<\/small>/);
+ payload.courses[0].exerciseCount=23;
+ await context.dashboard();context.renderHome();
+ assert.match(nodes['#content'].innerHTML,/31 道可执行练习/);
+ assert.match(nodes['#content'].innerHTML,/>31<small>道练习<\/small>/);
+ assert.deepEqual(calls.map(call=>call.method),['getLearningDashboard','getLearningDashboard']);
+});
+
+/** Run the complete app against small DOM/storage doubles, with every RPC kept in process. */
+function petAppBrowser(){
+ const app=fs.readFileSync(path.join(assets,'app.js'),'utf8');
+ const stored=new Map(),views=[],events=[],errors=[];let clock=Date.now();
+ class BrowserDate extends Date{constructor(...args){super(...(args.length?args:[clock]));}static now(){return clock;}}
+ const lesson=(stepId='task-A')=>({lessonId:'lesson',lessonTitle:'Test lesson',contextToken:`context-${stepId}`,
+  currentIndex:0,totalSteps:1,step:{id:stepId,cls:'cmd_question',output:'Test question'},starterCode:`print('${stepId}')`});
+ function create({user='learner-A',study=true,session=`session-${views.length}`,stepId='task-A',respond,blockedStorage=false,withPet=false}={}){
+  const nodes=new Map(),windowListeners={},documentListeners={},calls=[],sessionValues=new Map([
+   ['sparktutor.activeUser',user],['sparktutor.session',session],['sparktutor.studySession','1'],
+  ]);
+  let currentUrl=new URL(`http://example.test/${study?'?study=1':''}#${study?'lesson':'home'}`);
+  class Element{
+   constructor(id=''){this.id=id;this.children=[];this.isConnected=true;this.value='';this.disabled=false;this.hidden=false;this.dataset={};
+    this.style={setProperty(){}};this.classList={add(){},remove(){},toggle(){}};this.listeners={};this.scrollHeight=0;this.scrollTop=0;}
+   set innerHTML(html){
+    const remove=node=>{for(const child of node.children)remove(child);if(nodes.get(`#${node.id}`)===node)nodes.delete(`#${node.id}`);node.isConnected=false;};
+    for(const child of this.children)remove(child);this.children=[];this.html=String(html);
+    if(this.id==='content')nodes.delete('.lesson-reading');
+    for(const match of this.html.matchAll(/\bid="([^"]+)"/g)){
+     const child=new Element(match[1]);nodes.set(`#${child.id}`,child);this.children.push(child);
+     if(child.id==='code-editor')child.value=(this.html.match(/<textarea\b[^>]*id="code-editor"[^>]*>([\s\S]*?)<\/textarea>/)?.[1]||'').replace(/&(#39|quot|lt|gt|amp);/g,(_match,name)=>({'#39':"'",quot:'"',lt:'<',gt:'>',amp:'&'}[name]));
+    }
+    if(this.html.includes('class="lesson-reading"'))nodes.set('.lesson-reading',new Element());
+   }
+   get innerHTML(){return this.html||'';}
+   querySelector(selector){return selector==='button[type="submit"]'?(this.submitButton??=new Element()):nodes.get(selector)||null;}
+   addEventListener(name,handler){(this.listeners[name]??=[]).push(handler);}
+   setAttribute(){}
+   append(...items){this.children.push(...items);}
+   replaceChildren(...items){this.children=items;}
+   insertAdjacentHTML(_position,html){this.html=(this.html||'')+html;}
+   requestSubmit(){dispatch(documentListeners,'submit',{target:this,preventDefault(){}});}
+   focus(){}
+   contains(){return false;}
+   click(){dispatch(this.listeners,'click',{target:this});}
+  }
+  for(const id of ['content','menu-toggle','breadcrumb','toast','quick-search','quick-search-input','account-popover'])nodes.set(`#${id}`,new Element(id));
+  nodes.set('.sidebar',new Element());
+  function dispatch(listeners,type,event){
+   for(const handler of listeners[type]||[]){try{const result=handler(event);if(result?.then)result.catch(error=>errors.push(error));}catch(error){errors.push(error);}}
+  }
+  const location={get hash(){return currentUrl.hash;},set hash(value){const previous=currentUrl.hash;currentUrl.hash=value;if(previous!==currentUrl.hash)events.push(()=>dispatch(windowListeners,'hashchange',{}));},
+   get href(){return currentUrl.href;},set href(value){currentUrl=new URL(value,currentUrl);},get pathname(){return currentUrl.pathname;},get origin(){return currentUrl.origin;},get search(){return currentUrl.search;},reload(){}};
+  const storage=new Proxy({get length(){if(blockedStorage)throw Error('Storage denied');return stored.size;},key:index=>[...stored.keys()][index]??null,getItem(key){if(blockedStorage)throw Error('Storage denied');return stored.get(key)??null;},setItem(key,value){
+   if(blockedStorage)throw Error('Storage denied');
+   const oldValue=stored.get(key)??null;stored.set(key,String(value));
+   for(const other of views)if(other!==view)events.push(()=>other.storageEvent({key,oldValue,newValue:String(value)}));
+  },removeItem(key){const oldValue=stored.get(key)??null;stored.delete(key);for(const other of views)if(other!==view)events.push(()=>other.storageEvent({key,oldValue,newValue:null}));}},
+   {ownKeys:()=>[...stored.keys()],getOwnPropertyDescriptor:(target,key)=>stored.has(key)?{enumerable:true,configurable:true,value:stored.get(key)}:Reflect.getOwnPropertyDescriptor(target,key)});
+  const window={name:study?`sparktutor-study-${user}`:'',location,innerWidth:1280,innerHeight:800,matchMedia:()=>({matches:true}),scrollTo(){},focus(){},
+   addEventListener:(type,handler)=>(windowListeners[type]??=[]).push(handler),dispatchEvent:event=>{dispatch(windowListeners,event.type,event);return true;},
+   open:(_url,name)=>views.find(other=>other.window.name===name)?.window||null,
+   createSparkTutorFeatures:()=>({invalidate(){},difficultySelect:()=>'',coachDetails:()=>'',coachEvidence:()=>'',historySupplement:()=>'',handleAction:async()=>false,handleChange:async()=>false}),
+   createSparkTutorSettings:()=>({render:async host=>{host.innerHTML='<form id="settings-form"></form>';},handleAction:async()=>false,handleSubmit:async()=>{}}),
+  };
+  const document={title:'',querySelector:selector=>selector==='meta[name="sparktutor-user"]'?{content:user}:selector==='meta[name="sparktutor-token"]'?{content:'in-process-test-token'}:nodes.get(selector)||null,
+   querySelectorAll:()=>[],addEventListener:(type,handler)=>(documentListeners[type]??=[]).push(handler),createElement:()=>new Element()};
+  const context=vm.createContext({window,document,location,URL,URLSearchParams,Date:BrowserDate,Promise,console,
+   history:{replaceState(_state,_title,url){currentUrl=new URL(url,currentUrl);}},
+   localStorage:storage,sessionStorage:{getItem:key=>sessionValues.get(key)??null,setItem:(key,value)=>sessionValues.set(key,String(value)),removeItem:key=>sessionValues.delete(key)},
+   crypto:require('node:crypto').webcrypto,queueMicrotask,setTimeout:()=>0,clearTimeout(){},setInterval:()=>0,
+   CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail;}},
+   fetch:async(url,options)=>{
+    assert.equal(url,'/api/rpc');const request=JSON.parse(options.body);calls.push(request);
+    let result=await respond?.(request);
+    if(result===undefined){
+     if(request.method==='webChat')result={answer:`Answer: ${request.params.question}`};
+     else if(request.method==='pollWebNotifications')result={cursor:0,notifications:[]};
+     else if(request.method==='getLearningCoach')result={available:false,reason:'No coach needed for this transport test'};
+     else if(request.method==='getHint')result={hint:'Hint'};
+     else if(request.method==='loadLesson')result=lesson(`task-${request.params.lessonIdx}`);
+     else throw new Error(`Unexpected test RPC: ${request.method}`);
+    }
+    return{ok:true,status:200,json:async()=>({result})};
+   },
+  });
+  const view={window,location,calls,context,nodes,
+   storageEvent:event=>dispatch(windowListeners,'storage',event),
+   get state(){return vm.runInContext('state',context);},
+   ask(question,restoreId){const detail={question,restoreId};window.dispatchEvent({type:'sparkpet:ask',detail});return detail;},
+   pending(){const detail={items:[]};window.dispatchEvent({type:'sparkpet:pending',detail});return detail.items;},
+   chat(question){nodes.get('#chat-question').value=question;return vm.runInContext("(async()=>{const form=$('#chat-form');for(const handler of __submitHandlers)await handler({target:form,preventDefault(){}});})()",context);},
+   inputTutor(text){const input=nodes.get('#chat-question');input.value=text;dispatch(documentListeners,'input',{target:input});},
+   submitPet(text){nodes.get('#spark-pet-question').value=text;nodes.get('#spark-pet-panel').hidden=false;dispatch(nodes.get('#spark-pet-form').listeners,'submit',{preventDefault(){}});},
+   openPet(){nodes.get('#spark-pet-chat').click();},
+   blockStorage(value){blockedStorage=value;},
+   action:dataset=>context.action({dataset,disabled:false,isConnected:true,innerHTML:'Action'}),
+   consume:()=>context.consumePetQuestion(),
+  };
+  views.push(view);
+  // Initial navigation is driven explicitly below; every function and event handler stays original.
+  vm.runInContext(app.replace(/\nroute\(\);\s*$/,'\n'),context,{filename:'app.js'});
+  context.__submitHandlers=documentListeners.submit;
+  Object.assign(view.state,{courseId:'core',lessonIdx:0,depth:'beginner',lesson:lesson(stepId),lastCode:`print('${stepId}')`});
+  if(study){context.saveNavigation();context.renderLesson();}
+  if(withPet){
+   const index=fs.readFileSync(path.join(assets,'index.html'),'utf8'),markup=index.slice(index.indexOf('<div id="spark-pet"'));
+   for(const match of markup.matchAll(/\bid="([^"]+)"/g))nodes.set(`#${match[1]}`,new Element(match[1]));
+   for(const selector of ['.spark-pet-image','.spark-pet-speech'])nodes.set(selector,new Element());
+   for(const id of ['spark-pet-panel','spark-pet-menu','spark-pet-tools','spark-pet-activity-list','spark-pet-show'])nodes.get(`#${id}`).hidden=true;
+   vm.runInContext(fs.readFileSync(path.join(assets,'pet.js'),'utf8'),context,{filename:'pet.js'});
+  }
+  return view;
+ }
+ return{create,lesson,stored,errors,advance:milliseconds=>{clock+=milliseconds;},close(view){views.splice(views.indexOf(view),1);view.window.name='';},async flush(){
+  let handled=0;
+  for(let i=0;i<30;i++){while(events.length){assert.ok(++handled<1000,'Storage/hash events must settle.');events.shift()();}await new Promise(setImmediate);if(!events.length&&i>2)break;}
+  assert.deepEqual(errors,[]);
+ }};
+}
+
+test('pet questions submitted while the tutor is busy are delivered once after the current answer',async()=>{
+ let finishFirst;const browser=petAppBrowser();
+ const view=browser.create({respond:request=>request.method==='webChat'&&request.params.question==='First question'?new Promise(resolve=>{finishFirst=resolve;}):undefined});
+ const first=view.chat('First question');await browser.flush();assert.equal(view.state.busy,true);
+ view.ask('Second question');view.ask('Third question');await browser.flush();
+ assert.deepEqual(view.calls.filter(call=>call.method==='webChat').map(call=>call.params.question),['First question']);
+ finishFirst({answer:'First answer'});await first;await browser.flush();
+ assert.deepEqual(view.calls.filter(call=>call.method==='webChat').map(call=>call.params.question),['First question','Second question','Third question']);
+ assert.deepEqual(Array.from(view.state.chats.filter(chat=>chat.role==='user'),chat=>chat.text),['First question','Second question','Third question']);
+});
+
+test('pet questions switch the coach panel and an existing settings tab back to the correct tutor',async()=>{
+ const browser=petAppBrowser(),study=browser.create(),home=browser.create({study:false});
+ await study.action({action:'help-tab',tab:'coach'});assert.equal(study.nodes.has('#chat-question'),false);
+ study.ask('Question from coach');await browser.flush();
+ assert.equal(study.state.helpTab,'tutor');
+ assert.equal(study.calls.filter(call=>call.method==='webChat'&&call.params.question==='Question from coach').length,1);
+ study.location.hash='#settings';await browser.flush();assert.equal(study.nodes.has('#chat-question'),false);
+ home.ask('Question from dashboard');await browser.flush();
+ assert.equal(study.location.hash,'#lesson');assert.equal(study.state.helpTab,'tutor');
+ const chat=study.calls.filter(call=>call.method==='webChat'&&call.params.question==='Question from dashboard');
+ assert.equal(chat.length,1);assert.equal(chat[0].params.contextToken,'context-task-A');
+ assert.equal(chat[0].params.code,"print('task-A')");
+ assert.equal(home.calls.filter(call=>call.method==='webChat').length,0);
+});
+
+test('a pet question queued during lesson loading cannot be submitted against the newly loaded task',async()=>{
+ let finishLoad;const browser=petAppBrowser();
+ const study=browser.create({respond:request=>request.method==='loadLesson'?new Promise(resolve=>{finishLoad=resolve;}):undefined});
+ const home=browser.create({study:false});const loading=study.action({action:'load',course:'core',index:'1'});
+ await browser.flush();assert.equal(study.state.busy,true);
+ home.ask('Question only about task A');await browser.flush();
+ finishLoad(browser.lesson('task-B'));await loading;await browser.flush();await study.consume();await browser.flush();
+ assert.equal(study.state.lesson.step.id,'task-B');assert.equal(study.calls.filter(call=>call.method==='webChat').length,0);
+ assert.ok([...browser.stored.values()].some(value=>value.includes('Question only about task A')),'A task mismatch must preserve the unsent question.');
+});
+
+test('shared storage never broadcasts a question into a second study session or another account',async()=>{
+ const browser=petAppBrowser(),first=browser.create({session:'session-first',stepId:'task-A'}),
+  second=browser.create({session:'session-second',stepId:'task-B'}),other=browser.create({user:'learner-B',stepId:'task-A'});
+ first.ask('Private question for first session');await browser.flush();
+ assert.equal(first.calls.filter(call=>call.method==='webChat').length,1);
+ assert.equal(second.calls.filter(call=>call.method==='webChat').length,0);
+ assert.equal(other.calls.filter(call=>call.method==='webChat').length,0);
+ const home=browser.create({study:false});home.ask('Question from same-account dashboard');await browser.flush();
+ for(const target of [first,second,other]){await target.consume();await target.consume();}
+ await browser.flush();
+ const chats=[...first.calls,...second.calls,...other.calls].filter(call=>call.method==='webChat');
+ assert.equal(chats.filter(call=>call.params.question==='Question from same-account dashboard').length,1);
+ assert.equal(other.calls.filter(call=>call.method==='webChat').length,0);
+ assert.equal(new Set(chats.map(call=>call.params.question)).size,2);
+});
+
+test('a queued pet question preserves a handwritten tutor draft until the learner clears it',async()=>{
+ const browser=petAppBrowser(),view=browser.create();
+ view.inputTutor('Unsent handwritten draft');view.ask('Queued pet question');await browser.flush();
+ assert.equal(view.nodes.get('#chat-question').value,'Unsent handwritten draft');
+ assert.equal(view.calls.filter(call=>call.method==='webChat').length,0);
+ assert.ok([...browser.stored.values()].some(value=>value.includes('Queued pet question')));
+ view.inputTutor('');await browser.flush();
+ assert.deepEqual(view.calls.filter(call=>call.method==='webChat').map(call=>call.params.question),['Queued pet question']);
+});
+
+test('pet input stays editable when blocked browser storage prevents accepting the question',async()=>{
+ const browser=petAppBrowser(),view=browser.create({blockedStorage:true,withPet:true});
+ view.submitPet('Keep this question');await browser.flush();
+ assert.equal(view.nodes.get('#spark-pet-question').value,'Keep this question');
+ assert.equal(view.nodes.get('#spark-pet-panel').hidden,false);
+ assert.notEqual(view.nodes.get('#spark-pet-status').textContent,'运行中');
+ assert.equal(view.calls.filter(call=>call.method==='webChat').length,0);
+});
+
+test('closing a study session with a full pending queue does not block questions in its replacement session',async()=>{
+ const browser=petAppBrowser(),closed=browser.create({session:'closed-session'});
+ closed.inputTutor('Keep this handwritten draft');
+ for(let i=0;i<20;i++)assert.equal(closed.ask(`Old question ${i}`).accepted,true);
+ await browser.flush();assert.equal(closed.pending().length,20);browser.close(closed);
+ const current=browser.create({session:'replacement-session'});
+ assert.equal(current.ask('Question for the replacement session').accepted,true);await browser.flush();
+ assert.deepEqual(current.calls.filter(call=>call.method==='webChat').map(call=>call.params.question),['Question for the replacement session']);
+ assert.equal(current.pending().length,20,'Old questions remain available for explicit recovery.');
+});
+
+test('expired questions remain recoverable and send only after explicit confirmation succeeds',async()=>{
+ const browser=petAppBrowser(),view=browser.create({withPet:true});
+ view.inputTutor('Handwritten draft');view.ask('Recover the original question');await browser.flush();
+ const originalId=view.pending()[0].id;browser.advance(25*60*60*1000);
+ view.inputTutor('');await browser.flush();assert.equal(view.calls.filter(call=>call.method==='webChat').length,0);
+ view.openPet();const button=view.nodes.get('#spark-pet-activity-list').children.find(node=>node.className==='spark-pet-pending-question');
+ assert.ok(button.textContent.includes('已过期'));button.click();
+ assert.equal(view.nodes.get('#spark-pet-question').value,'Recover the original question');
+ assert.equal(view.pending()[0].id,originalId);assert.equal(view.calls.filter(call=>call.method==='webChat').length,0);
+ view.blockStorage(true);view.submitPet('Recover the original question');await browser.flush();
+ assert.equal(view.nodes.get('#spark-pet-question').value,'Recover the original question');
+ view.blockStorage(false);assert.equal(view.pending()[0].id,originalId);
+ view.submitPet('Recover the original question');await browser.flush();
+ assert.deepEqual(view.calls.filter(call=>call.method==='webChat').map(call=>call.params.question),['Recover the original question']);
+ assert.equal(view.pending().length,0);assert.equal(view.nodes.get('#spark-pet-question').value,'');
+});
+
+test('pending recovery is account scoped and never overwrites text already in the pet input',async()=>{
+ const browser=petAppBrowser(),owner=browser.create({withPet:true});
+ owner.inputTutor('Tutor draft');owner.ask('<img src=x onerror=alert(1)> retained question');await browser.flush();
+ owner.nodes.get('#spark-pet-question').value='Keep this pet draft';owner.openPet();
+ const button=owner.nodes.get('#spark-pet-activity-list').children.find(node=>node.className==='spark-pet-pending-question');
+ assert.ok(button.textContent.includes('<img src=x'));assert.equal(button.innerHTML,'');button.click();
+ assert.equal(owner.nodes.get('#spark-pet-question').value,'Keep this pet draft');
+ const other=browser.create({user:'learner-B',withPet:true});other.openPet();
+ assert.equal(other.pending().length,0);assert.equal(other.nodes.get('#spark-pet-activity-list').hidden,true);
+});
+
+test('a failed tutor request restores its question and keeps later pet questions queued for the learner',async()=>{
+ const browser=petAppBrowser(),view=browser.create({respond:request=>{if(request.method==='webChat'&&request.params.question==='Retry this question')throw Error('Model not configured');}});
+ view.ask('Retry this question');view.ask('Later queued question');await browser.flush();
+ assert.equal(view.state.busy,false);assert.equal(view.nodes.get('#chat-question').disabled,false);
+ assert.equal(view.nodes.get('#chat-question').value,'Retry this question');
+ assert.deepEqual(view.calls.filter(call=>call.method==='webChat').map(call=>call.params.question),['Retry this question']);
+ assert.equal(view.pending()[0].question,'Later queued question');
+ assert.ok(view.nodes.get('#toast').textContent.includes('Model not configured'));
+ view.inputTutor('');await browser.flush();
+ assert.deepEqual(view.calls.filter(call=>call.method==='webChat').map(call=>call.params.question),['Retry this question','Later queued question']);
+});
+
+test('a route requested while the tutor is busy resumes when its request finishes',async()=>{
+ let finish;const browser=petAppBrowser(),view=browser.create({respond:request=>request.method==='webChat'?new Promise(resolve=>{finish=resolve;}):undefined});
+ const answering=view.chat('Question before navigating');await browser.flush();
+ view.location.hash='#settings';await browser.flush();assert.equal(view.state.busy,true);
+ finish({answer:'Answer'});await answering;await browser.flush();
+ assert.equal(view.location.hash,'#settings');assert.equal(view.nodes.has('#settings-form'),true);
+ assert.equal(view.nodes.has('#chat-question'),false);
+});
+
+
+test('background activity cannot replace the pending-question recovery list in the chat panel',async()=>{
+ const browser=petAppBrowser(),view=browser.create({withPet:true});
+ view.inputTutor('Keep a tutor draft');view.ask('Question retained for recovery');await browser.flush();view.openPet();
+ const list=view.nodes.get('#spark-pet-activity-list'),button=list.children.find(node=>node.className==='spark-pet-pending-question');
+ assert.ok(button);
+ view.window.dispatchEvent({type:'sparkpet:activity',detail:{status:'ready',label:'Background operation completed'}});
+ assert.ok(list.children.includes(button));button.click();
+ assert.equal(view.nodes.get('#spark-pet-question').value,'Question retained for recovery');
 });

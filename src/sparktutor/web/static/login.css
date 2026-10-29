@@ -47,3 +47,24 @@ button{cursor:pointer}
 @media(max-height:760px) and (min-width:1001px){.login-header{min-height:60px}.login-main{padding:4px 0 12px}.login-introduction{margin-bottom:16px}.login-introduction h1{font-size:2.9rem}.login-card{padding:19px 26px}.login-card .field{margin-bottom:9px}.login-tabs{margin-bottom:13px}.login-footer{min-height:36px;padding-bottom:5px}}
 @media(max-width:1000px){.login-shell{background-position:62% center}.login-shell::before{background:linear-gradient(90deg,#f8f1e8 0%,#f8f1e8ec 45%,#f8f1e877 72%,transparent)}.login-header,.login-footer,.login-main{width:calc(100% - 60px)}.login-content{width:min(460px,62vw)}.login-header-note{display:none}}
 @media(max-width:680px){.login-shell{min-height:100dvh;background-position:66% top;background-size:auto 430px}.login-shell::before{background:linear-gradient(180deg,#f8f1e8b0 0%,#f8f1e8d9 220px,#f8f1e8 410px)}.login-header,.login-footer,.login-main{width:calc(100% - 36px)}.login-header{min-height:66px}.login-main{display:block;padding:90px 0 30px}.login-content{width:100%}.login-introduction{margin-bottom:22px}.login-introduction h1{font-size:2.65rem}.login-introduction p{font-size:.82rem}.login-card{padding:23px 21px}.login-footer{gap:20px}.login-footer span:last-child{display:none}}
+/* Short windows keep the form in normal document flow and reduce decorative space. */
+.login-main,.login-content,.login-card { min-width:0; }
+.login-intro,.login-note,.login-footer,.field small { color:#776e60; }
+.login-card-kicker { color:#8a624e; }
+.field input::placeholder { color:#756b60; }
+.login-tabs button,.login-submit { min-height:44px; }
+:focus-visible { outline:3px solid #a74928; outline-offset:3px; }
+@media(max-height:700px) {
+ .login-header { min-height:56px; }
+ .login-main { align-items:flex-start; padding-top:12px; }
+ .login-introduction { margin-bottom:16px; }
+ .login-introduction h1 { font-size:2.25rem; }
+ .login-introduction p { line-height:1.6; }
+}
+@media(max-width:360px) {
+ .login-header,.login-footer,.login-main { width:calc(100% - 28px); }
+ .login-card { padding:20px 16px; }
+ .login-introduction h1 { font-size:2.25rem; }
+ .login-card h2 { font-size:1.5rem; }
+ .login-tabs { gap:18px; }
+}

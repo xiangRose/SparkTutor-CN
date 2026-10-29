@@ -16,8 +16,10 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RESOURCE_SUFFIXES = {".py", ".yaml", ".json", ".js", ".css", ".html", ".svg", ".txt", ".tcss"}
-PRIVATE_PARTS = {".git", ".sparktutor-web", ".sparktutor", ".web-runtime", ".venv", "node_modules", "__pycache__", ".pytest_cache"}
+RESOURCE_SUFFIXES = {".py", ".yaml", ".json", ".js", ".css", ".html", ".svg", ".txt", ".tcss",
+                     ".png", ".jpg", ".jpeg", ".webp", ".gif", ".ico", ".woff", ".woff2"}
+PRIVATE_PARTS = {".git", ".sparktutor-web", ".sparktutor-trusted-local", ".sparktutor", ".web-runtime",
+                 ".venv", "node_modules", "__pycache__", ".pytest_cache", "coach-evaluation-output", "output"}
 SOURCE_FILES = (
     "pyproject.toml", "README.md", "LICENSE", ".gitignore", "start-web.ps1", "start-web-wsl.ps1",
     "containers/executor/Dockerfile", "containers/executor/.dockerignore",
@@ -59,7 +61,8 @@ def check(path: Path) -> dict:
         filename = parts[-1]
         assert filename not in {".env", "ai-settings.json", "ai-secrets.dpapi", "web-preferences.json", "runtime.json"}, name
         assert not filename.startswith(".env."), name
-        assert not filename.endswith((".pyc", ".pyo", ".dpapi", ".log", ".db", ".db-wal", ".db-shm")), name
+        assert not filename.endswith((".pyc", ".pyo", ".dpapi", ".log", ".db", ".db-wal", ".db-shm",
+                                      ".sqlite", ".sqlite3", ".sqlite-wal", ".sqlite-shm", ".key", ".pem", ".p12", ".pfx")), name
     resources = resource_files()
     prefix = "sparktutor/" if wheel else "src/sparktutor/"
     for name, content in resources.items():

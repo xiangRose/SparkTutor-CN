@@ -127,17 +127,23 @@ async function dashboard(courseId=state.scopeCourseId) {
   return state.dashboard;
 }
 function dimensions() { return state.dashboard?.diagnosis?.dimensions || []; }
+function exerciseCount() {
+  const courses=state.dashboard?.courses;
+  if(!courses?.length||courses.some(course=>!Number.isInteger(course.exerciseCount)||course.exerciseCount<0))return null;
+  return courses.reduce((total,course)=>total+course.exerciseCount,0);
+}
 function courseCard(course, index) {
   const progress = course.progress || {}; const done = progress.lessonsCompleted || 0; const started = progress.started;
   return `<article class="course-card"><div class="course-art ${index ? 'purple' : ''}"><span class="course-type">${index ? '02 / 项目实战' : '01 / 核心基础'}</span>${courseArtwork(index)}</div><div class="course-card-body"><div class="course-card-kicker">${index ? 'BUILD YOUR DATA PIPELINE' : 'YOUR FOUNDATION IN SPARK'}</div><h3>${esc(course.title)}</h3><p>${esc(course.description)}</p><div class="course-meta"><span>${icon('book')}${course.lessonCount} 个课节</span><span>${icon('clock')}${course.lessons.reduce((sum, lesson) => sum + (lesson.estimatedMinutes || 0), 0)} 分钟</span></div><div class="course-progress-label"><span>${started ? '正在积累的进步' : '等待你的第一步'}</span><span><b>${done}</b> / ${course.lessonCount} 课节</span></div><div class="progress-track" role="progressbar" aria-label="${esc(course.title)}完成进度" aria-valuenow="${Number(progress.completionPercent || 0)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${Number(progress.completionPercent || 0)}%"></span></div><button class="btn" data-action="course-start" data-course="${esc(course.id)}">${started ? '继续这门课程' : '开始学习'} ${icon('arrow')}</button></div></article>`;
 }
 function renderHome() {
   const d = state.dashboard; const total = d.courses.reduce((n,c) => n + c.lessonCount, 0); const done = d.courses.reduce((n,c) => n + (c.progress?.lessonsCompleted || 0), 0); const resume = d.resume;
+  const exercises=exerciseCount();
   const hasHistory = resume?.action === 'resume'; const diagnosis = d.diagnosis;
   $('#content').innerHTML = heading('每一步，都更懂 Spark。', '保持好奇，把今天学到的，变成明天做得到的。', `<span class="date-label">${icon('calendar')}${date(null, true)}<span class="date-divider"></span>今天也有新收获</span>`) +
-    `<section class="hero"><div class="hero-copy"><span class="pill"><i></i>${hasHistory ? '接着上一次的探索' : '教材 1.2.0 · 学习内容已更新'}</span><h2>${hasHistory ? esc(resume.lessonTitle) : '从第一行 <em>PySpark</em> 开始。'}</h2><p>${hasHistory ? esc(resume.courseTitle) + '<br>进度和练习代码已按账号保存，随时接着往下探索。' : `${d.courses.length} 条学习路径、${total} 个课节与 24 道可执行练习。<br>从核心概念出发，亲手完成一条数据管道。`}</p><div class="hero-actions"><button class="btn primary" data-action="resume">${hasHistory ? '继续学习' : '开启第一课'} ${icon('arrow')}</button><a class="btn subtle" href="#courses">浏览全部课程 ${icon('arrowUp')}</a></div></div>${heroArtwork()}</section>` +
+    `<section class="hero"><div class="hero-copy"><span class="pill"><i></i>${hasHistory ? '接着上一次的探索' : '教材 1.2.0 · 学习内容已更新'}</span><h2>${hasHistory ? esc(resume.lessonTitle) : '从第一行 <em>PySpark</em> 开始。'}</h2><p>${hasHistory ? esc(resume.courseTitle) + '<br>进度和练习代码已按账号保存，随时接着往下探索。' : `${d.courses.length} 条学习路径、${total} 个课节${exercises===null?'':`与 ${exercises} 道可执行练习`}。<br>从核心概念出发，亲手完成一条数据管道。`}</p><div class="hero-actions"><button class="btn primary" data-action="resume">${hasHistory ? '继续学习' : '开启第一课'} ${icon('arrow')}</button><a class="btn subtle" href="#courses">浏览全部课程 ${icon('arrowUp')}</a></div></div>${heroArtwork()}</section>` +
     `<section class="stats" aria-label="学习概览">${[
-      ['book','可探索课节',total,'课节'], ['check','已完成课节',done,'课节'], ['target','完成进度',`${Math.round(done / Math.max(total,1) * 100)}%`,''], ['route','可执行练习',24,'道练习']
+      ['book','可探索课节',total,'课节'], ['check','已完成课节',done,'课节'], ['target','完成进度',`${Math.round(done / Math.max(total,1) * 100)}%`,''], ['route','可执行练习',exercises??'—','道练习']
     ].map(([symbol,label,value,unit]) => `<div class="stat"><span class="stat-icon">${icon(symbol)}</span><div><div class="stat-label">${label}</div><div class="stat-value">${value}<small>${unit}</small></div></div></div>`).join('')}</section>` +
     `<div class="home-grid"><section><div class="section-title"><div><span class="section-kicker">CURATED LEARNING PATHS</span><h2>找到你的下一步</h2><p>从核心概念出发，在实践中串起知识。</p></div><a class="text-link" href="#courses">全部课程 ${icon('arrowUp')}</a></div><div class="course-cards">${d.courses.map(courseCard).join('')}</div></section><aside class="home-aside"><section class="panel diagnosis-mini"><div class="aside-heading"><span class="aside-icon">${icon('chart')}</span><h3>你的学习画像</h3><a class="icon-button" href="#diagnosis" aria-label="查看完整学习画像">${icon('arrowUp')}</a></div><p>每次练习，都让自己更清晰一点。</p><div class="dimension-overview">${dimensions().map((dim,i) => `<div class="dimension-summary"><div class="dimension-row"><span class="dimension-dot dot-${i}"></span>${esc(dim.name)}<strong>${pct(dim.score)}</strong></div><div class="dimension-meter ${dim.score == null ? 'no-evidence' : ''}"><span style="width:${dim.score == null ? 0 : Math.max(0,Math.min(100,dim.score))}%"></span></div></div>`).join('')}</div><p class="diagnosis-note">${diagnosis?.eventCount ? esc(diagnosis.diagnosis) : '画像随练习逐步建立。没有记录的维度保留「证据不足」，每一次进步都有迹可循。'}</p><a class="text-link" href="#diagnosis">了解我的学习状态 ${icon('arrow')}</a></section><section class="tool-card"><span class="tool-icon">${icon('spark')}</span><span class="tool-kicker">A LITTLE HELP GOES A LONG WAY</span><h3>卡住了？<br>换个角度，就有新思路。</h3><p>让 AI 导师陪你拆解问题，<br>在恰到好处的提示中找到答案。</p><a class="text-link" href="#settings">认识你的 AI 导师 ${icon('arrowUp')}</a></section></aside></div>`;
   const primary=$('.home-grid > section');
@@ -151,7 +157,8 @@ function renderHome() {
 }
 function renderCourses() {
   const lessonCount=state.dashboard.courses.reduce((total,course)=>total+course.lessonCount,0);
-  $('#content').innerHTML = heading('找到你的学习路径', `${lessonCount} 个课节、24 道可执行练习，从 Spark 核心概念走向完整数据管道。`) + `<div class="catalog-toolbar"><div class="chips"><button class="chip ${!state.courseFilter ? 'active' : ''}" data-action="course-filter" data-course="">全部课程</button>${state.dashboard.courses.map(c => `<button class="chip ${state.courseFilter === c.id ? 'active' : ''}" data-action="course-filter" data-course="${esc(c.id)}">${esc(c.title)}</button>`).join('')}</div><input class="search" id="course-search" type="search" placeholder="搜索课节…" aria-label="搜索课节" value="${esc(state.query)}"></div><div id="catalog-results"></div>`;
+  const exercises=exerciseCount();
+  $('#content').innerHTML = heading('找到你的学习路径', `${lessonCount} 个课节${exercises===null?'':`、${exercises} 道可执行练习`}，从 Spark 核心概念走向完整数据管道。`) + `<div class="catalog-toolbar"><div class="chips"><button class="chip ${!state.courseFilter ? 'active' : ''}" data-action="course-filter" data-course="">全部课程</button>${state.dashboard.courses.map(c => `<button class="chip ${state.courseFilter === c.id ? 'active' : ''}" data-action="course-filter" data-course="${esc(c.id)}">${esc(c.title)}</button>`).join('')}</div><input class="search" id="course-search" type="search" placeholder="搜索课节…" aria-label="搜索课节" value="${esc(state.query)}"></div><div id="catalog-results"></div>`;
   const resume = state.dashboard.resume;
   $('.catalog-toolbar').insertAdjacentHTML('beforebegin',`<section class="panel catalog-resume"><div><strong>${resume ? '接着上次的进度学习' : '开始你的第一课'}</strong><p>${resume ? `${esc(resume.courseTitle)} · ${esc(resume.lessonTitle)}` : '在独立学习标签页阅读、做题与编程。'}</p></div><div class="catalog-resume-art" aria-hidden="true">${courseArtwork(resume?.courseId==='spark_declarative_pipelines'?1:0)}</div><button class="btn primary" data-action="resume">${resume ? '继续学习' : '开始学习'} ${icon('arrowUp')}</button></section>`);
   const depthSelect = document.createElement('select'); depthSelect.id = 'depth-select'; depthSelect.className = 'search'; depthSelect.setAttribute('aria-label','练习难度');
@@ -230,16 +237,18 @@ async function flushEdits() {
  draftFlush=draftFlush.catch(()=>{}).then(work);return draftFlush;
 }
 function draftIdentity(){return{courseId:state.courseId,lessonId:state.lesson?.lessonId,stepId:state.lesson?.step?.id,depth:state.depth,contextToken:state.lesson?.contextToken,draftRevision:state.lesson?.draftRevision};}
-function saveNavigation(){if(state.lesson)sessionStorage.setItem('sparktutor.lastLesson',JSON.stringify({courseId:state.courseId,lessonIdx:state.lessonIdx,depth:state.depth,practiceMode:Boolean(state.lesson.practiceMode),stepId:state.lesson.step?.id}));}
+function saveNavigation(){if(state.lesson)sessionStorage.setItem('sparktutor.lastLesson',JSON.stringify({courseId:state.courseId,lessonIdx:state.lessonIdx,depth:state.depth,practiceMode:Boolean(state.lesson.practiceMode),stepId:state.lesson.step?.id}));publishPetStudyContext();}
 function openStudyTab(request = null) {
-  if (isStudyTab && !request) { location.hash='lesson'; return; }
+  if (isStudyTab && !request) { location.hash='lesson'; return {tab:window,fresh:false}; }
   const tab = window.open('', `sparktutor-study-${accountUser||'local'}`);
   if (!tab) { toast('浏览器拦截了学习标签页，请允许此网站打开新标签页后重试。',true); return; }
   const url = new URL(location.pathname,location.origin);
   url.searchParams.set('study','1');
   url.hash = request ? `study/${encodeURIComponent(JSON.stringify(request))}` : 'lesson';
-  if (request || tab.location.href === 'about:blank') tab.location.href=url.href;
+  const fresh=tab.location.href==='about:blank';
+  if (request || fresh) tab.location.href=url.href;
   tab.focus();
+  return {tab,fresh};
 }
 async function loadLesson(courseId, index, depth = state.depth) {
   await flushEdits();
@@ -248,23 +257,104 @@ async function loadLesson(courseId, index, depth = state.depth) {
   acceptLesson(result,true); saveNavigation();
   if (location.hash === '#lesson') renderLesson(); else location.hash = 'lesson';
 }
-const petQuestionKey=`${storagePrefix}pet.pendingQuestion`;
+const petQuestionPrefix=`${storagePrefix}pet.question.`;
+const petStudyContextKey=`${storagePrefix}pet.studyContext`;
+const petNotices=new Set();
+const petQuestionLifetime=24*60*60*1000;
+let petQuestionSequence=0;
+function petTaskContext(){
+  if(!state.lesson?.step?.id)return null;
+  return {courseId:state.courseId,lessonId:state.lesson.lessonId,stepId:state.lesson.step.id,depth:state.depth};
+}
+function samePetTask(left,right){return Boolean(left&&right&&['courseId','lessonId','stepId','depth'].every(key=>left[key]===right[key]));}
+function publishPetStudyContext(){
+  if(!isStudyTab)return;
+  try{localStorage.setItem(petStudyContextKey,JSON.stringify({userId:accountUser,sessionId:session,task:petTaskContext()}));}catch{}
+}
+function pendingPetQuestions(){
+  const result=[];
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const key=localStorage.key(i);if(!key?.startsWith(petQuestionPrefix))continue;
+      let item;try{item=JSON.parse(localStorage.getItem(key));}catch{continue;}
+      if(item?.userId===accountUser&&item.status==='pending'&&typeof item.id==='string'&&Number.isFinite(item.time)&&typeof item.question==='string'&&item.question.trim())result.push({...item,key});
+    }
+  }catch{}
+  return result.sort((a,b)=>a.time-b.time||(a.sequence||0)-(b.sequence||0)||a.id.localeCompare(b.id));
+}
+function petQuestionExpired(item){return Date.now()-item.time>petQuestionLifetime;}
+function resumePetWork(){
+  if(state.busy)return;
+  if(state.routePending){state.routePending=false;void route();return;}
+  consumePetQuestion();
+}
 function consumePetQuestion(){
-  if(!isStudyTab||!$('#chat-question'))return;
-  let pending;try{pending=JSON.parse(localStorage.getItem(petQuestionKey)||'null')}catch{}
-  if(!pending)return;
-  try{localStorage.removeItem(petQuestionKey)}catch{}
-  if(Date.now()-pending.time>300000||typeof pending.question!=='string')return;
-  $('#chat-question').value=pending.question;
-  $('#chat-form').requestSubmit();
+  if(!isStudyTab||state.busy)return;
+  for(const pending of pendingPetQuestions()){
+    if(pending.sessionId&&pending.sessionId!==session)continue;
+    if(petQuestionExpired(pending)){
+      if(!petNotices.has(pending.id)){petNotices.add(pending.id);toast('超过 24 小时的待发问题不会自动发送，可在桌宠中恢复后确认。');}
+      continue;
+    }
+    // Only the named learning window may claim a question sent before it opened.
+    if(!pending.sessionId&&window.name!==`sparktutor-study-${accountUser||'local'}`)continue;
+    const task=petTaskContext();
+    if(!task){if(location.hash!=='#lesson')location.hash='lesson';return;}
+    if(pending.task&&!samePetTask(pending.task,task)){
+      if(!petNotices.has(pending.id)){petNotices.add(pending.id);toast('桌宠问题已保留，回到提问时的练习后再发送。');}
+      continue;
+    }
+    if(!pending.sessionId||!pending.task){
+      pending.sessionId=session;pending.task=task;
+      try{localStorage.setItem(pending.key,JSON.stringify(pending));}catch{toast('暂时无法保存问题，请保留桌宠中的文字后重试。',true);return;}
+    }
+    if(location.hash!=='#lesson'){location.hash='lesson';return;}
+    if(state.helpTab!=='tutor'){state.helpTab='tutor';renderHelp();}
+    const input=$('#chat-question');if(!input)return;
+    if(input.value.trim()){
+      if(!petNotices.has(pending.id)){petNotices.add(pending.id);toast('桌宠问题已排队，请先发送或清空导师输入框中的文字。');}
+      return;
+    }
+    return submitTutorQuestion(pending.question,()=>{
+      // Persist acceptance before removing the queue entry. A failed write keeps
+      // the request pending; a failed removal cannot make it run twice.
+      const latest=JSON.parse(localStorage.getItem(pending.key)||'null');
+      if(latest?.status!=='pending')throw new Error('这个问题已由学习页接收，请勿重复发送。');
+      localStorage.setItem(pending.key,JSON.stringify({...pending,status:'accepted'}));
+      try{localStorage.removeItem(pending.key);}catch{}
+    });
+  }
 }
 window.addEventListener('sparkpet:ask',event=>{
   const question=String(event.detail?.question||'').trim();if(!question)return;
-  try{localStorage.setItem(petQuestionKey,JSON.stringify({question,time:Date.now()}))}catch{toast('浏览器无法暂存问题，请在课程页向导师提问。',true);return}
-  if(isStudyTab){if(location.hash==='#lesson')consumePetQuestion();else location.hash='lesson';}
-  else openStudyTab();
+  if(question.length>10000){toast('问题过长，请缩短后再发送。',true);return;}
+  const questions=pendingPetQuestions(),restoreId=event.detail?.restoreId;
+  const restored=restoreId?questions.find(item=>item.id===restoreId):null;
+  if(restoreId&&!restored){toast('这个待发问题已被处理，请查看导师记录；当前文字仍保留。',true);return;}
+  const opened=isStudyTab?null:openStudyTab();if(!isStudyTab&&!opened)return;
+  let target=isStudyTab?{sessionId:session,task:petTaskContext()}:null;
+  if(!isStudyTab&&!opened.fresh){try{const saved=JSON.parse(localStorage.getItem(petStudyContextKey)||'null');if(saved?.userId===accountUser)target=saved;}catch{}}
+  const sameQueue=item=>item.id!==restoreId&&!petQuestionExpired(item)&&item.sessionId===(target?.sessionId||null)
+    &&(samePetTask(item.task,target?.task)||!item.task&&!target?.task);
+  if(questions.filter(sameQueue).length>=20){toast('当前练习的待发送问题较多，请先等待导师处理；当前文字仍保留。',true);return;}
+  const id=Array.from(crypto.getRandomValues(new Uint8Array(12)),value=>value.toString(16).padStart(2,'0')).join('');
+  const pending={id,userId:accountUser,sessionId:target?.sessionId||null,task:target?.task||null,question,time:Date.now(),sequence:petQuestionSequence++,status:'pending'};
+  try{localStorage.setItem(petQuestionPrefix+id,JSON.stringify(pending));}catch{toast('浏览器无法暂存问题，请保留文字后重试。',true);return;}
+  if(restored){
+    try{
+      const previous=JSON.parse(localStorage.getItem(restored.key)||'null');
+      if(previous?.status==='pending')localStorage.setItem(restored.key,JSON.stringify({...previous,status:'moved'}));
+      localStorage.removeItem(restored.key);
+    }catch{}
+  }
+  event.detail.accepted=true;
+  if(isStudyTab)consumePetQuestion();
 });
-window.addEventListener('storage',event=>{if(event.key===petQuestionKey&&isStudyTab)consumePetQuestion()});
+window.addEventListener('sparkpet:pending',event=>{
+  if(!event.detail)return;
+  event.detail.items=pendingPetQuestions().slice().reverse().map(item=>({id:item.id,question:item.question,time:item.time,expired:petQuestionExpired(item)}));
+});
+window.addEventListener('storage',event=>{if(event.key?.startsWith(petQuestionPrefix)&&isStudyTab)consumePetQuestion();});
 function acceptLesson(result, fresh = false) {
   state.lesson = fresh ? result : {...state.lesson, ...result};
   state.choice = ''; state.passed = false; state.coachMessage = null; state.coach = null; state.helpTab = 'tutor';
@@ -310,7 +400,7 @@ async function moveStep(method) {
   if (result.atStart) return;
   if (result.finished) {
     $('#content').innerHTML = `<section class="panel empty-state"><div class="finish-art">✳</div><p class="eyebrow">ONE MORE STEP FORWARD</p><h2>${result.practiceMode ? '这道练习，完成了。' : '这一课，学完了。'}</h2><p>将刚刚的收获带进下一次实践。<br>你可以回看学习画像，找到下一步的方向。</p><div class="inline-actions" style="justify-content:center"><a class="btn primary" href="#courses">继续探索课程 →</a><a class="btn" href="#diagnosis">查看学习画像</a></div></section>`;
-    state.lesson = null; await dashboard(); return;
+    state.lesson = null; publishPetStudyContext(); await dashboard(); return;
   }
   acceptLesson(result);saveNavigation();renderLesson(); window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -326,16 +416,56 @@ function renderHelp() {
   }
   if(state.helpTab==='coach'&&state.coach)host.insertAdjacentHTML('beforeend',features.coachDetails(state.coach));
 }
+async function submitTutorQuestion(question,onAccepted) {
+  question=String(question||'').trim();
+  const form=$('#chat-form');
+  if(state.busy||!state.lesson||!form||!question||!$('#chat-question'))return false;
+  const button=$('button[type="submit"]',form);
+  let accepted=false,completed=false;
+  state.busy=true;if(button)button.disabled=true;
+  try{
+    onAccepted?.();accepted=true;
+    state.chats.push({role:'user',text:question});renderHelp();$('#chat-question').disabled=true;
+    petActivity('running','AI 导师正在回答');
+    await flushEdits();
+    const result=await rpc('webChat',{question,code:currentCode()});
+    state.chats.push({role:'tutor',text:result.answer});renderHelp();petActivity('ready','AI 导师已回答');completed=true;
+  }catch(error){
+    petActivity('blocked','AI 导师暂时无法回答');toast(error.message,true);
+    const input=$('#chat-question');
+    if(input){input.disabled=false;if(!input.value.trim())input.value=question;}
+  }finally{
+    state.busy=false;if(button?.isConnected)button.disabled=false;
+    if(completed||state.routePending)resumePetWork();
+  }
+  return accepted;
+}
+function historyTodaySummary(data,courseId) {
+  const summary=data.todaySummary;
+  const counts=['eventCount','eligibleSubmissionCount','passedSubmissionCount'];
+  if(!summary||summary.timeZone!=='Asia/Shanghai'||summary.courseId!==courseId
+    ||!/^\d{4}-\d{2}-\d{2}$/.test(summary.date||'')
+    ||counts.some(key=>!Number.isInteger(summary[key])||summary[key]<0)
+    ||!Number.isFinite(summary.estimatedActiveMinutes)||summary.estimatedActiveMinutes<0
+    ||summary.passedSubmissionCount>summary.eligibleSubmissionCount||summary.eligibleSubmissionCount>summary.eventCount)return null;
+  return summary;
+}
 
 async function renderHistory() {
-  const version=state.routeVersion;
-  const [data,eventData] = await Promise.all([rpc('getLearningHistory', {offset:state.historyOffset, limit:15, window:state.historyWindow, courseId:state.historyCourse}),rpc('getLearningEvents',{latest:true,limit:200})]);
-  if(version!==state.routeVersion||location.hash!=='#history')return;
-  const today=new Date().toLocaleDateString('zh-CN',{timeZone:'Asia/Shanghai'}),todayEvents=(eventData.events||[]).filter(event=>new Date(event.timestamp).toLocaleDateString('zh-CN',{timeZone:'Asia/Shanghai'})===today).sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
-  let activeMs=0;for(let i=1;i<todayEvents.length;i++)activeMs+=Math.min(10*60*1000,Math.max(0,new Date(todayEvents[i].timestamp)-new Date(todayEvents[i-1].timestamp)));const activeMinutes=Math.round(activeMs/60000);
-  const passedToday=todayEvents.filter(event=>event.passed===true).length;
-  const motivation=activeMinutes>=30?'专注正在积累，记得适时休息。':todayEvents.length?'今天已经迈出一步，再完成一个小目标吧。':'从 10 分钟开始，也是一段值得记录的学习。';
-  $('#content').innerHTML = heading('回看走过的每一步', '运行、提交、求助与修复，都可以成为理解学习过程的线索。') + `<section class="history-motivation"><div><span class="section-kicker">TODAY'S MOMENTUM</span><h2>今天学习了 <strong>${activeMinutes}</strong> 分钟</h2><p>${esc(motivation)}</p><small>依据当天连续学习事件估算，间隔超过 10 分钟不计入时长。</small></div><div class="motivation-stats"><span><strong>${todayEvents.length}</strong>次活动</span><span><strong>${passedToday}</strong>次通过</span><a class="btn primary" href="#courses">继续学习 →</a></div></section><div class="section-title"><div class="history-filters"><select id="history-course" aria-label="筛选课程"><option value="">全部课程</option>${data.courses.map(c => `<option value="${esc(c.id)}" ${state.historyCourse === c.id ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}</select><select id="history-window" aria-label="时间范围">${[['all','全部历史'],['7d','近 7 天'],['30d','近 30 天']].map(([value,label]) => `<option value="${value}" ${state.historyWindow === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div><span class="muted">${data.total} 道题目</span></div>` + (data.tasks.length ? `<section class="panel"><div class="history-wrap"><table class="history-table"><thead><tr><th>练习题目</th><th>最近评估</th><th>运行 / 提交</th><th>求助</th><th>最近活动</th></tr></thead><tbody>${data.tasks.map((task,i) => `<tr><td><button class="text-link" data-action="task-history" data-index="${i}">${esc(task.title)}</button><small>${esc(task.lessonTitle)}</small></td><td>${task.latestAssessment ? (task.latestAssessment.passed ? '<span class="badge">已通过</span>' : '<span class="badge purple">待改进</span>') : '暂无有效评估'}</td><td>${task.counts.runs} / ${task.counts.submissions}</td><td>${task.counts.hints} 次提示</td><td>${date(task.lastActivityAt)}</td></tr>`).join('')}</tbody></table></div><div class="pagination"><button class="btn small" data-action="history-prev" ${!state.historyOffset ? 'disabled' : ''}>← 上一页</button><span>${Math.floor(state.historyOffset / 15) + 1}</span><button class="btn small" data-action="history-next" ${!data.hasMore ? 'disabled' : ''}>下一页 →</button></div></section><div id="history-detail" class="history-detail"></div>` : empty('学习足迹，等待你的第一笔', '完成一次练习、提交或求助后，就能在这里回顾自己的学习过程。')) + `<p class="disclaimer">${esc(data.disclaimer)}</p>`;
+  const version=state.routeVersion,request=(state.historyRequest||0)+1;state.historyRequest=request;
+  const filters={offset:state.historyOffset,limit:15,window:state.historyWindow,courseId:state.historyCourse};
+  let data;
+  try{data=await rpc('getLearningHistory',filters);}catch(error){
+    if(request!==state.historyRequest||version!==state.routeVersion||location.hash!=='#history')return;
+    throw error;
+  }
+  if(request!==state.historyRequest||version!==state.routeVersion||location.hash!=='#history')return;
+  const summary=historyTodaySummary(data,filters.courseId),activeMinutes=summary?.estimatedActiveMinutes??'—';
+  const passedToday=summary?.passedSubmissionCount??'—',eventCount=summary?.eventCount??'—';
+  const scope=filters.courseId?(data.courses.find(course=>course.id===filters.courseId)?.title||'所选课程'):'全部课程';
+  const motivation=!summary?'完整统计暂不可用，请刷新后重试。':activeMinutes>=30?'专注正在积累，记得适时休息。':eventCount?'今天已经迈出一步，再完成一个小目标吧。':'从 10 分钟开始，也是一段值得记录的学习。';
+  const summaryNote=summary?`北京时间 ${summary.date} · ${scope}。同一学习会话中不超过 10 分钟的事件间隔估算活跃时长，重叠区间合并；不代表在线时长。通过次数含同题重试，不代表独立掌握。`:`北京时间 · ${scope}。尚未取得完整统计，暂不显示次数与时长。`;
+  $('#content').innerHTML = heading('回看走过的每一步', '运行、提交、求助与修复，都可以成为理解学习过程的线索。') + `<section class="history-motivation"><div><span class="section-kicker">TODAY'S MOMENTUM</span><h2>${summary?'今日估算活跃':'今日统计暂不可用'} <strong>${activeMinutes}</strong>${summary?' 分钟':''}</h2><p>${esc(motivation)}</p><small>${esc(summaryNote)}</small></div><div class="motivation-stats"><span><strong>${eventCount}</strong>次活动</span><span><strong>${passedToday}</strong>次通过</span><a class="btn primary" href="#courses">继续学习 →</a></div></section><div class="section-title"><div class="history-filters"><select id="history-course" aria-label="筛选课程"><option value="">全部课程</option>${data.courses.map(c => `<option value="${esc(c.id)}" ${state.historyCourse === c.id ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}</select><select id="history-window" aria-label="时间范围">${[['all','全部历史'],['7d','近 7 天'],['30d','近 30 天']].map(([value,label]) => `<option value="${value}" ${state.historyWindow === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div><span class="muted">${data.total} 道题目</span></div>` + (data.tasks.length ? `<section class="panel"><div class="history-wrap"><table class="history-table"><thead><tr><th>练习题目</th><th>最近评估</th><th>运行 / 提交</th><th>求助</th><th>最近活动</th></tr></thead><tbody>${data.tasks.map((task,i) => `<tr><td><button class="text-link" data-action="task-history" data-index="${i}">${esc(task.title)}</button><small>${esc(task.lessonTitle)}</small></td><td>${task.latestAssessment ? (task.latestAssessment.passed ? '<span class="badge">已通过</span>' : '<span class="badge purple">待改进</span>') : '暂无有效评估'}</td><td>${task.counts.runs} / ${task.counts.submissions}</td><td>${task.counts.hints} 次提示</td><td>${date(task.lastActivityAt)}</td></tr>`).join('')}</tbody></table></div><div class="pagination"><button class="btn small" data-action="history-prev" ${!state.historyOffset ? 'disabled' : ''}>← 上一页</button><span>${Math.floor(state.historyOffset / 15) + 1}</span><button class="btn small" data-action="history-next" ${!data.hasMore ? 'disabled' : ''}>下一页 →</button></div></section><div id="history-detail" class="history-detail"></div>` : empty('学习足迹，等待你的第一笔', '完成一次练习、提交或求助后，就能在这里回顾自己的学习过程。')) + `<p class="disclaimer">${esc(data.disclaimer)}</p>`;
   state.historyData=data;$('#content').insertAdjacentHTML('beforeend',features.historySupplement());
 }
 async function taskHistory(index, offset = 0) {
@@ -357,7 +487,8 @@ async function renderSettings(){if(!settingsPanel)throw new Error('设置页面�
 async function route(){
  const version=++state.routeVersion;
  try{
-  if(state.busy){toast('当前操作正在进行，请等待完成。');return;}
+  if(state.busy){state.routePending=true;toast('当前操作正在进行，完成后将打开所选页面。');return;}
+  state.routePending=false;
   const localCopy=rememberDraft();
   try{await flushEdits();}catch(error){if(!localCopy){toast('服务端与浏览器均未能保存，当前代码仍留在编辑器中。请先下载代码再离开。',true);return;}toast(`${error.message} 浏览器副本已保留，请回到练习页重试保存或下载当前代码。`,true);}
   const rawName=location.hash.slice(1)||'home';
@@ -393,6 +524,7 @@ async function route(){
    }
    case 'history':await renderHistory();break;case 'settings':await renderSettings();break;case 'data':location.hash='home';break;case 'demo':renderDemo();break;case 'account':window.SparkTutorAccount.renderAccount();break;case 'admin':await window.SparkTutorAccount.renderAdmin();break;default:location.hash='home';
   }
+   consumePetQuestion();
  }catch(error){if(version===state.routeVersion)$('#content').innerHTML=`<div class="panel route-error"><h2>这一步暂时没有完成</h2><p>${esc(error.message)}</p><button class="btn" data-action="refresh">重新加载</button></div>`;}
 }
 async function action(button) {
@@ -479,6 +611,7 @@ async function action(button) {
     if (button.isConnected) { button.innerHTML = oldMarkup; button.disabled = false; }
     if ($('#next-button')) $('#next-button').disabled = ['script','cmd_question','mult_question'].includes(state.lesson?.step?.cls) && !state.passed;
     if (['load','resume','course-start','recommended'].includes(type) && location.hash === '#lesson' && !$('#code-editor') && !$('.lesson-reading')) await route();
+    resumePetWork();
   }
 }
 async function saveSettings(){return settingsPanel.save();}
@@ -493,6 +626,7 @@ document.addEventListener('click', event => {
 document.addEventListener('input', event => {
   if (event.target.id === 'course-search') { state.query = event.target.value; renderCatalogResults(); }
   if(event.target.id==='quick-search-input'){renderQuickSearch(event.target.value);return;}
+  if(event.target.id==='chat-question'){if(!event.target.value.trim())consumePetQuestion();return;}
   if (event.target.id !== 'code-editor') return;
   const code = event.target.value; const old = state.lastCode; state.lastCode = code; rememberDraft(); updateLines();
   state.draftDirty = true; if ($('#save-state')) $('#save-state').textContent = '正在保存…';
@@ -506,11 +640,11 @@ document.addEventListener('input', event => {
 document.addEventListener('change', async event => {
   if(state.busy)return;
   try{if(await features.handleChange(event))return;}catch(error){toast(error.message,true);return;}
-  if(event.target.id==='lesson-depth'){state.depthExplicit=true;sessionStorage.setItem('sparktutor.depth',event.target.value);state.busy=true;try{await loadLesson(state.courseId,state.lessonIdx,event.target.value);}catch(error){toast(error.message,true);}finally{state.busy=false;}return;}
+  if(event.target.id==='lesson-depth'){state.depthExplicit=true;sessionStorage.setItem('sparktutor.depth',event.target.value);state.busy=true;try{await loadLesson(state.courseId,state.lessonIdx,event.target.value);}catch(error){toast(error.message,true);}finally{state.busy=false;resumePetWork();}return;}
   if (event.target.id === 'depth-select') { state.depth = event.target.value; state.depthExplicit=true; sessionStorage.setItem('sparktutor.depth',state.depth); return; }
   if (event.target.id === 'history-course' || event.target.id === 'history-window') {
     state.historyCourse = $('#history-course').value; state.historyWindow = $('#history-window').value; state.historyOffset = 0;
-    try { await renderHistory(); } catch(error) { toast(error.message,true); }
+    try { await renderHistory(); } catch(error) { toast(`历史刷新失败，仍显示上次结果：${error.message}`,true); }
   }
 });
 document.addEventListener('scroll', event => { if (event.target.id === 'code-editor') $('#line-numbers').scrollTop = event.target.scrollTop; },true);
@@ -522,13 +656,12 @@ document.addEventListener('keydown', event => {
 });
 document.addEventListener('submit', async event => {
   if (!['chat-form','settings-form'].includes(event.target.id)) return; event.preventDefault(); if (state.busy) return;
+  if(event.target.id==='chat-form'){await submitTutorQuestion($('#chat-question').value);return;}
   const button = $('button[type="submit"]',event.target); state.busy = true; button.disabled = true;
-  if(event.target.id==='chat-form')petActivity('running','AI 导师正在回答');
   try {
-    if(event.target.id==='settings-form'){await settingsPanel.handleSubmit(event);}
-    else { const question = $('#chat-question').value.trim(); if (!question) return; state.chats.push({role:'user',text:question}); renderHelp(); $('#chat-question').disabled = true; await flushEdits(); const r = await rpc('webChat',{question,code:currentCode()}); state.chats.push({role:'tutor',text:r.answer}); renderHelp(); petActivity('ready','AI 导师已回答'); }
-  } catch(error) { if(event.target.id==='chat-form')petActivity('blocked','AI 导师暂时无法回答');toast(error.message,true); if ($('#chat-question')) $('#chat-question').disabled = false; }
-  finally { state.busy = false; if (button.isConnected) button.disabled = false; }
+    await settingsPanel.handleSubmit(event);
+  } catch(error) { toast(error.message,true); }
+  finally { state.busy = false; if (button.isConnected) button.disabled = false;resumePetWork(); }
 });
 $('#menu-toggle').addEventListener('click',()=>{ const open = $('.sidebar').classList.toggle('open'); $('#menu-toggle').setAttribute('aria-expanded',String(open)); });
 window.addEventListener('hashchange',route);

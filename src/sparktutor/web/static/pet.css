@@ -20,6 +20,7 @@
 .spark-pet-tools-toggle{position:relative;z-index:2}
 .spark-pet-tools{position:absolute;right:calc(100% + 8px);bottom:0;display:flex;gap:7px;align-items:center;padding:7px;border:1px solid #dcc4a5;border-radius:24px;background:#fff9ee;box-shadow:0 9px 24px #533a222b}
 .spark-pet-tools button{width:36px;height:36px;box-shadow:none}
+.spark-pet[data-dock="left"] .spark-pet-speech,.spark-pet[data-dock="left"] .spark-pet-menu,.spark-pet[data-dock="left"] .spark-pet-tools,.spark-pet[data-dock="left"] .spark-pet-panel{left:calc(100% + 10px);right:auto}
 #spark-pet-unread{display:inline-block;width:6px;height:6px;margin-left:2px;border-radius:50%;background:#d1532f}
 #spark-pet-unread[hidden]{display:none}
 .spark-pet[data-status="running"] .spark-pet-image{animation:pet-cheer .8s ease-in-out infinite}
@@ -39,4 +40,15 @@
 @keyframes pet-sleep{0%,100%{transform:translateY(2px) rotate(-5deg)}50%{transform:translateY(5px) rotate(-7deg)}}
 @keyframes pet-sparkle{0%,100%{opacity:0;transform:scale(.5) rotate(0)}50%{opacity:1;transform:scale(1.3) rotate(45deg)}}
 @media(max-width:700px){.spark-pet{--pet-width:88px;left:calc(100vw - 100px);top:calc(100dvh - 145px)}.spark-pet-speech{top:12px;max-width:150px;font-size:11px}.spark-pet-tools{display:grid;grid-template-columns:repeat(3,36px);right:calc(100% + 5px);bottom:0}.spark-pet-menu{right:calc(100% + 5px);bottom:96px}.spark-pet-panel{right:0;bottom:45px}}
+@media(max-width:700px){.spark-pet[data-dock="left"] .spark-pet-panel{left:0;right:auto}}
 @media(prefers-reduced-motion:reduce){.spark-pet-image,.spark-pet-sparkle{animation:none!important}.spark-pet-speech{transition:none}}
+.spark-pet-panel { max-height:calc(100dvh - 24px); overflow-y:auto; overscroll-behavior:contain; }
+.spark-pet-pending-question { display:block; width:100%; margin:7px 0; padding:9px; border:1px solid #d5bd9e; border-radius:7px; background:#f4e6d1; color:#563d29; text-align:left; white-space:normal; overflow-wrap:anywhere; }
+html[data-theme="dark"] :is(.spark-pet-panel,.spark-pet-menu,.spark-pet-tools,.spark-pet-speech) { background:#2c342b; color:#eee2cd; border-color:#8a795d; }
+html[data-theme="dark"] :is(.spark-pet-menu button,.spark-pet-controls button,.spark-pet-panel-head button) { background:#303a2e; color:#f1d0a4; border-color:#8a795d; }
+html[data-theme="dark"] :is(.spark-pet-menu button:hover,.spark-pet-controls button:hover) { background:#45513a; }
+html[data-theme="dark"] #spark-pet-form input { background:#1d281f; color:#f4e8d2; border-color:#8a9176; }
+html[data-theme="dark"] :is(#spark-pet-status,#spark-pet-activity-list small) { color:#c9baa0; }
+html[data-theme="dark"] #spark-pet-activity-list a { color:#f3d9af; border-color:#62684d; }
+html[data-theme="dark"] .spark-pet-pending-question { background:#3e4732; color:#f2dfbf; border-color:#8c8f6a; }
+html[data-theme="dark"] .spark-pet-show { background:#303a2e; color:#f3d1a5; border-color:#8a795d; }
