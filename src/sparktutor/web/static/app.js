@@ -29,7 +29,7 @@ if (!session) {
 }
 const state = { storagePrefix, dashboard: null, lesson: null, courseId: '', lessonIdx: 0, depth: sessionStorage.getItem('sparktutor.depth') || 'beginner', choice: '', passed: false,
   busy: false, routeVersion: 0, courseFilter: '', query: '', historyOffset: 0, historyWindow: 'all', historyCourse: '',
-  helpTab: 'tutor', chats: [], coach: null, coachMessage: null, edit: null, draftTimer: null, lastCode: '', draftDirty: false, scopeCourseId: sessionStorage.getItem('sparktutor.scope') || '', notificationCursor: 0, operationId: '', depthExplicit: sessionStorage.getItem('sparktutor.depth') !== null };
+  helpTab: 'tutor', chats: [], chatKey: '', chatStorageFailed: false, tutorPending: false, coach: null, coachMessage: null, edit: null, draftTimer: null, lastCode: '', draftDirty: false, scopeCourseId: sessionStorage.getItem('sparktutor.scope') || '', notificationCursor: 0, operationId: '', depthExplicit: sessionStorage.getItem('sparktutor.depth') !== null };
 const names = { home: '学习工作台', courses: '课程目录', lesson: '课程学习', diagnosis: '学习画像', history: '学习历史', demo: '学习诊断示例', settings: '设置', account:'我的账号', admin:'管理后台' };
 const eventNames = { code_submit: '提交判题', code_run: '运行代码', hint_request: '查看提示', code_edit: '编辑代码', task_start: '开始练习', task_complete: '完成步骤', solution_view: '查看答案', chat_request: '导师问答', lesson_loaded: '进入课程' };
 const statusNames = { not_started: '尚未开始', in_progress: '学习中', completed: '已完成', unavailable: '暂不可用' };
@@ -219,6 +219,50 @@ function renderDiagnosis() {
 }
 
 function draftKey() { return `${state.storagePrefix}draft.${state.courseId}.${state.lesson?.lessonId}.${state.depth}.${state.lesson?.step?.id}`; }
+function tutorHistoryPrefix(courseId,lessonId){
+  const prefix=`${state.storagePrefix}chat.v1.`;
+  return courseId===undefined ? prefix : `${prefix}${encodeURIComponent(JSON.stringify([courseId,lessonId]))}.`;
+}
+function tutorHistoryKey(){
+  if(!state.lesson?.step?.id)return '';
+  return tutorHistoryPrefix(state.courseId,state.lesson.lessonId)+encodeURIComponent(JSON.stringify([state.depth,state.lesson.step.id]));
+}
+function readTutorHistory(key){
+  if(!key)return [];
+  let raw;
+  try{raw=localStorage.getItem(key);}catch{state.chatStorageFailed=true;return [];}
+  try{
+    const saved=JSON.parse(raw||'null');
+    if(saved?.version!==1||!Array.isArray(saved.messages))return [];
+    return saved.messages.filter(item=>item&&typeof item.id==='string'&&['user','tutor','error'].includes(item.role)
+      &&typeof item.text==='string'&&item.text.length<=100000&&Number.isFinite(item.at)).slice(-100);
+  }catch{return [];}
+}
+function restoreTutorHistory(){
+  state.chatKey=tutorHistoryKey();state.chatStorageFailed=false;
+  state.chats=readTutorHistory(state.chatKey);state.tutorPending=false;
+}
+function appendTutorMessage(role,text){
+  const saved=readTutorHistory(state.chatKey);
+  const messages=new Map([...saved,...state.chats].map(item=>[item.id,item]));
+  const at=Math.max(Date.now(),...Array.from(messages.values(),item=>item.at||0))+1;
+  const id=Array.from(crypto.getRandomValues(new Uint8Array(12)),value=>value.toString(16).padStart(2,'0')).join('');
+  messages.set(id,{id,role,text:String(text??''),at});
+  state.chats=[...messages.values()].sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id)).slice(-100);
+  try{
+    if(!state.chatKey||state.chats.some(item=>item.text.length>100000))throw new Error('Conversation cannot be stored');
+    localStorage.setItem(state.chatKey,JSON.stringify({version:1,messages:state.chats}));state.chatStorageFailed=false;
+  }catch{state.chatStorageFailed=true;}
+}
+let tutorHistoryGeneration=0;
+function clearTutorHistory(courseId,lessonId){
+  const prefix=tutorHistoryPrefix(courseId,lessonId);
+  if(!state.chatKey||state.chatKey.startsWith(prefix)){
+    tutorHistoryGeneration++;state.chats=[];state.chatKey='';state.tutorPending=false;
+  }
+  try{for(const key of Object.keys(localStorage))if(key.startsWith(prefix))localStorage.removeItem(key);}
+  catch{state.chatStorageFailed=true;}
+}
 function currentCode() { return window.activeSparkTutorEditor?.getValue() ?? $('#code-editor')?.value ?? state.lastCode ?? ''; }
 function currentAnswer() { return state.lesson?.step?.cls === 'mult_question' ? state.choice : currentCode(); }
 function rememberDraft() { if(!state.lesson?.step?.id)return true;try{localStorage.setItem(draftKey(),currentCode());return true;}catch{return false;} }
@@ -238,12 +282,13 @@ async function flushEdits() {
 }
 function draftIdentity(){return{courseId:state.courseId,lessonId:state.lesson?.lessonId,stepId:state.lesson?.step?.id,depth:state.depth,contextToken:state.lesson?.contextToken,draftRevision:state.lesson?.draftRevision};}
 function saveNavigation(){if(state.lesson)sessionStorage.setItem('sparktutor.lastLesson',JSON.stringify({courseId:state.courseId,lessonIdx:state.lessonIdx,depth:state.depth,practiceMode:Boolean(state.lesson.practiceMode),stepId:state.lesson.step?.id}));publishPetStudyContext();}
-function openStudyTab(request = null) {
+function openStudyTab(request = null, focusTutor = false) {
   if (isStudyTab && !request) { location.hash='lesson'; return {tab:window,fresh:false}; }
   const tab = window.open('', `sparktutor-study-${accountUser||'local'}`);
   if (!tab) { toast('浏览器拦截了学习标签页，请允许此网站打开新标签页后重试。',true); return; }
   const url = new URL(location.pathname,location.origin);
   url.searchParams.set('study','1');
+  if(focusTutor)url.searchParams.set('help','tutor');
   url.hash = request ? `study/${encodeURIComponent(JSON.stringify(request))}` : 'lesson';
   const fresh=tab.location.href==='about:blank';
   if (request || fresh) tab.location.href=url.href;
@@ -354,11 +399,29 @@ window.addEventListener('sparkpet:pending',event=>{
   if(!event.detail)return;
   event.detail.items=pendingPetQuestions().slice().reverse().map(item=>({id:item.id,question:item.question,time:item.time,expired:petQuestionExpired(item)}));
 });
+let tutorFocusPending=new URLSearchParams(location.search).get('help')==='tutor';
+function focusTutorReply(){
+  if(location.hash!=='#lesson'||!state.lesson||!$('#help-content'))return;
+  if(state.helpTab!=='tutor'){state.helpTab='tutor';renderHelp();}
+  const messages=$('#chat-messages');
+  if(messages?.lastElementChild)messages.scrollTop=messages.lastElementChild.offsetTop;
+  messages?.scrollIntoView?.({behavior:'smooth',block:'center'});
+  tutorFocusPending=false;
+}
+window.addEventListener('sparkpet:view-tutor',()=>{
+  if(isStudyTab){
+    tutorFocusPending=true;
+    if(location.hash!=='#lesson')location.hash='lesson';else focusTutorReply();
+    return;
+  }
+  const opened=openStudyTab(null,true);if(!opened)return;
+  if(!opened.fresh)opened.tab.dispatchEvent(new CustomEvent('sparkpet:view-tutor'));
+});
 window.addEventListener('storage',event=>{if(event.key?.startsWith(petQuestionPrefix)&&isStudyTab)consumePetQuestion();});
 function acceptLesson(result, fresh = false) {
   state.lesson = fresh ? result : {...state.lesson, ...result};
   state.choice = ''; state.passed = false; state.coachMessage = null; state.coach = null; state.helpTab = 'tutor';
-  if (fresh) state.chats = [];
+  restoreTutorHistory();
   let draft = null; try { draft = localStorage.getItem(draftKey()); } catch {}
   state.lastCode=result.draftFound?(result.restoredCode??''):(draft??(result.restoredCode||result.starterCode||''));
   state.edit=null;state.draftDirty=!result.draftFound&&draft!==null&&['script','cmd_question'].includes(state.lesson?.step?.cls);saveNavigation();
@@ -371,6 +434,7 @@ function renderLesson() {
   $('#content').innerHTML = `<div class="lesson-header"><div><p class="eyebrow">${lesson.practiceMode ? 'FOCUSED PRACTICE / 单题练习' : 'LEARNING BY DOING'}</p><h1>${esc(lesson.lessonTitle)}</h1></div><div class="inline-actions">${features.difficultySelect()}<button class="btn small" data-action="feature-reset-lesson">重置本课</button><a class="btn" href="#home">学习首页</a><a class="btn" href="#courses">课程目录</a></div></div><div class="lesson-layout"><section class="panel lesson-reading"><div class="lesson-step-meta"><span>${{text:'阅读与理解',mult_question:'概念自测',cmd_question:'动手练习',script:'综合编程'}[step.cls] || '学习步骤'}</span><span>步骤 ${lesson.currentIndex + 1} / ${lesson.totalSteps}</span></div><div class="progress-track"><span style="width:${(lesson.currentIndex + 1) / lesson.totalSteps * 100}%"></span></div><div class="markdown">${markdown(step.output)}</div>${step.cls === 'mult_question' ? `<div class="choice-list">${choices(step).map((choice, index) => `<button class="choice ${state.choice === choice ? 'selected' : ''}" data-action="choice" data-choice="${esc(choice)}" aria-pressed="${state.choice === choice}"><span>${'ABCD'[index] || index + 1}</span>${esc(choice)}</button>`).join('')}</div>` : ''}<div id="feedback" aria-live="polite"></div><div id="hint-area" aria-live="polite"></div><div class="lesson-controls"><button class="btn small" data-action="back" ${lesson.currentIndex === 0 || lesson.practiceMode ? 'disabled' : ''}>← 上一步</button><div>${isQuestion ? '<button class="btn small" data-action="hint">✧ 提示</button>' : ''}${step.cls === 'mult_question' ? '<button class="btn small primary" data-action="submit">提交答案</button>' : ''}<button class="btn small primary" id="next-button" data-action="next" ${isQuestion && !state.passed ? 'disabled' : ''}>${lesson.practiceMode ? '完成练习' : '下一步'} →</button></div></div></section><div class="lesson-tools">${isCode ? `<section class="editor-panel"><div class="editor-toolbar"><span>● &nbsp; ${step.cls === 'script' ? esc(step.starterCode || 'exercise.py') : 'exercise.py'}</span><div class="editor-tool-buttons"><button class="btn small" data-action="feature-editor-search">搜索 / 替换</button><span>Python · 基础补全</span></div></div><div class="editor-wrap"><div class="line-numbers" id="line-numbers" aria-hidden="true"></div><textarea id="code-editor" class="code-editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Python 代码编辑器">${esc(state.lastCode)}</textarea></div><div class="editor-footer"><span id="save-state">自动保存草稿</span><span>UTF-8 &nbsp; · &nbsp; 4 空格缩进</span></div></section><div class="editor-actions"><button class="btn small" data-action="feature-editor-download">下载代码</button><button class="btn small" data-action="solution">查看参考答案</button><button class="btn small" data-action="run">▷ 运行代码</button><button class="btn small primary" data-action="submit">提交判题 →</button></div><section class="panel output-panel"><div class="output-heading"><span>运行输出</span><span class="muted" id="execution-mode">等待运行</span></div><pre id="run-output" role="log">运行代码后，结果会显示在这里。</pre></section>` : ''}<section class="panel help-panel"><div class="help-tabs"><button class="active" data-action="help-tab" data-tab="tutor">✦ 导师问答</button><button data-action="help-tab" data-tab="coach">调试教练</button></div><div id="help-content"></div></section></div></div>`;
   renderHelp(); if(isCode){updateLines();if(window.SparkTutorEditor)window.activeSparkTutorEditor=window.SparkTutorEditor.create($('#code-editor'));}
   if(isQuestion&&!state.passed)petActivity('needsInput','');
+  if(tutorFocusPending)focusTutorReply();
 }
 function choices(step) {
   const items = (Array.isArray(step.answerChoices) ? step.answerChoices : (step.answerChoices || '').split(';')).filter(Boolean);
@@ -406,9 +470,12 @@ async function moveStep(method) {
 }
 function renderHelp() {
   const host = $('#help-content'); if (!host) return;
+  if(state.chatKey!==tutorHistoryKey())restoreTutorHistory();
   document.querySelectorAll('[data-action="help-tab"]').forEach(b => b.classList.toggle('active', b.dataset.tab === state.helpTab));
   if (state.helpTab === 'tutor') {
-    host.innerHTML = `<div class="chat-messages" id="chat-messages">${state.chats.length ? state.chats.map(chat => `<div class="chat-bubble ${chat.role === 'user' ? 'user' : ''}"><div class="markdown">${markdown(chat.text)}</div></div>`).join('') : '<p class="disclaimer no-margin">从一个问题开始。导师会结合当前题面与代码，帮你理解概念和下一步思路。<a href="#settings"> 配置模型 ↗</a></p>'}</div><form class="chat-form" id="chat-form"><label class="sr-only" for="chat-question">向导师提问</label><input id="chat-question" placeholder="有什么想不明白的？" required maxlength="10000"><button class="btn primary small" type="submit">发送 ↑</button></form>`;
+    host.innerHTML = `<div class="chat-messages" id="chat-messages" role="log" aria-label="导师问答记录" aria-live="polite" aria-busy="${state.tutorPending}">${state.chats.length ? state.chats.map(chat => `<div class="chat-bubble ${chat.role === 'user' ? 'user' : chat.role === 'error' ? 'chat-error' : ''}"><strong class="chat-author">${chat.role === 'user' ? '你' : chat.role === 'error' ? '本次未收到导师回复' : 'AI 导师'}</strong><div class="markdown">${markdown(chat.text)}</div>${chat.role === 'error' ? '<a href="#settings">检查此学习页的模型配置 →</a>' : ''}</div>`).join('') : '<p class="disclaimer no-margin">从一个问题开始。导师会结合当前题面与代码，帮你理解概念和下一步思路。<a href="#settings"> 配置模型 ↗</a></p>'}${state.tutorPending ? '<div class="chat-bubble chat-pending"><span class="spinner" aria-hidden="true"></span>AI 导师正在回答，请稍候…</div>' : ''}</div><form class="chat-form" id="chat-form"><label class="sr-only" for="chat-question">向导师提问</label><input id="chat-question" placeholder="有什么想不明白的？" required maxlength="10000" ${state.tutorPending ? 'disabled' : ''}><button class="btn primary small" type="submit" ${state.tutorPending ? 'disabled' : ''}>${state.tutorPending ? '回答中…' : '发送 ↑'}</button></form>`;
+    host.insertAdjacentHTML('beforeend',`<p class="disclaimer chat-storage-note" role="status">${state.chatStorageFailed ? '对话暂未保存，刷新前请复制需要的内容。浏览器存储可能已满或被禁用。' : '本浏览器按账号和练习保留最近 100 条对话，刷新可恢复；退出账号或清除浏览器数据后删除。'}</p>`);
+    if(!state.tutorPending&&state.chats.at(-1)?.role==='user')host.insertAdjacentHTML('beforeend','<p class="disclaimer">上一条问题暂无已保存的回复；需要时请重新发送，系统不会自动重试。</p>');
     const messages = $('#chat-messages'); messages.scrollTop = messages.scrollHeight;
   } else {
     const c = state.coach;
@@ -421,22 +488,33 @@ async function submitTutorQuestion(question,onAccepted) {
   const form=$('#chat-form');
   if(state.busy||!state.lesson||!form||!question||!$('#chat-question'))return false;
   const button=$('button[type="submit"]',form);
+  const requestSession=session,requestKey=state.chatKey,requestContext=state.lesson.contextToken,requestGeneration=tutorHistoryGeneration;
+  const isCurrent=()=>session===requestSession&&state.chatKey===requestKey&&state.lesson?.contextToken===requestContext&&tutorHistoryGeneration===requestGeneration;
   let accepted=false,completed=false;
   state.busy=true;if(button)button.disabled=true;
   try{
     onAccepted?.();accepted=true;
-    state.chats.push({role:'user',text:question});renderHelp();$('#chat-question').disabled=true;
+    state.tutorPending=true;
+    appendTutorMessage('user',question);renderHelp();focusTutorReply();
     petActivity('running','AI 导师正在回答');
     await flushEdits();
+    if(!isCurrent())return accepted;
     const result=await rpc('webChat',{question,code:currentCode()});
-    state.chats.push({role:'tutor',text:result.answer});renderHelp();petActivity('ready','AI 导师已回答');completed=true;
+    if(!isCurrent())return accepted;
+    state.tutorPending=false;
+    appendTutorMessage('tutor',result.answer);renderHelp();focusTutorReply();petActivity('ready','AI 导师已回答，请在导师问答查看');completed=true;
   }catch(error){
-    petActivity('blocked','AI 导师暂时无法回答');toast(error.message,true);
+    if(!isCurrent())return accepted;
+    state.tutorPending=false;
+    if(accepted){appendTutorMessage('error',error.message);renderHelp();focusTutorReply();}
+    petActivity('blocked','AI 导师暂时无法回答，请在导师问答查看原因');toast(error.message,true);
     const input=$('#chat-question');
     if(input){input.disabled=false;if(!input.value.trim())input.value=question;}
   }finally{
-    state.busy=false;if(button?.isConnected)button.disabled=false;
-    if(completed||state.routePending)resumePetWork();
+    if(isCurrent()){
+      state.busy=false;if(button?.isConnected)button.disabled=false;
+      if(completed||state.routePending)resumePetWork();
+    }
   }
   return accepted;
 }
@@ -672,11 +750,12 @@ window.addEventListener('pagehide',()=>{
 
 let draftFlush=Promise.resolve();
 const features=window.createSparkTutorFeatures({rpc,esc,state,heading,date,pct,toast,currentCode,
- refresh:async()=>{const busy=state.busy;state.busy=false;try{await route();}finally{state.busy=busy;}},rotateSession});
+ refresh:async()=>{const busy=state.busy;state.busy=false;try{await route();}finally{state.busy=busy;}},rotateSession,clearTutorHistory});
 const settingsPanel=window.createSparkTutorSettings?window.createSparkTutorSettings({rpc,esc,icon,toast,renderEnvironment:host=>features.renderEnvironment(host)}):null;
 const checkinPanel=window.createSparkTutorCheckIn?window.createSparkTutorCheckIn({rpc,esc,icon,toast}):null;
 function destroyEditor(){if(window.activeSparkTutorEditor){window.activeSparkTutorEditor.destroy();window.activeSparkTutorEditor=null;}}
 function rotateSession(newSessionId){
+ clearTutorHistory();
  clearTimeout(state.draftTimer);state.edit=null;state.draftDirty=false;state.lesson=null;state.lastCode='';state.operationId='';state.notificationCursor=0;state.busy=false;destroyEditor();
  for(const key of Object.keys(localStorage))if(key.startsWith(`${state.storagePrefix||'sparktutor.'}draft.`))localStorage.removeItem(key);
  sessionStorage.removeItem('sparktutor.lastLesson');session=newSessionId||Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');sessionStorage.setItem('sparktutor.session',session);location.hash='home';
@@ -689,6 +768,7 @@ async function pollNotifications(){
   for(const item of data.notifications||[]){const params=item.params||{};
    if(item.method==='sessionReset'){rotateSession(params.sessionId);toast('学习记录已在另一标签页清除，请重新开始。');await route();break;}
    if(item.method==='lessonReset'){
+    clearTutorHistory(params.courseId,params.lessonId);
     const prefix=`${state.storagePrefix||'sparktutor.'}draft.${params.courseId}.${params.lessonId}.`;
     if(state.courseId===params.courseId&&state.lesson?.lessonId===params.lessonId&&state.draftDirty){try{localStorage.setItem(`${state.storagePrefix||'sparktutor.'}recovery.${Date.now()}`,JSON.stringify({courseId:state.courseId,lessonId:state.lesson.lessonId,stepId:state.lesson.step?.id,code:currentCode()}));}catch{}}
     for(const key of Object.keys(localStorage))if(key.startsWith(prefix))localStorage.removeItem(key);
@@ -705,7 +785,7 @@ async function pollNotifications(){
 async function beginOperation(){await pollNotifications();state.operationId=Array.from(crypto.getRandomValues(new Uint8Array(12)),v=>v.toString(16).padStart(2,'0')).join('');state.outputStarted=false;}
 if(window.SparkTutorAccount){
  window.SparkTutorAccount.beforeLogout=async()=>{rememberDraft();await flushEdits();};
- window.SparkTutorAccount.afterLogout=()=>{for(const key of Object.keys(localStorage))if(key.startsWith(state.storagePrefix))localStorage.removeItem(key);};
+ window.SparkTutorAccount.afterLogout=()=>{clearTutorHistory();for(const key of Object.keys(localStorage))if(key.startsWith(state.storagePrefix))localStorage.removeItem(key);};
 }
 setInterval(pollNotifications,700);
 route();

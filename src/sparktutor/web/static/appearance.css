@@ -38,6 +38,13 @@ main { width:100%; }
 .field label,.field input,.field select,.field textarea,.chat-form input,.chat-form button { font-size:.9rem; }
 .field small,.settings-grid .panel > p,.disclaimer,.settings-storage-note { font-size:.8rem; line-height:1.8; }
 .dimension-card p,.coach-message p,.help-panel p,.knowledge-list p,.environment-checks p,.environment-checks li { font-size:.85rem; }
+.chat-bubble .markdown,.chat-bubble .markdown p,.chat-bubble .markdown li,.chat-form input,.chat-form button { font-size:1rem; }
+.chat-messages { position:relative; max-height:480px; max-height:min(480px,60dvh); scroll-margin-block:90px; }
+.chat-bubble { min-width:0; }
+.chat-author { display:block; font-size:.85rem; margin-bottom:6px; }
+.chat-pending { display:flex; align-items:center; gap:10px; font-size:.95rem; }
+.chat-error { border:1px solid #b8795d; }
+.chat-error > a { display:inline-block; font-size:.9rem; margin-top:6px; }
 .dimension-card h3,.stat-label,.history-table,.event-item,.knowledge-list summary { font-size:.85rem; }
 .stat-value { font-size:1.6rem; }
 .badge,.toast,.muted { font-size:.8rem; }
