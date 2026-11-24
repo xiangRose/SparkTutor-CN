@@ -1,6 +1,6 @@
 'use strict';
 
-window.createSparkTutorFeatures = function ({rpc,esc,state,date,pct,toast,refresh,rotateSession,currentCode}) {
+window.createSparkTutorFeatures = function ({rpc,esc,state,date,pct,toast,refresh,rotateSession,currentCode,clearTutorHistory=()=>{}}) {
   let sequence = 0;
   const label = {knowledge:'知识任务表现',debugging:'失败过程修复率',transfer:'首次迁移通过率',hint_dependency:'提示使用覆盖率'};
   const num = value => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -99,8 +99,9 @@ window.createSparkTutorFeatures = function ({rpc,esc,state,date,pct,toast,refres
     if(type==='feature-editor-download')download(currentCode(),'sparktutor-exercise.py','text/x-python;charset=utf-8');
     if(type==='feature-reset-lesson'){
       if(!state.lesson)return true;
-      if(!window.confirm('重置当前课节？本课的进度和受管练习代码会清除；其他课节及辅助文件保留。'))return true;
+      if(!window.confirm('重置当前课节？本课的进度、受管练习代码和本浏览器的导师对话会清除；其他课节及辅助文件保留。'))return true;
       await rpc('resetWebLesson',{courseId:state.courseId,lessonId:state.lesson.lessonId,contextToken:state.lesson.contextToken,confirmation:'reset-lesson'});
+      clearTutorHistory(state.courseId,state.lesson.lessonId);
       const prefix=`${state.storagePrefix||'sparktutor.'}draft.${state.courseId}.${state.lesson.lessonId}.`;
       for(const key of Object.keys(localStorage))if(key.startsWith(prefix))localStorage.removeItem(key);
       state.edit=null;state.draftDirty=false;state.lesson=null;state.lastCode='';state.passed=false;

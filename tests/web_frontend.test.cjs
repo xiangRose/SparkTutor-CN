@@ -142,17 +142,18 @@ test('removed browser draft export does not create downloads',async()=>{
 test('a lesson reset notification is handled even when no execution operation is active',async()=>{
  const app=fs.readFileSync(path.join(assets,'app.js'),'utf8');
  const pollSource=app.slice(app.indexOf('async function pollNotifications('),app.indexOf('async function beginOperation('));
- const loaded=[],removed=[];const local={
+ const loaded=[],removed=[],clearedChats=[];const local={
   'sparktutor.draft.course.lesson.beginner.step':'unsaved code',
   setItem(key,value){this[key]=value;},removeItem(key){delete this[key];removed.push(key);},
  };
  const state={notificationCursor:0,operationId:'',courseId:'course',lessonIdx:2,depth:'beginner',lesson:{lessonId:'lesson',step:{id:'step'}},draftDirty:true};
  const context=vm.createContext({window:{},state,localStorage:local,sessionStorage:{removeItem(){}},location:{hash:'#lesson'},
   rpc:async()=>({cursor:1,notifications:[{method:'lessonReset',params:{courseId:'course',lessonId:'lesson'}}]}),
-  currentCode:()=> 'unsaved code',destroyEditor(){},toast(){},loadLesson:async(...args)=>loaded.push(args),route(){},console});
+  currentCode:()=> 'unsaved code',clearTutorHistory:(...args)=>clearedChats.push(args),destroyEditor(){},toast(){},loadLesson:async(...args)=>loaded.push(args),route(){},console});
  vm.runInContext(pollSource,context);await vm.runInContext('pollNotifications()',context);
  assert.equal(loaded.length,1);assert.deepEqual(loaded[0],['course',2,'beginner']);assert.equal(state.notificationCursor,1);assert.equal(state.lesson,null);
  assert.ok(removed.includes('sparktutor.draft.course.lesson.beginner.step'));
+ assert.deepEqual(clearedChats,[['course','lesson']]);
  assert.ok(Object.keys(local).some(key=>key.startsWith('sparktutor.recovery.')));
 });
 
@@ -627,11 +628,11 @@ function petAppBrowser(){
  class BrowserDate extends Date{constructor(...args){super(...(args.length?args:[clock]));}static now(){return clock;}}
  const lesson=(stepId='task-A')=>({lessonId:'lesson',lessonTitle:'Test lesson',contextToken:`context-${stepId}`,
   currentIndex:0,totalSteps:1,step:{id:stepId,cls:'cmd_question',output:'Test question'},starterCode:`print('${stepId}')`});
- function create({user='learner-A',study=true,session=`session-${views.length}`,stepId='task-A',respond,blockedStorage=false,withPet=false}={}){
+ function create({user='learner-A',study=true,session=`session-${views.length}`,courseId='core',lessonId='lesson',depth='beginner',stepId='task-A',respond,blockedStorage=false,withPet=false}={}){
   const nodes=new Map(),windowListeners={},documentListeners={},calls=[],sessionValues=new Map([
-   ['sparktutor.activeUser',user],['sparktutor.session',session],['sparktutor.studySession','1'],
+   ['sparktutor.activeUser',user],['sparktutor.session',session],['sparktutor.studySession','1'],['sparktutor.depth',depth],
   ]);
-  let currentUrl=new URL(`http://example.test/${study?'?study=1':''}#${study?'lesson':'home'}`);
+  let currentUrl=new URL(`http://example.test/${study?'?study=1':''}#${study?'lesson':'home'}`),hrefAssignments=0,reloads=0,windowFocuses=0;
   class Element{
    constructor(id=''){this.id=id;this.children=[];this.isConnected=true;this.value='';this.disabled=false;this.hidden=false;this.dataset={};
     this.style={setProperty(){}};this.classList={add(){},remove(){},toggle(){}};this.listeners={};this.scrollHeight=0;this.scrollTop=0;}
@@ -639,9 +640,14 @@ function petAppBrowser(){
     const remove=node=>{for(const child of node.children)remove(child);if(nodes.get(`#${node.id}`)===node)nodes.delete(`#${node.id}`);node.isConnected=false;};
     for(const child of this.children)remove(child);this.children=[];this.html=String(html);
     if(this.id==='content')nodes.delete('.lesson-reading');
-    for(const match of this.html.matchAll(/\bid="([^"]+)"/g)){
+    for(const match of this.html.matchAll(/<\w+\b[^>]*\bid="([^"]+)"[^>]*>/g)){
      const child=new Element(match[1]);nodes.set(`#${child.id}`,child);this.children.push(child);
+     child.disabled=/\sdisabled(?:\s|=|>)/.test(match[0]);
      if(child.id==='code-editor')child.value=(this.html.match(/<textarea\b[^>]*id="code-editor"[^>]*>([\s\S]*?)<\/textarea>/)?.[1]||'').replace(/&(#39|quot|lt|gt|amp);/g,(_match,name)=>({'#39':"'",quot:'"',lt:'<',gt:'>',amp:'&'}[name]));
+    }
+    for(const match of this.html.matchAll(/<form\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/form>/g)){
+     const form=nodes.get(`#${match[1]}`),buttonTag=match[2].match(/<button\b[^>]*\btype="submit"[^>]*>/)?.[0];
+     if(form&&buttonTag){form.submitButton=new Element();form.submitButton.disabled=/\sdisabled(?:\s|=|>)/.test(buttonTag);form.children.push(form.submitButton);}
     }
     if(this.html.includes('class="lesson-reading"'))nodes.set('.lesson-reading',new Element());
    }
@@ -654,6 +660,7 @@ function petAppBrowser(){
    insertAdjacentHTML(_position,html){this.html=(this.html||'')+html;}
    requestSubmit(){dispatch(documentListeners,'submit',{target:this,preventDefault(){}});}
    focus(){}
+   scrollIntoView(){this.scrollIntoViewCalls=(this.scrollIntoViewCalls||0)+1;}
    contains(){return false;}
    click(){dispatch(this.listeners,'click',{target:this});}
   }
@@ -663,14 +670,14 @@ function petAppBrowser(){
    for(const handler of listeners[type]||[]){try{const result=handler(event);if(result?.then)result.catch(error=>errors.push(error));}catch(error){errors.push(error);}}
   }
   const location={get hash(){return currentUrl.hash;},set hash(value){const previous=currentUrl.hash;currentUrl.hash=value;if(previous!==currentUrl.hash)events.push(()=>dispatch(windowListeners,'hashchange',{}));},
-   get href(){return currentUrl.href;},set href(value){currentUrl=new URL(value,currentUrl);},get pathname(){return currentUrl.pathname;},get origin(){return currentUrl.origin;},get search(){return currentUrl.search;},reload(){}};
+   get href(){return currentUrl.href;},set href(value){hrefAssignments++;currentUrl=new URL(value,currentUrl);},get pathname(){return currentUrl.pathname;},get origin(){return currentUrl.origin;},get search(){return currentUrl.search;},reload(){reloads++;}};
   const storage=new Proxy({get length(){if(blockedStorage)throw Error('Storage denied');return stored.size;},key:index=>[...stored.keys()][index]??null,getItem(key){if(blockedStorage)throw Error('Storage denied');return stored.get(key)??null;},setItem(key,value){
    if(blockedStorage)throw Error('Storage denied');
    const oldValue=stored.get(key)??null;stored.set(key,String(value));
    for(const other of views)if(other!==view)events.push(()=>other.storageEvent({key,oldValue,newValue:String(value)}));
   },removeItem(key){const oldValue=stored.get(key)??null;stored.delete(key);for(const other of views)if(other!==view)events.push(()=>other.storageEvent({key,oldValue,newValue:null}));}},
    {ownKeys:()=>[...stored.keys()],getOwnPropertyDescriptor:(target,key)=>stored.has(key)?{enumerable:true,configurable:true,value:stored.get(key)}:Reflect.getOwnPropertyDescriptor(target,key)});
-  const window={name:study?`sparktutor-study-${user}`:'',location,innerWidth:1280,innerHeight:800,matchMedia:()=>({matches:true}),scrollTo(){},focus(){},
+  const window={name:study?`sparktutor-study-${user}`:'',location,innerWidth:1280,innerHeight:800,matchMedia:()=>({matches:true}),scrollTo(){},focus(){windowFocuses++;},
    addEventListener:(type,handler)=>(windowListeners[type]??=[]).push(handler),dispatchEvent:event=>{dispatch(windowListeners,event.type,event);return true;},
    open:(_url,name)=>views.find(other=>other.window.name===name)?.window||null,
    createSparkTutorFeatures:()=>({invalidate(){},difficultySelect:()=>'',coachDetails:()=>'',coachEvidence:()=>'',historySupplement:()=>'',handleAction:async()=>false,handleChange:async()=>false}),
@@ -682,7 +689,7 @@ function petAppBrowser(){
    history:{replaceState(_state,_title,url){currentUrl=new URL(url,currentUrl);}},
    localStorage:storage,sessionStorage:{getItem:key=>sessionValues.get(key)??null,setItem:(key,value)=>sessionValues.set(key,String(value)),removeItem:key=>sessionValues.delete(key)},
    crypto:require('node:crypto').webcrypto,queueMicrotask,setTimeout:()=>0,clearTimeout(){},setInterval:()=>0,
-   CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail;}},
+   CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},
    fetch:async(url,options)=>{
     assert.equal(url,'/api/rpc');const request=JSON.parse(options.body);calls.push(request);
     let result=await respond?.(request);
@@ -698,6 +705,7 @@ function petAppBrowser(){
    },
   });
   const view={window,location,calls,context,nodes,
+   get hrefAssignments(){return hrefAssignments;},get reloads(){return reloads;},get windowFocuses(){return windowFocuses;},
    storageEvent:event=>dispatch(windowListeners,'storage',event),
    get state(){return vm.runInContext('state',context);},
    ask(question,restoreId){const detail={question,restoreId};window.dispatchEvent({type:'sparkpet:ask',detail});return detail;},
@@ -714,8 +722,8 @@ function petAppBrowser(){
   // Initial navigation is driven explicitly below; every function and event handler stays original.
   vm.runInContext(app.replace(/\nroute\(\);\s*$/,'\n'),context,{filename:'app.js'});
   context.__submitHandlers=documentListeners.submit;
-  Object.assign(view.state,{courseId:'core',lessonIdx:0,depth:'beginner',lesson:lesson(stepId),lastCode:`print('${stepId}')`});
-  if(study){context.saveNavigation();context.renderLesson();}
+  Object.assign(view.state,{courseId,lessonIdx:0,depth,lesson:{...lesson(stepId),lessonId},lastCode:`print('${stepId}')`});
+  if(study){context.acceptLesson(view.state.lesson,true);context.renderLesson();}
   if(withPet){
    const index=fs.readFileSync(path.join(assets,'index.html'),'utf8'),markup=index.slice(index.indexOf('<div id="spark-pet"'));
    for(const match of markup.matchAll(/\bid="([^"]+)"/g))nodes.set(`#${match[1]}`,new Element(match[1]));
@@ -862,6 +870,184 @@ test('a route requested while the tutor is busy resumes when its request finishe
  finish({answer:'Answer'});await answering;await browser.flush();
  assert.equal(view.location.hash,'#settings');assert.equal(view.nodes.has('#settings-form'),true);
  assert.equal(view.nodes.has('#chat-question'),false);
+});
+
+test('a pending tutor reply stays visible and disables the current form until the answer arrives',async()=>{
+ let finish;const browser=petAppBrowser(),view=browser.create({withPet:true,
+  respond:request=>request.method==='webChat'?new Promise(resolve=>{finish=resolve;}):undefined});
+ const answering=view.chat('Explain this aggregation');await browser.flush();
+ const assertPending=()=>{
+  assert.equal(view.state.tutorPending,true);
+  assert.match(view.nodes.get('#help-content').innerHTML,/id="chat-messages"[\s\S]*AI 导师正在回答/);
+  assert.equal(view.nodes.get('#chat-question').disabled,true);
+  assert.equal(view.nodes.get('#chat-form').querySelector('button[type="submit"]').disabled,true);
+ };
+ assertPending();view.context.renderHelp();assertPending();
+ view.nodes.get('#spark-pet-view-reply').click();await browser.flush();assertPending();
+ assert.ok(view.nodes.get('#chat-messages').scrollIntoViewCalls>0);
+ assert.equal(view.calls.filter(call=>call.method==='webChat').length,1);
+ finish({answer:'Sum the quantities, not the number of rows.'});await answering;await browser.flush();
+ assert.equal(view.state.tutorPending,false);
+ assert.match(view.nodes.get('#help-content').innerHTML,/Sum the quantities, not the number of rows\./);
+ assert.doesNotMatch(view.nodes.get('#help-content').innerHTML,/AI 导师正在回答/);
+ assert.equal(view.nodes.get('#chat-question').disabled,false);
+ assert.equal(view.nodes.get('#chat-form').querySelector('button[type="submit"]').disabled,false);
+});
+
+test('a failed tutor reply remains in the conversation and keeps the original question available for retry',async()=>{
+ let attempts=0;const browser=petAppBrowser(),view=browser.create({withPet:true,respond:request=>{
+  if(request.method==='webChat'&&++attempts===1)throw Error('Provider unavailable <retry>');
+ }});
+ await view.chat('Keep my question for retry');await browser.flush();
+ assert.equal(view.state.tutorPending,false);assert.equal(view.state.busy,false);
+ assert.ok(view.state.chats.some(chat=>chat.role==='error'&&chat.text==='Provider unavailable <retry>'));
+ assert.match(view.nodes.get('#help-content').innerHTML,/Provider unavailable &lt;retry&gt;/);
+ assert.equal(view.nodes.get('#chat-question').value,'Keep my question for retry');
+ assert.equal(view.nodes.get('#chat-question').disabled,false);
+ assert.equal(view.nodes.get('#chat-form').querySelector('button[type="submit"]').disabled,false);
+ view.nodes.get('#toast').textContent='';
+ view.nodes.get('#spark-pet-view-reply').click();await browser.flush();
+ assert.equal(attempts,1,'Viewing the failure must not automatically retry the provider.');
+ assert.match(view.nodes.get('#help-content').innerHTML,/Provider unavailable &lt;retry&gt;/);
+ assert.equal(view.nodes.get('#chat-question').value,'Keep my question for retry');
+ await view.chat(view.nodes.get('#chat-question').value);await browser.flush();
+ assert.deepEqual(view.calls.filter(call=>call.method==='webChat').map(call=>call.params.question),
+  ['Keep my question for retry','Keep my question for retry']);
+ assert.match(view.nodes.get('#help-content').innerHTML,/Answer: Keep my question for retry/);
+ assert.match(view.nodes.get('#help-content').innerHTML,/Provider unavailable &lt;retry&gt;/);
+});
+
+test('the pet reply button restores the tutor panel without discarding replies or handwritten drafts',async()=>{
+ const browser=petAppBrowser(),view=browser.create({withPet:true});
+ await view.chat('An answered question');await browser.flush();
+ await view.action({action:'help-tab',tab:'coach'});assert.equal(view.state.helpTab,'coach');
+ const callsBefore=view.calls.length;
+ view.nodes.get('#spark-pet-view-reply').click();await browser.flush();
+ assert.equal(view.state.helpTab,'tutor');
+ assert.match(view.nodes.get('#help-content').innerHTML,/Answer: An answered question/);
+ assert.ok(view.nodes.get('#chat-messages').scrollIntoViewCalls>0);
+ view.inputTutor('Unsent follow-up in my own words');
+ const input=view.nodes.get('#chat-question'),editor=view.nodes.get('#code-editor');editor.value='print("unfinished code")';
+ view.nodes.get('#spark-pet-view-reply').click();await browser.flush();
+ assert.equal(view.nodes.get('#chat-question'),input);
+ assert.equal(input.value,'Unsent follow-up in my own words');
+ assert.equal(view.nodes.get('#code-editor'),editor);assert.equal(editor.value,'print("unfinished code")');
+ assert.equal(view.calls.length,callsBefore,'Viewing an existing reply must not call the model or reload the lesson.');
+ assert.equal(view.hrefAssignments,0);assert.equal(view.reloads,0);
+});
+
+test('the home pet reply button focuses the existing study tab without navigation or a duplicate model request',async()=>{
+ const browser=petAppBrowser(),study=browser.create({withPet:true}),home=browser.create({study:false,withPet:true});
+ await study.chat('Answer in the learning tab');await browser.flush();
+ study.inputTutor('Do not send or discard this draft');
+ const input=study.nodes.get('#chat-question'),editor=study.nodes.get('#code-editor');editor.value='print("still editing")';
+ const callsBefore=study.calls.length,focusesBefore=study.windowFocuses,urlBefore=study.location.href;
+ home.nodes.get('#spark-pet-view-reply').click();await browser.flush();
+ assert.equal(study.windowFocuses,focusesBefore+1);
+ assert.equal(study.location.href,urlBefore);assert.equal(home.location.hash,'#home');
+ assert.equal(study.hrefAssignments,0);assert.equal(study.reloads,0);
+ assert.equal(study.nodes.get('#chat-question'),input);assert.equal(input.value,'Do not send or discard this draft');
+ assert.equal(study.nodes.get('#code-editor'),editor);assert.equal(editor.value,'print("still editing")');
+ assert.match(study.nodes.get('#help-content').innerHTML,/Answer: Answer in the learning tab/);
+ assert.ok(study.nodes.get('#chat-messages').scrollIntoViewCalls>0);
+ assert.equal(study.calls.length,callsBefore);assert.equal(home.calls.length,0);
+});
+
+test('completed tutor messages survive reopening the same task without another model request',async()=>{
+ const browser=petAppBrowser(),original=browser.create();
+ await original.chat('Why does this aggregation count rows?');await browser.flush();
+ assert.ok([...browser.stored.keys()].some(key=>key.startsWith(original.state.storagePrefix)&&key.includes('chat.v1')));
+ browser.close(original);
+ const reopened=browser.create({session:'reopened-session'});await browser.flush();
+ assert.deepEqual(Array.from(reopened.state.chats,chat=>[chat.role,chat.text]),[
+  ['user','Why does this aggregation count rows?'],['tutor','Answer: Why does this aggregation count rows?'],
+ ]);
+ assert.match(reopened.nodes.get('#help-content').innerHTML,/Answer: Why does this aggregation count rows\?/);
+ assert.equal(reopened.state.tutorPending,false);
+ assert.equal(reopened.calls.filter(call=>call.method==='webChat').length,0);
+ reopened.context.renderHelp();
+ assert.equal(reopened.state.chats.length,2,'Rendering stored history must not duplicate its messages.');
+});
+
+test('stored tutor conversations are isolated by account, course, lesson, depth and task',async()=>{
+ const browser=petAppBrowser(),owner=browser.create();
+ await owner.chat('Private beginner task A discussion');await browser.flush();
+ for(const options of [{user:'learner-B'},{courseId:'another-course'},{lessonId:'another-lesson'},
+  {depth:'advanced'},{stepId:'task-B'}]){
+  const separate=browser.create(options);await browser.flush();
+  assert.equal(separate.state.chats.length,0,`Unexpected conversation for ${JSON.stringify(options)}`);
+  assert.doesNotMatch(separate.nodes.get('#help-content').innerHTML,/Private beginner task A discussion/);
+  assert.equal(separate.calls.filter(call=>call.method==='webChat').length,0);
+ }
+ const sameTask=browser.create();
+ assert.match(sameTask.nodes.get('#help-content').innerHTML,/Answer: Private beginner task A discussion/);
+});
+
+test('normal next and previous task navigation restores each tutor conversation independently',async()=>{
+ const browser=petAppBrowser(),view=browser.create({respond:request=>{
+  if(request.method==='advance')return browser.lesson('task-B');
+  if(request.method==='goBack')return browser.lesson('task-A');
+  if(request.method==='saveDraft')return{saved:true};
+ }});
+ await view.chat('Question only for task A');await browser.flush();
+ await view.context.moveStep('advance');await browser.flush();
+ assert.equal(view.state.lesson.step.id,'task-B');assert.equal(view.state.chats.length,0);
+ await view.chat('Question only for task B');await browser.flush();
+ await view.context.moveStep('goBack');await browser.flush();
+ assert.equal(view.state.lesson.step.id,'task-A');
+ assert.match(view.nodes.get('#help-content').innerHTML,/Answer: Question only for task A/);
+ assert.doesNotMatch(view.nodes.get('#help-content').innerHTML,/Question only for task B/);
+ await view.context.moveStep('advance');await browser.flush();
+ assert.match(view.nodes.get('#help-content').innerHTML,/Answer: Question only for task B/);
+ assert.doesNotMatch(view.nodes.get('#help-content').innerHTML,/Question only for task A/);
+ assert.deepEqual(view.calls.filter(call=>call.method==='webChat').map(call=>call.params.question),
+  ['Question only for task A','Question only for task B']);
+});
+
+test('unavailable browser storage still displays the tutor answer and explains that it was not saved',async()=>{
+ const browser=petAppBrowser(),view=browser.create({blockedStorage:true});
+ await view.chat('Answer even when local storage is unavailable');await browser.flush();
+ assert.equal(view.state.chatStorageFailed,true);
+ assert.match(view.nodes.get('#help-content').innerHTML,/Answer: Answer even when local storage is unavailable/);
+ assert.match(view.nodes.get('#help-content').innerHTML,/未(?:能)?保存|无法保存|保存失败/);
+ assert.equal(view.state.tutorPending,false);assert.equal(view.nodes.get('#chat-question').disabled,false);
+ assert.equal(view.calls.filter(call=>call.method==='webChat').length,1);
+ assert.equal([...browser.stored.keys()].filter(key=>key.includes('chat.v1')).length,0);
+});
+
+test('a late tutor result cannot restore cleared history after the same task is opened in a new session',async()=>{
+ let finish;const browser=petAppBrowser(),view=browser.create({respond:request=>{
+  if(request.method==='webChat'&&request.params.question==='Question pending during clear')return new Promise(resolve=>{finish=resolve;});
+ }});
+ await view.chat('Earlier conversation to clear');await browser.flush();
+ const pending=view.chat('Question pending during clear');await browser.flush();
+ assert.equal(view.state.tutorPending,true);
+ view.context.rotateSession('replacement-session');
+ view.context.acceptLesson(browser.lesson('task-A'),true);view.location.hash='#lesson';view.context.renderLesson();
+ await browser.flush();
+ assert.equal(view.state.chats.length,0);
+ finish({answer:'Old session answer that must stay cleared'});await pending;await browser.flush();
+ assert.equal(view.state.chats.length,0,'Neither the late answer nor its old-session error may recreate cleared messages.');
+ assert.doesNotMatch(view.nodes.get('#help-content').innerHTML,/Earlier conversation to clear|Question pending during clear|Old session answer/);
+ const reopened=browser.create({session:'after-clearing-session'});await browser.flush();
+ assert.equal(reopened.state.chats.length,0);
+ assert.equal(reopened.calls.filter(call=>call.method==='webChat').length,0);
+ assert.ok([...browser.stored.entries()].filter(([key])=>key.includes('chat.v1'))
+  .every(([,value])=>!value.includes('Earlier conversation to clear')&&!value.includes('Question pending during clear')&&!value.includes('Old session answer')));
+});
+
+test('two existing tabs append to the same task history without overwriting or duplicating earlier replies',async()=>{
+ const browser=petAppBrowser(),first=browser.create({session:'first-session'}),second=browser.create({session:'second-session'});
+ await first.chat('First tab question');await browser.flush();
+ await second.chat('Second tab question');await browser.flush();
+ await first.chat('First tab follow-up');await browser.flush();
+ const reopened=browser.create({session:'third-session'});await browser.flush();
+ assert.deepEqual(Array.from(reopened.state.chats,chat=>[chat.role,chat.text]),[
+  ['user','First tab question'],['tutor','Answer: First tab question'],
+  ['user','Second tab question'],['tutor','Answer: Second tab question'],
+  ['user','First tab follow-up'],['tutor','Answer: First tab follow-up'],
+ ]);
+ assert.equal(reopened.calls.filter(call=>call.method==='webChat').length,0);
 });
 
 
